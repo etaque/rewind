@@ -9,7 +9,7 @@ object Conf {
   case class Root(
       http: Http,
       db: DB,
-      objectStorage: ObjectStorage,
+      gribStorage: ObjectStorage,
   )
 
   case class Http(

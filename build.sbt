@@ -40,6 +40,10 @@ libraryDependencies ++= Seq(
   "com.chuusai" %% "shapeless" % "2.4.0-M1", // Use an explicit version because implicit version 2.3.3 makes the compilation to hang indefinitely (investigated using -verbose in scalacOptions)
   // conf
   "com.github.pureconfig" %% "pureconfig" % "0.14.0",
+  // logging
+  "ch.qos.logback" % "logback-classic" % "1.2.3",
+  "ch.qos.logback" % "logback-core" % "1.2.3",
+  "org.slf4j" % "slf4j-api" % "1.7.25",
   // tests
   "io.monix" %% "minitest" % "2.8.2" % Test,
   "io.monix" %% "minitest-laws" % "2.8.2" % Test
