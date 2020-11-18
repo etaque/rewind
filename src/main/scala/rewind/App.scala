@@ -19,15 +19,17 @@ object App extends IOApp {
 
     val ec = ExecutionContext.global
 
-    BlazeClientBuilder[IO](ec).resource.use { client =>
+    BlazeClientBuilder[IO](ec).resource.use { baseClient =>
+      val httpClient = FollowRedirect(1)(baseClient)
       val app = Router(
-        "/" -> GribService.make(FollowRedirect(1)(client), conf.gribStorage)
+        "/" -> GribService.routes(httpClient, conf.gribStorage)
       ).orNotFound
 
       BlazeServerBuilder[IO](ec).withoutBanner
         .bindHttp(conf.http.port, conf.http.address)
         .withHttpApp(Logger.httpApp(logBody = false, logHeaders = true)(app))
         .serve
+        .concurrently(GribService.dailySync(httpClient, conf.gribStorage))
         .compile
         .drain
         .as(ExitCode.Success)

@@ -1,18 +1,23 @@
 package rewind.services
 
-import cats.effect.IO
+import scala.concurrent.duration._
+import java.time.LocalDateTime
 
+import cats.effect.{IO, Timer}
 import org.http4s._
 import org.http4s.dsl.io._
 import org.http4s.client.Client
+import fs2.Stream
+import org.slf4j.LoggerFactory
 
 import rewind.Conf.ObjectStorage
 import rewind.stores._
 import helpers.LocalDateVar
 
 object GribService {
+  val logger = LoggerFactory.getLogger("GribService")
 
-  def make(httpClient: Client[IO], gribConf: ObjectStorage) = {
+  def routes(httpClient: Client[IO], gribConf: ObjectStorage) = {
     val gribStore = new GribStore(httpClient, gribConf)
 
     HttpRoutes.of[IO] {
@@ -29,5 +34,23 @@ object GribService {
         }
 
     }
+  }
+
+  def dailySync(httpClient: Client[IO], gribConf: ObjectStorage)(
+      implicit timer: Timer[IO]): Stream[IO, List[String]] = {
+    val gribStore = new GribStore(httpClient, gribConf)
+
+    Stream
+      .awakeEvery[IO](1.hour)
+      .evalMap { _ =>
+        logger.info("Daily sync loop")
+        IO(LocalDateTime.now).flatMap { now =>
+          if (now.getHour() == 2) {
+            gribStore.syncOn(now.minusDays(1).toLocalDate())
+          } else {
+            IO(Nil)
+          }
+        }
+      }
   }
 }

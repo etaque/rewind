@@ -7,28 +7,35 @@ import cats.effect.IO
 import org.http4s._
 import org.http4s.client.Client
 import com.amazonaws.services.s3.AmazonS3ClientBuilder
+import org.slf4j.LoggerFactory
 
 import rewind.Conf.ObjectStorage
 
 class GribStore(httpClient: Client[IO], storageConf: ObjectStorage) {
+  val logger = LoggerFactory.getLogger("GribStore")
   val s3 =
     AmazonS3ClientBuilder.standard().withRegion(storageConf.region).build()
 
   def syncAt(date: LocalDate, hour: Int): IO[String] = {
-    httpClient.expect[String](GribStore.noaaUri(date, hour)).flatMap {
-      content =>
-        val filename = GribStore.filename(date, hour)
-        IO {
-          s3.putObject(storageConf.bucket, filename, content)
-          filename
-        }
-    }
+    val noaaUri = GribStore.noaaUri(date, hour)
+    for {
+      _ <- IO(logger.info(s"Downloading NOAA file on $date at $hour: $noaaUri"))
+      content <- httpClient.expect[String](noaaUri)
+      filename = GribStore.filename(date, hour)
+      _ <- IO(logger.info(s"Download successful, uploading to $filename"))
+      _ <- IO(s3.putObject(storageConf.bucket, filename, content))
+      _ <- IO(logger.info(s"Upload successful to $filename"))
+    } yield filename
   }
 
   def syncOn(date: LocalDate): IO[List[String]] = {
-    0.to(3).map(_ * 6).toList.traverse { hour =>
-      syncAt(date, hour)
-    }
+    for {
+      _ <- IO(logger.info(s"Starting sync on $date"))
+      names <- 0.to(3).map(_ * 6).toList.traverse { hour =>
+        syncAt(date, hour)
+      }
+      _ <- IO(logger.info(s"Finished sync on $date"))
+    } yield names
   }
 }
 
