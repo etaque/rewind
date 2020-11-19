@@ -7,11 +7,6 @@
     path: "{{ bin_dir }}"
     state: directory
 
-- name: Ensure user conf dir exists
-  file:
-    path: "{{ conf_dir }}"
-    state: directory
-
 - name: Create application dir
   file:
     path: "{{ app_dir }}/"
@@ -22,9 +17,19 @@
     path: "{{ app_dir }}/releases/"
     state: directory
 
+- name: Create conf dir
+  file:
+    path: "{{ conf_dir }}"
+    state: directory
+
+- name: Upload app conf
+  template:
+    src: application.conf.j2
+    dest: "{{ conf_dir }}/application.conf"
+
 - name: Create logs dir
   file:
-    path: "{{ app_dir }}/logs/"
+    path: "{{ logs_dir }}"
     state: directory
 
 - name: Upload log conf for main
@@ -32,20 +37,14 @@
     current_name: "main"
   template:
     src: logback.xml.j2
-    dest: "{{ app_dir }}/logback-main.xml"
+    dest: "{{ conf_dir }}/logback-main.xml"
 
 - name: Upload log conf for alt
   vars:
     current_name: "alt"
   template:
     src: logback.xml.j2
-    dest: "{{ app_dir }}/logback-alt.xml"
-
-- name: Remove stale log conf
-  file:
-    path: "{{ app_dir }}/logback.xml"
-    state: absent
-  ignore_errors: true
+    dest: "{{ conf_dir }}/logback-alt.xml"
 
 - name: Create user services dir
   file:

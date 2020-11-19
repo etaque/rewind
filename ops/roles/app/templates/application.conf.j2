@@ -1,0 +1,17 @@
+http {
+    port = 9000
+    address = "127.0.0.1"
+}
+db {
+    uri = "jdbc:postgresql://localhost/{{ db_name }}"
+    user = "{{ db_user }}"
+    password = "{{ secrets.pg_password }}"
+}
+
+grib-storage {
+    region = "eu-west-3"
+    bucket = "rewind-gribs"
+    key-id = "{{ secrets.grib_storage.key_id }}"
+    secret = "{{ secrets.grib_storage.secret }}"
+}
+

@@ -4,7 +4,7 @@ backend_main_port: 9000
 backend_alt_port: 9001
 backend_address: "localhost"
 db_uri: "jdbc:postgresql://localhost/{{ db_name }}"
-db_password: "{{ backend_secrets.pg_password }}"
+db_password: "{{ secrets.pg_password }}"
 
 ssl_email: "etaque@gmail.com"
 
@@ -13,6 +13,6 @@ alt_service_name: "rewind-alt"
 
 bin_dir: "{{ ansible_env.HOME }}/bin"
 app_dir: "{{ ansible_env.HOME }}/{{ app_name }}"
-log_dir: "{{ app_dir }}/logs"
+logs_dir: "{{ app_dir }}/logs"
 conf_dir: "{{ app_dir }}/conf"
 
