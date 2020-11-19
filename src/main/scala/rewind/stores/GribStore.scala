@@ -7,14 +7,21 @@ import cats.effect.IO
 import org.http4s._
 import org.http4s.client.Client
 import com.amazonaws.services.s3.AmazonS3ClientBuilder
+import com.amazonaws.auth.{BasicAWSCredentials, AWSStaticCredentialsProvider}
 import org.slf4j.LoggerFactory
 
 import rewind.Conf.ObjectStorage
 
 class GribStore(httpClient: Client[IO], storageConf: ObjectStorage) {
   val logger = LoggerFactory.getLogger("GribStore")
+
+  val awsCreds = new BasicAWSCredentials(storageConf.keyId, storageConf.secret);
   val s3 =
-    AmazonS3ClientBuilder.standard().withRegion(storageConf.region).build()
+    AmazonS3ClientBuilder
+      .standard()
+      .withCredentials(new AWSStaticCredentialsProvider(awsCreds))
+      .withRegion(storageConf.region)
+      .build()
 
   def syncAt(date: LocalDate, hour: Int): IO[String] = {
     val noaaUri = GribStore.noaaUri(date, hour)

@@ -25,7 +25,9 @@ object Conf {
 
   case class ObjectStorage(
       region: String,
-      bucket: String
+      bucket: String,
+      keyId: String,
+      secret: String
   )
 
   lazy val get = ConfigSource.default.load[Root] match {
