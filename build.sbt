@@ -12,8 +12,6 @@ val catsEffectVersion = "2.1.4"
 val doobieVersion = "0.9.0"
 val tsecVersion = "0.2.1"
 
-resolvers += "jmcardon at bintray" at "https://dl.bintray.com/jmcardon/tsec"
-resolvers += "dividat at bintray" at "https://dl.bintray.com/dividat/maven"
 resolvers += Resolver.sbtPluginRepo("releases")
 
 libraryDependencies ++= Seq(

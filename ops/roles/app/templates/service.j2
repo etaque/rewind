@@ -1,9 +1,9 @@
 [Unit]
-Description=Dividat Backend
+Description=Rewind Backend
 After=network.target
 
 [Service]
-ExecStart={{ app_dir }}/{{ current_name }}/bin/dividat-backend -Dlogback.configurationFile={{ app_dir }}/logback-{{ current_name }}.xml
+ExecStart={{ app_dir }}/{{ current_name }}/bin/rewind -Dlogback.configurationFile={{ conf_dir }}/logback-{{ current_name }}.xml
 Restart=on-failure
 SuccessExitStatus=143
 
