@@ -2,5 +2,6 @@
 .bsp/
 .metals/
 .vscode/
+.vagrant/
 project/target/
 target/
