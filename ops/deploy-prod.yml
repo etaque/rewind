@@ -1,0 +1,7 @@
+# rewind.skiffr.me
+
+- hosts: prod
+  roles:
+    - { role: roles/env }
+    - { role: roles/app }
+

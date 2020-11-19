@@ -1,0 +1,28 @@
+# {{ ansible_managed }}
+
+upstream backend  {
+  server 127.0.0.1:{{ backend_main_port }} fail_timeout=10s;
+  server 127.0.0.1:{{ backend_alt_port }} fail_timeout=10s backup;
+}
+
+limit_req_zone $binary_remote_addr zone={{ app_name }}-limit:10m rate=10r/s;
+
+server {
+  listen 80;
+  server_name {{ hostname }};
+
+  location /auth/login {
+    limit_req zone={{ app_name }}-limit burst=20 nodelay;
+    proxy_set_header Host $host;
+    proxy_set_header X-Real-IP $remote_addr;
+    proxy_pass  http://backend;
+    proxy_next_upstream error;
+  }
+
+  location / {
+    proxy_set_header Host $host;
+    proxy_set_header X-Real-IP $remote_addr;
+    proxy_pass  http://backend;
+    proxy_next_upstream error;
+  }
+}

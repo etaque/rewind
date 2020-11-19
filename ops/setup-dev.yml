@@ -1,0 +1,11 @@
+
+# Make Ubuntu ready to run Ansible.
+
+- name: Install Python
+  hosts: dev
+  gather_facts: false
+  tasks:
+    - name: Install Python 2.x
+      raw: test -e /usr/bin/python || (apt update && apt install -y python-minimal)
+      register: test
+      changed_when: test.stdout

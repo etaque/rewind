@@ -1,0 +1,9 @@
+#!/bin/sh
+# {{ ansible_managed }}
+
+ARCHIVE=$1
+
+RELEASES_DIR={{ app_dir }}/releases/
+
+echo " * Extracting $ARCHIVE to $RELEASES_DIR"
+unzip -u $ARCHIVE -d $RELEASES_DIR && rm $ARCHIVE

@@ -1,0 +1,7 @@
+ansible_user: www-data
+
+app_name: "rewind-prod"
+db_name: "{{ app_name }}"
+db_user: "{{ app_name }}"
+
+hostname: "rewind.skiffr.me"

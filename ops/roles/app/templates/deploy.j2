@@ -1,0 +1,59 @@
+#!/bin/bash
+# {{ ansible_managed }}
+
+RELEASES_DIR={{ app_dir }}/releases
+VERSIONS=$(ls "$RELEASES_DIR")
+VERSION="$1"
+
+# check that the version exists
+
+echo " * Checking that version $VERSION exists"
+if [ -z "$VERSION" ] || ! [ -d "$RELEASES_DIR/$VERSION" ] || ! [[ "$VERSIONS" =~ "$VERSION" ]]; then
+  printf "Version '$VERSION' does not exist.\nAvailable versions are:\n$VERSIONS\nExiting.\n"
+  exit 1
+fi
+
+# migrate the DB
+
+echo " * Applying DB migrations..."
+cd {{app_dir}}
+{{ bin_dir }}/migrate_db.sh "$RELEASES_DIR/$VERSION" || exit 1
+cd
+
+# update alt
+
+echo " * Linking $VERSION as alt"
+ln -s -fn $RELEASES_DIR/$VERSION {{app_dir}}/alt || exit 1
+
+echo " * Restarting alt..."
+systemctl --user restart {{ alt_service_name }}.service
+
+
+# wait until alt is up
+
+echo " * Waiting for alt..."
+while [[ "$(curl -s -o /dev/null -w ''%{http_code}'' localhost:{{ backend_alt_port }})" != "200" ]]
+do
+    sleep 1
+done
+
+
+# now update main
+
+echo " * Linking $VERSION as main"
+ln -s -fn $RELEASES_DIR/$VERSION {{app_dir}}/main || exit 1
+
+echo " * Restarting main..."
+systemctl --user restart {{ main_service_name }}.service
+
+
+# wait until main is up
+
+echo " * Waiting for main..."
+while [[ "$(curl -s -o /dev/null -w ''%{http_code}'' localhost:{{ backend_main_port }})" != "200" ]]
+do
+    sleep 1
+done
+
+
+echo "Done."
