@@ -11,8 +11,8 @@ ssl_email: "etaque@gmail.com"
 main_service_name: "rewind-main"
 alt_service_name: "rewind-alt"
 
-bin_dir: "{{ ansible_env.HOME }}/bin"
 app_dir: "{{ ansible_env.HOME }}/{{ app_name }}"
+bin_dir: "{{ app_dir }}/bin"
 logs_dir: "{{ app_dir }}/logs"
 conf_dir: "{{ app_dir }}/conf"
 

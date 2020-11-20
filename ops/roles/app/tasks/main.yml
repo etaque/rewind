@@ -2,14 +2,14 @@
 # Playbook to deploy backend
 #######################################
 
-- name: Ensure user bin dir exists
-  file:
-    path: "{{ bin_dir }}"
-    state: directory
-
 - name: Create application dir
   file:
     path: "{{ app_dir }}/"
+    state: directory
+
+- name: Create bin dir
+  file:
+    path: "{{ bin_dir }}"
     state: directory
 
 - name: Create releases dir

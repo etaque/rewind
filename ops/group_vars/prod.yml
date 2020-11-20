@@ -1,4 +1,6 @@
-ansible_user: www-data
+skip_ssl: true
+
+ansible_user: ubuntu
 
 app_name: "rewind-prod"
 db_name: "{{ app_name }}"
