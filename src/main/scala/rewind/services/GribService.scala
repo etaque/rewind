@@ -26,12 +26,12 @@ object GribService {
 
       case PUT -> Root / "gribs" / "sync-at" / LocalDateVar(date) / IntVar(
             hour) =>
-        gribStore.syncAt(date, hour).flatMap { filename =>
+        gribStore.syncAt(date, hour, force = true).flatMap { filename =>
           Ok("Done: " + filename)
         }
 
       case PUT -> Root / "gribs" / "sync-on" / LocalDateVar(date) =>
-        gribStore.syncOn(date).flatMap { filenames =>
+        gribStore.syncOn(date, force = true).flatMap { filenames =>
           Ok("Done: " + filenames.mkString(", "))
         }
 
@@ -55,7 +55,8 @@ object GribService {
                   for {
                     _ <- IO(logger.info("Lock grabbed, syncing..."))
                     filenames <- gribStore.syncOn(
-                      now.minusDays(1).toLocalDate())
+                      now.minusDays(1).toLocalDate(),
+                      force = false)
                     _ <- releaseLock()
                     _ <- IO(logger.info("Lock released."))
                   } yield filenames

@@ -33,7 +33,7 @@ libraryDependencies ++= Seq(
   "org.typelevel" %% "cats-core" % catsVersion,
   "org.typelevel" %% "cats-effect" % catsEffectVersion,
   // object storage
-  "com.amazonaws" % "aws-java-sdk-s3" % "1.11.357",
+  "com.amazonaws" % "aws-java-sdk-s3" % "1.11.905",
   // shapeless
   "com.chuusai" %% "shapeless" % "2.4.0-M1", // Use an explicit version because implicit version 2.3.3 makes the compilation to hang indefinitely (investigated using -verbose in scalacOptions)
   // conf
