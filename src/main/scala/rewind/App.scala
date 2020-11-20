@@ -2,13 +2,15 @@ package rewind
 
 import scala.concurrent.ExecutionContext
 
-import cats.effect.{IO, IOApp, ExitCode}
+import cats.effect.{IO, IOApp, ExitCode, Resource, Blocker}
 import org.http4s.server.blaze._
 import org.http4s.server.middleware._
 import org.http4s.server.Router
 import org.http4s.client.blaze._
 import org.http4s.client.middleware.FollowRedirect
 import org.http4s.implicits._
+import doobie._
+import doobie.hikari._
 
 import services._
 
@@ -21,19 +23,40 @@ object App extends IOApp {
 
     BlazeClientBuilder[IO](ec).resource.use { baseClient =>
       val httpClient = FollowRedirect(1)(baseClient)
-      val app = Router(
-        "/" -> GribService.routes(httpClient, conf.gribStorage)
-      ).orNotFound
 
-      BlazeServerBuilder[IO](ec).withoutBanner
-        .bindHttp(conf.http.port, conf.http.address)
-        .withHttpApp(Logger.httpApp(logBody = false, logHeaders = true)(app))
-        .serve
-        .concurrently(GribService.dailySync(httpClient, conf.gribStorage))
-        .compile
-        .drain
-        .as(ExitCode.Success)
+      makeTransactor(conf.db).use { implicit xa =>
+        val app = Router(
+          "/" -> GribService.routes(httpClient, conf)
+        ).orNotFound
+
+        BlazeServerBuilder[IO](ec).withoutBanner
+          .bindHttp(conf.http.port, conf.http.address)
+          .withHttpApp(Logger.httpApp(logBody = false, logHeaders = true)(app))
+          .serve
+          .concurrently(GribService.dailySync(httpClient, conf))
+          .compile
+          .drain
+          .as(ExitCode.Success)
+      }
     }
   }
+
+  def makeTransactor(dbConf: Conf.DB): Resource[IO, HikariTransactor[IO]] =
+    for {
+      connectEC <- ExecutionContexts.fixedThreadPool[IO](
+        Runtime
+          .getRuntime()
+          .availableProcessors() * 2 + 1) // await JDBC connection
+      transactEC <- ExecutionContexts
+        .cachedThreadPool[IO] // execute JDBC operations
+      xa <- HikariTransactor.newHikariTransactor[IO](
+        driverClassName = "org.postgresql.Driver",
+        url = dbConf.uri,
+        user = dbConf.user,
+        pass = dbConf.password.getOrElse(""),
+        connectEC = connectEC,
+        blocker = Blocker.liftExecutionContext(transactEC)
+      )
+    } yield xa
 
 }

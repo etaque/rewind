@@ -2,6 +2,7 @@ package rewind.stores
 
 import java.time.LocalDate
 import java.time.format.DateTimeFormatter
+
 import cats.implicits._
 import cats.effect.IO
 import org.http4s._

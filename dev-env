@@ -1,0 +1,5 @@
+export DEV_DATADIR="dev-data"
+export DEV_DB_DATADIR="$DEV_DATADIR/db"
+export REWIND_DB_NAME="rewind-dev"
+export REWIND_DB_USER="rewind"
+export REWIND_DB_URI="jdbc:postgresql://localhost/$REWIND_DB_NAME"

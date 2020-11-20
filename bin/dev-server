@@ -1,0 +1,30 @@
+#!/usr/bin/env bash
+set -e
+cd `dirname "$0"`/..
+
+source dev-env
+
+function start_services {
+  if [ ! -e "$DEV_DB_DATADIR/postgresql.conf" ]; then
+    bin/db init
+  fi
+  pg_ctl -w -D "$DEV_DB_DATADIR" start
+}
+
+function stop_services {
+  pg_ctl -w -D "$DEV_DB_DATADIR" stop 2>/dev/null || true
+}
+
+if [ "$1" == "stop" ]; then
+
+  stop_services
+
+else
+
+  trap stop_services EXIT
+
+  start_services
+
+  sbt ~reStart
+
+fi
