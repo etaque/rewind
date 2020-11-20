@@ -43,29 +43,35 @@ object GribService {
       timer: Timer[IO]): Stream[IO, List[String]] = {
     val gribStore = new GribStore(httpClient, conf.gribStorage)
 
-    Stream
-      .awakeEvery[IO](1.day)
-      .evalMap { _ =>
-        logger.info("Daily sync loop")
-        IO(LocalDateTime.now).flatMap { now =>
-          if (now.getHour() == 2) {
-            grabLock().flatMap { hasLock =>
-              if (hasLock) {
-                for {
-                  _ <- IO(logger.info("Lock grabbed, syncing..."))
-                  filenames <- gribStore.syncOn(now.minusDays(1).toLocalDate())
-                  _ <- releaseLock()
-                  _ <- IO(logger.info("Lock released."))
-                } yield filenames
-              } else {
-                IO(logger.info("Unable to grab lock, skipping.")).map(_ => Nil)
+    if (conf.sync.enabled.contains(true)) {
+      Stream
+        .awakeEvery[IO](1.day)
+        .evalMap { _ =>
+          logger.info("Daily sync loop")
+          IO(LocalDateTime.now).flatMap { now =>
+            if (now.getHour() == 2) {
+              grabLock().flatMap { hasLock =>
+                if (hasLock) {
+                  for {
+                    _ <- IO(logger.info("Lock grabbed, syncing..."))
+                    filenames <- gribStore.syncOn(
+                      now.minusDays(1).toLocalDate())
+                    _ <- releaseLock()
+                    _ <- IO(logger.info("Lock released."))
+                  } yield filenames
+                } else {
+                  IO(logger.info("Unable to grab lock, skipping.")).map(_ =>
+                    Nil)
+                }
               }
+            } else {
+              IO(logger.info("Not time to sync, skipping.")).map(_ => Nil)
             }
-          } else {
-            IO(logger.info("Not time to sync, skipping.")).map(_ => Nil)
           }
         }
-      }
+    } else {
+      Stream.empty
+    }
   }
 
   val SyncLockId = 1

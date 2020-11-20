@@ -5,3 +5,5 @@ db_name: "{{ app_name }}"
 db_user: "{{ app_name }}"
 
 hostname: "rewind.skiffr.me"
+
+sync_enabled: true

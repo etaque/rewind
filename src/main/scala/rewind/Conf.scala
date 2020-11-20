@@ -10,6 +10,7 @@ object Conf {
       http: Http,
       db: DB,
       gribStorage: ObjectStorage,
+      sync: Sync
   )
 
   case class Http(
@@ -28,6 +29,10 @@ object Conf {
       bucket: String,
       keyId: String,
       secret: String
+  )
+
+  case class Sync(
+      enabled: Option[Boolean]
   )
 
   lazy val get = ConfigSource.default.load[Root] match {
