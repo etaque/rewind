@@ -2,7 +2,10 @@ package rewind
 
 import scala.concurrent.ExecutionContext
 
+import cats.implicits._
 import cats.effect.{IO, IOApp, ExitCode, Resource, Blocker}
+import org.http4s._
+import org.http4s.dsl.io._
 import org.http4s.server.blaze._
 import org.http4s.server.middleware._
 import org.http4s.server.Router
@@ -25,8 +28,10 @@ object App extends IOApp {
       val httpClient = FollowRedirect(1)(baseClient)
 
       makeTransactor(conf.db).use { implicit xa =>
+        val apiService = rootService <+> GribService.routes(httpClient, conf)
+
         val app = Router(
-          "/" -> GribService.routes(httpClient, conf)
+          "/" -> apiService
         ).orNotFound
 
         BlazeServerBuilder[IO](ec).withoutBanner
@@ -39,6 +44,11 @@ object App extends IOApp {
           .as(ExitCode.Success)
       }
     }
+  }
+
+  val rootService = HttpRoutes.of[IO] {
+    case GET -> Root =>
+      Ok("Hello world")
   }
 
   def makeTransactor(dbConf: Conf.DB): Resource[IO, HikariTransactor[IO]] =

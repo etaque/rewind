@@ -3,7 +3,8 @@ Description=Rewind Backend
 After=network.target
 
 [Service]
-ExecStart={{ app_dir }}/{{ current_name }}/bin/rewind -Dlogback.configurationFile={{ conf_dir }}/logback-{{ current_name }}.xml
+Environment=REWIND_HTTP_PORT={{ http_port }}
+ExecStart={{ app_dir }}/{{ current_name }}/bin/rewind -Dconfig.file={{ conf_dir }}/application.conf -Dlogback.configurationFile={{ conf_dir }}/logback-{{ current_name }}.xml
 Restart=on-failure
 SuccessExitStatus=143
 

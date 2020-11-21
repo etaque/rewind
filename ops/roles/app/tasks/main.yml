@@ -58,6 +58,15 @@
   template:
     src: service.j2
     dest: "~/.config/systemd/user/{{ main_service_name }}.service"
+  register: main_service
+
+- name: Enable main service
+  systemd:
+    name: "{{ main_service_name }}"
+    daemon_reload: true
+    scope: user
+    enabled: true
+  when: main_service.changed
 
 - name: Install alt service
   vars:
@@ -66,23 +75,7 @@
   template:
     src: service.j2
     dest: "~/.config/systemd/user/{{ alt_service_name }}.service"
-
-- name: Check if we're on initial setup
-  command: "test -e {{ app_dir }}/current/bin/rewind"
-  register: test_current
-  ignore_errors: true
-
-- name: Reload systemctl after changing service file
-  command: systemctl --user daemon-reload
-  when: test_current is succeeded
-
-- name: Enable main service
-  systemd:
-    name: "{{ main_service_name }}"
-    daemon_reload: true
-    scope: user
-    enabled: true
-  when: test_current is succeeded
+  register: alt_service
 
 - name: Enable alt service
   systemd:
@@ -90,7 +83,7 @@
     daemon_reload: true
     scope: user
     enabled: true
-  when: test_current is succeeded
+  when: alt_service.changed
 
 - name: Upload extract script
   template:

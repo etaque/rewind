@@ -1,5 +1,5 @@
 http {
-    port = 9000
+    port = ${REWIND_HTTP_PORT}
     address = "127.0.0.1"
 }
 db {
@@ -16,6 +16,6 @@ grib-storage {
 }
 
 sync {
-    enabled = "{{ sync_enabled }}"
+    enabled = {%if sync_enabled %}true{% else %}false{% endif %}
 }
 
