@@ -3,4 +3,4 @@ flyway_dir: "{{ ansible_env.HOME }}/flyway"
 
 flyway_script : "{{ flyway_dir }}/flyway-{{ flyway_version}}/flyway"
 flyway_symlink: "{{ bin_dir }}/flyway"
-flyway_config_file: "{{ conf_dir }}/flyway.conf"
+flyway_config_file: "{{ app_dir }}/flyway.conf"
