@@ -59,6 +59,9 @@ object GribService {
                       force = false)
                     _ <- releaseLock()
                     _ <- IO(logger.info("Lock released."))
+                    _ <- conf.sync.healthcheck
+                      .map(httpClient.expect[String])
+                      .getOrElse(IO(""))
                   } yield filenames
                 } else {
                   IO(logger.info("Unable to grab lock, skipping.")).map(_ =>

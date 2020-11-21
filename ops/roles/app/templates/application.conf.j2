@@ -11,11 +11,12 @@ db {
 grib-storage {
     region = "eu-west-3"
     bucket = "rewind-gribs"
-    key-id = "{{ secrets.grib_storage.key_id }}"
-    secret = "{{ secrets.grib_storage.secret }}"
+    key-id = "{{ shared_secrets.grib_storage.key_id }}"
+    secret = "{{ shared_secrets.grib_storage.secret }}"
 }
 
 sync {
     enabled = {%if sync_enabled %}true{% else %}false{% endif %}
+    healthcheck = "{{ shared_secrets.sync_healthcheck }}"
 }
 

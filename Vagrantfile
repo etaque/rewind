@@ -13,6 +13,6 @@ Vagrant.configure("2") do |config|
   config.vm.provision "ansible", run: "always" do |ansible|
     ansible.playbook = "ops/deploy-local.yml"
     ansible.inventory_path = "ops/hosts.yml"
-    ansible.extra_vars = YAML.load_file("ops/secrets/local.yml")
+    ansible.extra_vars = YAML.load_file("ops/secrets/local.yml").merge(YAML.load_file("ops/secrets/shared.yml"))
   end
 end

@@ -32,7 +32,8 @@ object Conf {
   )
 
   case class Sync(
-      enabled: Option[Boolean]
+      enabled: Option[Boolean],
+      healthcheck: Option[String]
   )
 
   lazy val get = ConfigSource.default.load[Root] match {
