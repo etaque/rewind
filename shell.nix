@@ -7,6 +7,7 @@ mkShell {
     flyway
     ansible
     postgresql_11
+    postgis
   ];
 
 }

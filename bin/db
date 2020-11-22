@@ -6,15 +6,20 @@ cd $(dirname "$0")/..
 bin/container ensure
 source dev-env
 
-PGHOST=$(nixos-container show-ip rewind)
-PGUSER=rewind
-PGDATABASE=rewind
-
 if [ "$1" == "console" ]; then
   psql
 
 elif  [ "$1" == "migrate" ]; then
   flyway migrate
+
+elif  [ "$1" == "prepare" ]; then
+  SHP_NAME=simplified-land-polygons-complete
+  SRID=3857
+
+  # source: https://wiki.openstreetmap.org/wiki/Coastline
+  wget "https://osmdata.openstreetmap.de/download/$SHP_NAME-$SRID.zip" -O "/tmp/$SHP_NAME.zip"
+  unzip -o "/tmp/$SHP_NAME.zip" -d /tmp
+  shp2pgsql -I -s "$SRID" "/tmp/$SHP_NAME-$SRID/simplified_land_polygons.shp" "$SHP_NAME" | psql
   
 else
   echo "Usage: $0 console|migrate"
