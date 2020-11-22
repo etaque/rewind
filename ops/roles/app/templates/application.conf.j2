@@ -16,7 +16,11 @@ grib-storage {
 }
 
 sync {
-    enabled = {%if sync_enabled %}true{% else %}false{% endif %}
+{% if sync_enabled %}
+    enabled = true
+{% else %}
+    enabled = false
+{% endif %}
     healthcheck = "{{ shared_secrets.sync_healthcheck }}"
 }
 
