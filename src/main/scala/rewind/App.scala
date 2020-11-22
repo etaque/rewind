@@ -14,6 +14,7 @@ import org.http4s.client.middleware.FollowRedirect
 import org.http4s.implicits._
 import doobie._
 import doobie.hikari._
+import doobie.implicits._
 
 import services._
 
@@ -46,9 +47,11 @@ object App extends IOApp {
     }
   }
 
-  val rootService = HttpRoutes.of[IO] {
+  def rootService(implicit xa: Transactor[IO]) = HttpRoutes.of[IO] {
     case GET -> Root =>
-      Ok("Hello world")
+      sql"SELECT 42".query[Int].unique.transact(xa).flatMap { _ =>
+        Ok("Hello world")
+      }
   }
 
   def makeTransactor(dbConf: Conf.DB): Resource[IO, HikariTransactor[IO]] =

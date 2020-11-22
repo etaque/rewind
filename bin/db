@@ -1,134 +1,24 @@
 #!/usr/bin/env bash
 set -e
 
-CALLER_DIR=$(pwd)
 cd $(dirname "$0")/..
 
-# Definitions
-
+bin/container ensure
 source dev-env
 
-FLYWAY="flyway -url=$REWIND_DB_URI -user=$REWIND_DB_USER -password=$REWIND_DB_PASSWORD"
-PG_CTL="pg_ctl -w -D $DEV_DB_DATADIR"
+PGHOST=$(nixos-container show-ip rewind)
+PGUSER=rewind
+PGDATABASE=rewind
 
-if [ -d "$DEV_DB_DATADIR" ]; then
+if [ "$1" == "console" ]; then
+  psql
 
-  DOES_DB_EXISTS=1
-  IS_DB_RUNNING=$(eval "$PG_CTL status" | grep "server is running" || true)
-
+elif  [ "$1" == "migrate" ]; then
+  flyway migrate
+  
 else
-
-  DOES_DB_EXISTS=""
-  IS_DB_RUNNING=""
-
-fi
-
-function step {
-  echo "$(tput setaf 2)$1$(tput sgr0)"
-}
-
-function create_database {
-  step "Creating database $REWIND_DB_NAME"
-  mkdir -p "$DEV_DB_DATADIR"
-  initdb -D "$DEV_DB_DATADIR"
-  eval "$PG_CTL start"
-  createuser -h /tmp "$REWIND_DB_USER"
-  createdb -h /tmp -O "$REWIND_DB_USER" "$REWIND_DB_NAME"
-  psql -h /tmp -d "$REWIND_DB_NAME" -c 'CREATE EXTENSION IF NOT EXISTS "uuid-ossp"'
-}
-
-function on_db {
-
-  LABEL="$1"
-  CMD_ON_NEW="$2"
-  CMD_ON_EXISTING="$3"
-
-  if [ -z "$DOES_DB_EXISTS" ]; then
-
-    create_database
-
-    step "Migrating database $REWIND_DB_NAME"
-    eval "$FLYWAY migrate"
-
-    if [ -n "$CMD_ON_NEW" ]; then
-      step "Starting $LABEL"
-      eval "$CMD_ON_NEW"
-    fi
-
-    step "Stopping database $REWIND_DB_NAME"
-    eval "$PG_CTL stop"
-
-  elif [ -n "$IS_DB_RUNNING" ]; then
-
-    step "Starting $LABEL"
-    eval "$CMD_ON_EXISTING"
-
-  else
-
-    step "Starting database $REWIND_DB_NAME"
-    eval "$PG_CTL start"
-
-    step "Starting $LABEL"
-    eval "$CMD_ON_EXISTING"
-
-    step "Stopping database $REWIND_DB_NAME"
-    eval "$PG_CTL stop"
-
-  fi
-}
-
-function delete_database {
-  if [ -n "$IS_DB_RUNNING" ]; then
-
-    step "Stopping database $REWIND_DB_NAME"
-    eval "$PG_CTL stop"
-
-  fi
-
-  if [ -n "$DOES_DB_EXISTS" ]; then
-
-    step "Deleting database $REWIND_DB_NAME"
-    rm -rf "$DEV_DB_DATADIR"
-
-  else
-
-    echo "Database $REWIND_DB_NAME already deleted."
-
-  fi
-}
-
-# Commands
-
-if [ "$1" == "init" ]; then
-
-  on_db \
-    "migration" \
-    "" \
-    "$FLYWAY migrate"
-
-elif [ "$1" == "delete" ]; then
-
-  delete_database
-
-elif [ "$1" == "migrate" ]; then
-
-  on_db \
-    "migration" \
-    "" \
-    "$FLYWAY migrate"
-
-elif [ "$1" == "repair" ]; then
-
-  # Repair flyway history table, useful when altering a migration in dev
-  # See https://flywaydb.org/documentation/maven/repair
-  on_db \
-    "repair" \
-    "" \
-    "$FLYWAY repair"
-
-else
-
-  echo "Usage: $0 init|delete|migrate|repair"
+  echo "Usage: $0 console|migrate"
   exit 1
 
 fi
+

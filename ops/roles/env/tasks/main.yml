@@ -12,6 +12,7 @@
       - python3-psycopg2
       - postgresql
       - postgresql-contrib
+      - postgis
       - nginx
       - openjdk-8-jre
       - unzip
@@ -43,22 +44,25 @@
 - name: Create PostgreSQL user
   become: true
   become_user: postgres
-  postgresql_user: db={{db_name}} name={{db_user}} password={{db_password}} priv=ALL
+  postgresql_user: db={{ db_name }} name={{ db_user }} password={{ db_password }} priv=ALL
 
 - name: Create PostgreSQL extensions
   become: true
   become_user: postgres
-  postgresql_ext: db={{db_name}} name=uuid-ossp
+  postgresql_ext: db={{ db_name }} name={{ item }}
+  with_items:
+    - uuid-ossp
+    - postgis
 
 - name: ensure user does not have unnecessary privilege
   become: true
   become_user: postgres
-  postgresql_user: name={{db_user}} role_attr_flags=NOSUPERUSER,NOCREATEDB
+  postgresql_user: name={{ db_user }} role_attr_flags=NOSUPERUSER,NOCREATEDB
 
 - name: ensure no other user can access the database
   become: true
   become_user: postgres
-  postgresql_privs: db={{db_name}} role=PUBLIC type=database priv=ALL state=absent
+  postgresql_privs: db={{ db_name }} role=PUBLIC type=database priv=ALL state=absent
 
 - name: Start Nginx service
   become: true

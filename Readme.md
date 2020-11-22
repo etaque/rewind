@@ -2,10 +2,11 @@
 
 ## Development
 
-Start backend with:
+Start backend and services with:
 
-    sbt ~reStart
+    bin/dev-server
 
+Sudo will be required to initialize NixOS container on first start.
 
 ## Deployment
 
