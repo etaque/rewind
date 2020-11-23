@@ -4,7 +4,7 @@
 
 Start backend and services with:
 
-    bin/dev-server
+    backend/bin/dev-server
 
 Sudo will be required to initialize NixOS container on first start.
 
@@ -14,13 +14,14 @@ Sudo will be required to initialize NixOS container on first start.
 
 Start and provision the VM with:
 
+    cd backend
     vagrant up
 
 ### Production
 
 Provision EC2 instance with:
 
-    cd ops
+    cd backend/ops
     ansible-playbook -i hosts.yml \
       --extra-vars "@secrets/shared.yml" \
       --extra-vars "@secrets/prod.yml" \

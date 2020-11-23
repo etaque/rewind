@@ -1,8 +1,6 @@
 .bloop/
 .bsp/
 .metals/
-.vscode/
 .vagrant/
 project/target/
 target/
-dev-data/
