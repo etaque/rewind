@@ -17,6 +17,7 @@ import doobie.hikari._
 import doobie.implicits._
 
 import services._
+import stores.PolarStore
 
 object App extends IOApp {
 
@@ -52,6 +53,12 @@ object App extends IOApp {
       sql"SELECT 42".query[Int].unique.transact(xa).flatMap { _ =>
         Ok("Hello world")
       }
+
+    case GET -> Root / "polar" / windSpeed / IntVar(windAngle) =>
+      Ok(
+        utils.Geo
+          .mpsToKnot(PolarStore.current.getSpeed(windSpeed.toDouble, windAngle))
+          .toString)
   }
 
   def makeTransactor(dbConf: Conf.DB): Resource[IO, HikariTransactor[IO]] =
