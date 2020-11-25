@@ -1,4 +1,4 @@
-module Main exposing (..)
+module App exposing (..)
 
 import Browser
 import Browser.Navigation as Nav
@@ -54,6 +54,11 @@ view : Model -> Browser.Document Msg
 view model =
     let
         body =
-            H.text "Hey there!"
+            H.div
+                [ HA.class "container" ]
+                [ H.h1
+                    [ HA.class "font-sans text-5xl" ]
+                    [ H.text "Hey there!" ]
+                ]
     in
-    { title = "Rewind", body = [ body ] }
+    { title = "Re:WIND", body = [ body ] }

@@ -11,5 +11,16 @@
     "url": "git+ssh://git@github.com/etaque/rewind.git"
   },
   "author": "Emilien Taque",
-  "license": "ISC"
+  "license": "ISC",
+  "dependencies": {},
+  "devDependencies": {
+    "autoprefixer": "^10.0.2",
+    "rollup-plugin-elm": "^2.0.2",
+    "rollup-plugin-generate-html-template": "^1.7.0",
+    "rollup-plugin-postcss": "isaacl/rollup-plugin-postcss#9095159",
+    "rollup-plugin-serve": "^1.1.0",
+    "postcss": "^8.1.10",
+    "postcss-import": "^13.0.0",
+    "tailwindcss": "^2.0.1"
+  }
 }
