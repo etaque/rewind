@@ -18,6 +18,7 @@
       - unzip
       - htop
       - certbot
+      - libeccodes-tools
     state: latest
     update_cache: yes
   become: true

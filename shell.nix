@@ -11,9 +11,10 @@ mkShell {
     # backend
     sbt
     flyway
-    ansible
+    ansible_2_9
     postgresql_11
     postgis
+    eccodes
 
     # frontend
     nodejs
