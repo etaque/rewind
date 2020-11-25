@@ -3,6 +3,7 @@ package rewind.services
 import scala.concurrent.duration._
 import java.time.LocalDateTime
 
+import cats.implicits._
 import cats.effect.{IO, Timer}
 import org.http4s._
 import org.http4s.dsl.io._
@@ -52,7 +53,7 @@ object GribService {
             if (now.getHour() == 2) {
               grabLock().flatMap { hasLock =>
                 if (hasLock) {
-                  for {
+                  val result = for {
                     _ <- IO(logger.info("Lock grabbed, syncing..."))
                     filenames <- gribStore.syncOn(
                       now.minusDays(1).toLocalDate(),
@@ -63,6 +64,11 @@ object GribService {
                       .map(httpClient.expect[String])
                       .getOrElse(IO(""))
                   } yield filenames
+                  result.recover(e => {
+                    logger.error(
+                      "Failed to sync, error occured: " + e.getMessage())
+                    Nil
+                  })
                 } else {
                   IO(logger.info("Unable to grab lock, skipping.")).map(_ =>
                     Nil)
@@ -74,6 +80,7 @@ object GribService {
           }
         }
     } else {
+      IO(logger.info("Sync disabled.")).map(_ => Nil)
       Stream.empty
     }
   }
