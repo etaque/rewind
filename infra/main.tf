@@ -35,5 +35,6 @@ data "aws_route53_zone" "zone" {
 
 locals {
   frontend_domain = "rewind.skiffr.me"
+  backend_domain  = "rewind-api.skiffr.me"
 }
 

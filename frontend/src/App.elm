@@ -61,4 +61,4 @@ view model =
                     [ H.text "Hey there!" ]
                 ]
     in
-    { title = "Re:WIND", body = [ body ] }
+    { title = "RE:WIND", body = [ body ] }
