@@ -1,4 +1,4 @@
-skip_ssl: true
+skip_ssl: false
 
 ansible_user: ubuntu
 
@@ -6,6 +6,6 @@ app_name: "rewind-prod"
 db_name: "{{ app_name }}"
 db_user: "{{ app_name }}"
 
-hostname: "rewind.skiffr.me"
+hostname: "rewind-api.skiffr.me"
 
 sync_enabled: true

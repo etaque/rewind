@@ -19,19 +19,10 @@
       - htop
       - certbot
       - libeccodes-tools
+      - python3-certbot-nginx
     state: latest
     update_cache: yes
   become: true
-
-- name: Check if user is lingered (see https://wiki.archlinux.org/index.php/Systemd/User)
-  raw: loginctl show-user {{ ansible_user_id }} | grep --quiet Linger=yes
-  register: linger_enabled
-  ignore_errors: true
-
-- name: Enable user lingering
-  become: true
-  raw: loginctl enable-linger {{ ansible_user_id }}
-  when: linger_enabled.rc != 0
 
 - name: Start PostgreSQL service
   become: true
@@ -95,7 +86,7 @@
   notify:
     reload nginx
 
-- name: Check if certbot is already there
+- name: Check if certbot is already installed
   when: skip_ssl is undefined or not skip_ssl
   stat:
     path: /etc/letsencrypt/live/{{ hostname }}/fullchain.pem

@@ -26,7 +26,7 @@ echo " * Linking $VERSION as alt"
 ln -s -fn $RELEASES_DIR/$VERSION {{app_dir}}/alt || exit 1
 
 echo " * Restarting alt..."
-systemctl --user restart {{ alt_service_name }}.service
+sudo systemctl restart {{ alt_service_name }}.service
 
 
 # wait until alt is up
@@ -44,7 +44,7 @@ echo " * Linking $VERSION as main"
 ln -s -fn $RELEASES_DIR/$VERSION {{app_dir}}/main || exit 1
 
 echo " * Restarting main..."
-systemctl --user restart {{ main_service_name }}.service
+sudo systemctl restart {{ main_service_name }}.service
 
 
 # wait until main is up

@@ -46,26 +46,22 @@
     src: logback.xml.j2
     dest: "{{ conf_dir }}/logback-alt.xml"
 
-- name: Create user services dir
-  file:
-    path: "~/.config/systemd/user/"
-    state: directory
-
 - name: Install main service
   vars:
     current_name: "main"
     http_port: "{{ backend_main_port }}"
   template:
     src: service.j2
-    dest: "~/.config/systemd/user/{{ main_service_name }}.service"
+    dest: "/etc/systemd/system/{{ main_service_name }}.service"
+  become: true
   register: main_service
 
 - name: Enable main service
   systemd:
     name: "{{ main_service_name }}"
     daemon_reload: true
-    scope: user
     enabled: true
+  become: true
   when: main_service.changed
 
 - name: Install alt service
@@ -74,15 +70,16 @@
     http_port: "{{ backend_alt_port }}"
   template:
     src: service.j2
-    dest: "~/.config/systemd/user/{{ alt_service_name }}.service"
+    dest: "/etc/systemd/system/{{ alt_service_name }}.service"
+  become: true
   register: alt_service
 
 - name: Enable alt service
   systemd:
     name: "{{ alt_service_name }}"
     daemon_reload: true
-    scope: user
     enabled: true
+  become: true
   when: alt_service.changed
 
 - name: Upload extract script
