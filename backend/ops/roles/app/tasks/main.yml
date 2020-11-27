@@ -139,3 +139,17 @@
     src: "flyway.conf.j2"
     dest: "{{ flyway_config_file }}"
     mode: "u=rw,og=r"
+
+- name: "Upload GRIB sync script"
+  template:
+    src: gribs_sync.j2
+    dest: "{{ bin_dir }}/gribs_sync.sh"
+    mode: u+x
+
+- name: "Install GRIB sync job"
+  cron:
+    name: "GRIB sync"
+    hour: "3"
+    minute: "0"
+    job: "{{ bin_dir }}/gribs_sync.sh && curl --retry 3 {{ shared_secrets.grib_storage.sync_healthcheck }}"
+

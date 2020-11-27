@@ -2,6 +2,7 @@ http {
     port = ${REWIND_HTTP_PORT}
     address = "127.0.0.1"
 }
+
 db {
     uri = "jdbc:postgresql://localhost/{{ db_name }}"
     user = "{{ db_user }}"
@@ -9,8 +10,8 @@ db {
 }
 
 grib-storage {
-    region = "eu-west-3"
-    bucket = "rewind-gribs"
+    region = "{{ grib_storage.region }}"
+    bucket = "{{ grib_storage.bucket }}"
     key-id = "{{ shared_secrets.grib_storage.key_id }}"
     secret = "{{ shared_secrets.grib_storage.secret }}"
 }
@@ -21,6 +22,6 @@ sync {
 {% else %}
     enabled = false
 {% endif %}
-    healthcheck = "{{ shared_secrets.sync_healthcheck }}"
+    healthcheck = "{{ shared_secrets.grib_storage.sync_healthcheck }}"
 }
 

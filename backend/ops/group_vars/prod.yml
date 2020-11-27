@@ -8,4 +8,4 @@ db_user: "{{ app_name }}"
 
 hostname: "rewind-api.skiffr.me"
 
-sync_enabled: true
+sync_enabled: false

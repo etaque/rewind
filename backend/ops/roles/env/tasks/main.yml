@@ -20,6 +20,7 @@
       - certbot
       - libeccodes-tools
       - python3-certbot-nginx
+      - awscli
     state: latest
     update_cache: yes
   become: true

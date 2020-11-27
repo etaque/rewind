@@ -16,4 +16,8 @@ bin_dir: "{{ ansible_env.HOME }}/bin"
 logs_dir: "{{ app_dir }}/logs"
 conf_dir: "{{ app_dir }}/conf"
 
+grib_storage:
+  region: "eu-west-3"
+  bucket: "rewind-gribs"
+
 sync_enabled: false
