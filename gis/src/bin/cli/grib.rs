@@ -33,6 +33,12 @@ pub fn cli() -> App<'static, 'static> {
                 .required(true)
                 .takes_value(true),
         )
+        .arg(
+            Arg::with_name("forecast")
+                .long("forecast")
+                .required(true)
+                .takes_value(true),
+        )
 }
 
 pub async fn exec(args: &ArgMatches<'static>) -> anyhow::Result<()> {
@@ -46,11 +52,12 @@ pub async fn exec(args: &ArgMatches<'static>) -> anyhow::Result<()> {
 
     let path = tmp.into_temp_path().keep()?;
 
-    let u_output = parse_file(&path, "10u")?;
-    let v_output = parse_file(&path, "10v")?;
-
     let day = NaiveDate::parse_from_str(args.value_of("day").unwrap(), "%Y-%m-%d")?;
     let hour = args.value_of("hour").unwrap().parse::<i16>()?;
+    let forecast = args.value_of("forecast").unwrap().parse::<i16>()?;
+
+    let u_output = parse_file(&path, forecast, "10u")?;
+    let v_output = parse_file(&path, forecast, "10v")?;
 
     let env = Environment::new().await?;
     let conn = env.db_pool.get().await?;
@@ -68,8 +75,8 @@ pub async fn exec(args: &ArgMatches<'static>) -> anyhow::Result<()> {
 
     let _record_id = conn
         .execute(
-            "INSERT INTO wind_records (url, day, hour) VALUES ($1, $2, $3)",
-            &[&url, &day, &hour],
+            "INSERT INTO wind_records (url, day, hour, forecast) VALUES ($1, $2, $3, $4)",
+            &[&url, &day, &hour, &forecast],
         )
         .await?;
 
@@ -122,10 +129,10 @@ impl FromStr for Entry {
     }
 }
 
-fn parse_file(path: &Path, short_name: &str) -> anyhow::Result<Vec<Entry>> {
+fn parse_file(path: &Path, forecast: i16, short_name: &str) -> anyhow::Result<Vec<Entry>> {
     let output = Command::new("grib_get_data")
         .arg("-w")
-        .arg(format!("stepRange=3,shortName={}", short_name))
+        .arg(format!("stepRange={},shortName={}", forecast, short_name))
         .arg(&path)
         .output()?;
     let s = String::from_utf8(output.stdout)?;

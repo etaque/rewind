@@ -12,6 +12,7 @@ pub struct WindRecord {
     pub url: String,
     pub day: NaiveDate,
     pub hour: i16,
+    pub forecast: i16,
 }
 
 #[derive(Clone, Debug)]
