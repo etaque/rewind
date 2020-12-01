@@ -1,19 +1,38 @@
-with import (builtins.fetchGit {
-  name = "nixpkgs-20.09";
-  url = "git@github.com:nixos/nixpkgs.git";
-  rev = "cd63096d6d887d689543a0b97743d28995bc9bc3";
-  ref = "refs/tags/20.09";
-}) {};
+let
+  mozOverlay = import (builtins.fetchTarball https://github.com/mozilla/nixpkgs-mozilla/archive/master.tar.gz);
+  nixpkgs = import <nixpkgs> {
+    overlays = [ mozOverlay ];
+  };
+  rustStable = (nixpkgs.latest.rustChannels.stable.rust.override {
+    extensions = [ 
+      "rust-src"
+      "rls-preview"
+      "clippy-preview"
+      "rustfmt-preview"
+      "rust-analysis"
+    ];
+  });
+in
+with nixpkgs;
 
 mkShell {
 
   buildInputs = [
+    # infra
+    terraform
+
     # backend
     sbt
     flyway
     ansible_2_9
     postgresql_11
     postgis
+
+    # gis
+    rustStable
+    cargo
+    cargo-watch
+    osm2pgsql
     eccodes
 
     # frontend
