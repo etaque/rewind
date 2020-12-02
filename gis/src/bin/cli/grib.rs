@@ -2,7 +2,7 @@ use ::rewind::environment::Environment;
 use chrono::NaiveDate;
 use clap::{App, Arg, ArgMatches, SubCommand};
 use futures::pin_mut;
-use geo_types::Point;
+use postgis::ewkb;
 use reqwest;
 use std::collections::HashMap;
 use std::io::{copy, Cursor};
@@ -11,7 +11,7 @@ use std::path::Path;
 use std::process::Command;
 use std::str::FromStr;
 use tokio_postgres::binary_copy::BinaryCopyInWriter;
-use tokio_postgres::types::Type;
+use tokio_postgres::types::{Kind, Type};
 
 pub fn cli() -> App<'static, 'static> {
     SubCommand::with_name("grib")
@@ -60,7 +60,7 @@ pub async fn exec(args: &ArgMatches<'static>) -> anyhow::Result<()> {
     let v_output = parse_file(&path, forecast, "10v")?;
 
     let env = Environment::new().await?;
-    let conn = env.db_pool.get().await?;
+    let client = env.db_pool.get().await?;
 
     const GRID_SIZE: usize = 65160;
     let mut u_grid: HashMap<Coords, Value> = HashMap::with_capacity(GRID_SIZE);
@@ -73,18 +73,27 @@ pub async fn exec(args: &ArgMatches<'static>) -> anyhow::Result<()> {
         v_grid.insert(entry.coords, entry.value);
     }
 
-    let _record_id = conn
-        .execute(
-            "INSERT INTO wind_records (url, day, hour, forecast) VALUES ($1, $2, $3, $4)",
+    let record_id: i64 = client
+        .query_one(
+            "INSERT INTO wind_records (url, day, hour, forecast) VALUES ($1, $2, $3, $4) RETURNING id",
             &[&url, &day, &hour, &forecast],
         )
-        .await?;
+        .await?.get("id");
 
-    let sink = conn
+    let sink = client
         .copy_in("COPY wind_points (wind_record_id, point, u, v) FROM STDIN BINARY")
         .await?;
+
+    // Geom has a dynamic OID hence the 0. Ignored by rust-postgis anyway:
+    // https://github.com/andelf/rust-postgis/blob/9dff397feae9e1b22454cb269d6a9b1af7e6c530/src/postgis.rs#L22
+    let geom_type = Type::new(
+        String::from("geometry"),
+        0,
+        Kind::Pseudo,
+        String::from("public"),
+    );
     let writer =
-        BinaryCopyInWriter::new(sink, &[Type::INT4, Type::POINT, Type::FLOAT8, Type::FLOAT8]);
+        BinaryCopyInWriter::new(sink, &[Type::INT8, geom_type, Type::FLOAT8, Type::FLOAT8]);
     pin_mut!(writer);
 
     for lat in -90..90 {
@@ -92,8 +101,12 @@ pub async fn exec(args: &ArgMatches<'static>) -> anyhow::Result<()> {
             let k = (format!("{}.000", lat), format!("{}.000", lon));
             match u_grid.get(&k).zip(v_grid.get(&k)) {
                 Some((u, v)) => {
-                    let point = Point::new(lat as f64, lon as f64);
-                    writer.as_mut().write(&[&1, &point, &u, &v]).await.unwrap();
+                    let point = &ewkb::Point::new(lat as f64, lon as f64, None);
+                    writer
+                        .as_mut()
+                        .write(&[&record_id, &point, &u, &v])
+                        .await
+                        .unwrap();
                 }
                 None => (),
             }

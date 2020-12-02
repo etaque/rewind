@@ -1,5 +1,5 @@
 create table wind_records (
-  id serial primary key,
+  id bigserial primary key,
   url text not null,
   day date not null,
   hour smallint not null,
@@ -8,8 +8,8 @@ create table wind_records (
 );
 
 create table wind_points (
-  id serial primary key,
-  wind_record_id int not null references wind_records(id),
+  id bigserial primary key,
+  wind_record_id bigint not null references wind_records(id),
   point geometry(Point) not null,
   u float not null,
   v float not null
