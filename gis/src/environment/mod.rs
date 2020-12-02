@@ -1,7 +1,7 @@
-use std::env;
-
 use bb8::Pool;
 use bb8_postgres::PostgresConnectionManager;
+use dotenv::dotenv;
+use std::env;
 
 pub struct Environment {
     pub db_url: String,
@@ -10,6 +10,7 @@ pub struct Environment {
 
 impl Environment {
     pub async fn new() -> anyhow::Result<Self> {
+        dotenv().ok();
         let db_url = &env::var("DATABASE_URL")?;
         let pg_mgr = PostgresConnectionManager::new(db_url.parse().unwrap(), tokio_postgres::NoTls);
 
