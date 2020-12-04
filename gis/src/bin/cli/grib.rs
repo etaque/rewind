@@ -1,4 +1,5 @@
-use ::rewind::environment::Environment;
+use ::rewind::conf::Conf;
+use ::rewind::db;
 use chrono::NaiveDate;
 use clap::{App, Arg, ArgMatches, SubCommand};
 use futures::pin_mut;
@@ -59,8 +60,9 @@ pub async fn exec(args: &ArgMatches<'static>) -> anyhow::Result<()> {
     let u_output = parse_file(&path, forecast, "10u")?;
     let v_output = parse_file(&path, forecast, "10v")?;
 
-    let env = Environment::new().await?;
-    let client = env.db_pool.get().await?;
+    let conf = Conf::from_env()?;
+    let pool = db::pool(conf).await?;
+    let client = pool.get().await?;
 
     const GRID_SIZE: usize = 65160;
     let mut u_grid: HashMap<Coords, Value> = HashMap::with_capacity(GRID_SIZE);

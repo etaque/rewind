@@ -1,4 +1,5 @@
-use ::rewind::environment::Environment;
+use ::rewind::conf::Conf;
+use ::rewind::db;
 
 mod embedded {
     use refinery::embed_migrations;
@@ -6,8 +7,8 @@ mod embedded {
 }
 
 pub async fn exec() -> anyhow::Result<()> {
-    let env = Environment::new().await?;
-    let mut conn = env.db_pool.dedicated_connection().await?;
+    let conf = Conf::from_env()?;
+    let mut conn = db::pool(conf).await?.dedicated_connection().await?;
 
     println!("Running migrations");
     embedded::migrations::runner().run_async(&mut conn).await?;
