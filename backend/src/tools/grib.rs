@@ -1,7 +1,5 @@
-use ::rewind::conf::Conf;
-use ::rewind::db;
-use chrono::NaiveDate;
-use clap::{App, Arg, ArgMatches, SubCommand};
+use crate::cli::GribArgs;
+use crate::db;
 use futures::pin_mut;
 use postgis::ewkb;
 use reqwest;
@@ -14,37 +12,8 @@ use std::str::FromStr;
 use tokio_postgres::binary_copy::BinaryCopyInWriter;
 use tokio_postgres::types::{Kind, Type};
 
-pub fn cli() -> App<'static, 'static> {
-    SubCommand::with_name("grib")
-        .arg(
-            Arg::with_name("url")
-                .long("url")
-                .required(true)
-                .takes_value(true),
-        )
-        .arg(
-            Arg::with_name("day")
-                .long("day")
-                .required(true)
-                .takes_value(true),
-        )
-        .arg(
-            Arg::with_name("hour")
-                .long("hour")
-                .required(true)
-                .takes_value(true),
-        )
-        .arg(
-            Arg::with_name("forecast")
-                .long("forecast")
-                .required(true)
-                .takes_value(true),
-        )
-}
-
-pub async fn exec(args: &ArgMatches<'static>) -> anyhow::Result<()> {
-    let url = args.value_of("url").unwrap();
-    let res = reqwest::get(url).await?;
+pub async fn exec(db_url: String, args: GribArgs) -> anyhow::Result<()> {
+    let res = reqwest::get(&args.url).await?;
     let mut content = Cursor::new(res.bytes().await?);
 
     let mut tmp = tempfile::NamedTempFile::new()?;
@@ -53,15 +22,10 @@ pub async fn exec(args: &ArgMatches<'static>) -> anyhow::Result<()> {
 
     let path = tmp.into_temp_path().keep()?;
 
-    let day = NaiveDate::parse_from_str(args.value_of("day").unwrap(), "%Y-%m-%d")?;
-    let hour = args.value_of("hour").unwrap().parse::<i16>()?;
-    let forecast = args.value_of("forecast").unwrap().parse::<i16>()?;
+    let u_output = parse_file(&path, args.forecast, "10u")?;
+    let v_output = parse_file(&path, args.forecast, "10v")?;
 
-    let u_output = parse_file(&path, forecast, "10u")?;
-    let v_output = parse_file(&path, forecast, "10v")?;
-
-    let conf = Conf::from_env()?;
-    let pool = db::pool(conf).await?;
+    let pool = db::pool(db_url).await?;
     let client: db::Conn = pool.get().await?;
 
     const GRID_SIZE: usize = 65160;
@@ -78,7 +42,7 @@ pub async fn exec(args: &ArgMatches<'static>) -> anyhow::Result<()> {
     let record_id: i64 = client
         .query_one(
             "INSERT INTO wind_records (url, day, hour, forecast) VALUES ($1, $2, $3, $4) RETURNING id",
-            &[&url, &day, &hour, &forecast],
+            &[&args.url, &args.day, &args.hour, &args.forecast],
         )
         .await?.get("id");
 

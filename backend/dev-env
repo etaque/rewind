@@ -2,5 +2,5 @@ export PGHOST=$(nixos-container show-ip rewind)
 export PGUSER=rewind
 export PGDATABASE=rewind
 
-export REWIND_DATABASE_URL="postgresql://$PGHOST/$PGDATABASE"
+export REWIND_DATABASE_URL="postgresql://$PGUSER@$PGHOST/$PGDATABASE"
 

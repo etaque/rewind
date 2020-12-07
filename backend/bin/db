@@ -10,7 +10,7 @@ if [ "$1" == "console" ]; then
   psql
 
 elif  [ "$1" == "migrate" ]; then
-  flyway migrate
+  cargo run -- db migrate
 
 elif  [ "$1" == "prepare" ]; then
   SHP_NAME=simplified-land-polygons-complete
