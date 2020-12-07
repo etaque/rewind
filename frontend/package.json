@@ -12,7 +12,10 @@
   },
   "author": "Emilien Taque",
   "license": "ISC",
-  "dependencies": {},
+  "dependencies": {
+    "leaflet": "^1.7.1",
+    "tangram": "^0.21.0"
+  },
   "devDependencies": {
     "autoprefixer": "^10.0.2",
     "postcss": "^8.1.10",

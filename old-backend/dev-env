@@ -1,0 +1,11 @@
+export PGHOST=$(nixos-container show-ip rewind)
+export PGUSER=rewind
+export PGDATABASE=rewind
+
+export REWIND_DB_NAME="$PGDATABASE"
+export REWIND_DB_USER="$PGUSER"
+export REWIND_DB_URI="jdbc:postgresql://$PGHOST/$PGDATABASE"
+
+export FLYWAY_URL="$REWIND_DB_URI"
+export FLYWAY_USER="$REWIND_DB_USER"
+export FLYWAY_PASSWORD=""
