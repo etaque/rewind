@@ -15,11 +15,11 @@ actix-codec = "0.3"
 actix-web = "3"
 actix-web-actors = "3"
 env_logger = "0.7"
-awc = "2"
 reqwest = { version = "0.10", features = ["rustls-tls"], default-features = false }
 tempfile = "3"
 serde_derive = "1.0"
 serde = "1.0"
+serde_json = "1.0"
 derive_more = "0.99.2"
 chrono = { version = "0.4", features = ["serde"] }
 # structopt = "0.1.3"
@@ -34,3 +34,4 @@ postgis = "0.7"
 postgres-types = { version = "0.1.3", features = ["derive"] }
 uuid = { version = "0.8", features = ["serde", "v4"] }
 bytes = "0.5"
+geo = "0.16"
