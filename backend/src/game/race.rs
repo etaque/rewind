@@ -29,7 +29,7 @@ impl Handler<RunUpdate> for Race {
             let conn = local_pool.get().await?;
             let report = wind_reports::find_closest(conn, real_time).await?;
             Ok(WindUpdate(WindState {
-                report,
+                time: report.target_time,
                 points: Vec::new(),
             }))
         };

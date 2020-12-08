@@ -1866,7 +1866,6 @@ dependencies = [
  "bb8-postgres",
  "bytes",
  "chrono",
- "clap",
  "derive_more",
  "env_logger",
  "futures",

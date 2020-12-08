@@ -1,7 +1,8 @@
 use actix::prelude::*;
+use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 
-use crate::models::{Area, Coord, WindPoint, WindReport};
+use crate::models::{Area, Coord, WindPoint};
 
 #[derive(Clone, Debug, Deserialize, Serialize)]
 pub struct PlayerState {
@@ -12,7 +13,7 @@ pub struct PlayerState {
 
 #[derive(Clone, Debug, Deserialize, Serialize)]
 pub struct WindState {
-    pub report: WindReport,
+    pub time: DateTime<Utc>,
     pub points: Vec<WindPoint>,
 }
 

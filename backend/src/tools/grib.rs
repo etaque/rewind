@@ -1,5 +1,6 @@
 use crate::cli::GribArgs;
 use crate::db;
+use chrono::{DateTime, Utc};
 use futures::pin_mut;
 use postgis::ewkb;
 use reqwest;
@@ -39,10 +40,15 @@ pub async fn exec(db_url: String, args: GribArgs) -> anyhow::Result<()> {
         v_grid.insert(entry.coords, entry.value);
     }
 
+    let target_time = DateTime::<Utc>::from_utc(
+        args.day.and_hms((args.hour + args.forecast) as u32, 0, 0),
+        Utc,
+    );
+
     let record_id: i64 = client
         .query_one(
-            "INSERT INTO wind_records (url, day, hour, forecast) VALUES ($1, $2, $3, $4) RETURNING id",
-            &[&args.url, &args.day, &args.hour, &args.forecast],
+            "INSERT INTO wind_records (url, day, hour, forecast, target_time) VALUES ($1, $2, $3, $4, $5) RETURNING id",
+            &[&args.url, &args.day, &args.hour, &args.forecast, &target_time],
         )
         .await?.get("id");
 

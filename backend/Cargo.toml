@@ -6,7 +6,6 @@ edition = "2018"
 
 [dependencies]
 tokio = { version = "0.2", features = ["macros"] }
-clap = "2.33.3" # 3.0.0 compiling fails
 structopt = "0.3.21"
 futures = "0.3.1"
 actix = "0.10"

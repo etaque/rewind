@@ -37,6 +37,7 @@ pub struct WindReport {
     pub day: NaiveDate,
     pub hour: i16,
     pub forecast: i16,
+    pub target_time: DateTime<Utc>,
     pub creation_time: DateTime<Utc>,
 }
 
