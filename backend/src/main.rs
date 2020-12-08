@@ -18,7 +18,7 @@ async fn session(
     pool: web::Data<db::Pool>,
 ) -> Result<HttpResponse, Error> {
     ws::start(
-        game::session::Session::new(pool, models::Course::vg20()),
+        game::session::Session::new(pool, repos::courses::vg20()),
         &req,
         stream,
     )

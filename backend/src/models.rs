@@ -62,25 +62,6 @@ pub struct Course {
 }
 
 impl Course {
-    const LSD: Coord = Coord {
-        lon: 46.470243284275966,
-        lat: -1.788456535301071,
-    };
-
-    pub fn vg20() -> Self {
-        Course {
-            key: "vg20".to_string(),
-            name: "Vendée Globe 2020".to_string(),
-            start_time: DateTime::<Utc>::from_utc(
-                NaiveDate::from_ymd(2020, 11, 8).and_hms(11, 0, 0),
-                Utc,
-            ),
-            start_coord: Self::LSD,
-            finish_coord: Self::LSD,
-            time_factor: 100,
-        }
-    }
-
     pub fn real_time(&self, clock: i64) -> DateTime<Utc> {
         self.start_time + Duration::milliseconds(clock) * self.time_factor.into()
     }
