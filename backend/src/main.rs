@@ -1,11 +1,12 @@
 mod cli;
 mod db;
+mod error;
 mod game;
 mod models;
-mod stores;
+mod repos;
 mod tools;
 
-use actix_web::{middleware, web, App, Error, HttpRequest, HttpResponse, HttpServer, Responder};
+use actix_web::{get, middleware, web, App, Error, HttpRequest, HttpResponse, HttpServer};
 use actix_web_actors::ws;
 use structopt::StructOpt;
 
@@ -23,26 +24,27 @@ async fn session(
     )
 }
 
-async fn health() -> impl Responder {
-    "Ok"
+#[get("/health")]
+async fn health(pool: web::Data<db::Pool>) -> Result<&'static str, error::Error> {
+    db::health(pool).await?;
+    Ok("All good")
 }
 
 #[actix_web::main]
 async fn main() -> anyhow::Result<()> {
-    std::env::set_var("RUST_LOG", "actix_server=info,actix_web=info");
     env_logger::init();
 
     let args = Cli::from_args();
 
     match args.cmd {
         Command::Server { address } => {
-            let pool = web::Data::new(db::pool(args.database_url).await.unwrap());
+            let pool = db::pool(args.database_url).await?;
             let server = HttpServer::new(move || {
                 App::new()
                     .data(pool.clone())
                     .wrap(middleware::Logger::default())
                     .service(web::resource("/game").route(web::get().to(session)))
-                    .service(web::scope("/app").route("/health", web::get().to(health)))
+                    .service(health)
             })
             .bind(address)?
             .run()

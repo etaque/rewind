@@ -1,3 +1,3 @@
-pub mod msg;
+pub mod messages;
 pub mod race;
 pub mod session;

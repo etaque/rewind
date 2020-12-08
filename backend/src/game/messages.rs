@@ -17,7 +17,7 @@ pub struct WindState {
 }
 
 #[derive(Clone, Debug, Deserialize, Serialize, Message)]
-#[rtype(result = "WindUpdate")]
+#[rtype(result = "anyhow::Result<WindUpdate>")]
 pub struct RunUpdate(pub PlayerState);
 
 #[derive(Clone, Debug, Deserialize, Serialize)]

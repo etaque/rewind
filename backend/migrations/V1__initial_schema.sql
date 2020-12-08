@@ -4,7 +4,7 @@ create table wind_reports (
   day date not null,
   hour smallint not null,
   forecast smallint not null,
-  creation timestamptz not null default now()
+  creation_time timestamptz not null default now()
 );
 
 create table wind_points (

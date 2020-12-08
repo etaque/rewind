@@ -1,6 +1,7 @@
 use actix::prelude::*;
 use actix_web::web;
 use actix_web_actors::ws;
+use log::{error, warn};
 use serde_json;
 use std::time::{Duration, Instant};
 
@@ -40,20 +41,25 @@ impl StreamHandler<Result<ws::Message, ws::ProtocolError>> for Session {
                         .send(msg)
                         .into_actor(self)
                         .map(|result, _act, _ctx| match result {
-                            Ok(wind_update) => {
+                            Ok(Ok(wind_update)) => {
                                 _ctx.text(serde_json::to_string(&wind_update).unwrap());
                             }
+                            Ok(Err(e)) => {
+                                warn!("Unable to process message: {:#?}", e);
+                            }
                             _ => {
-                                println!("TODO Actor error");
+                                error!("TODO Actor error");
                             }
                         })
                         .wait(ctx);
                 }
-                _ => {
-                    println!("Unable to process message: {}", text);
+                Err(e) => {
+                    warn!("Unable to deserialize message: {:#?}", e);
                 }
             },
-            Ok(ws::Message::Binary(_)) => {}
+            Ok(ws::Message::Binary(_)) => {
+                warn!("Binary message, ignoring.");
+            }
             Ok(ws::Message::Close(reason)) => {
                 ctx.close(reason);
                 ctx.stop();
