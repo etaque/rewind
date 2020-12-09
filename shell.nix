@@ -4,6 +4,7 @@ let
     overlays = [ mozOverlay ];
   };
   rustStable = (nixpkgs.latest.rustChannels.stable.rust.override {
+    targets = [ "wasm32-unknown-unknown" "x86_64-unknown-linux-gnu" ];
     extensions = [ 
       "rust-src"
       "rls-preview"
@@ -21,27 +22,19 @@ mkShell {
     # infra
     terraform
 
-    # backend
-    sbt
-    flyway
+    # server
     ansible_2_9
     postgresql_11
     postgis
-
-    # gis
     rustStable
     cargo
     cargo-watch
     osm2pgsql
     eccodes
 
-    # frontend
-    nodejs
-    nodePackages.rollup
-    elmPackages.elm
-    elmPackages.elm-format
-    elmPackages.elm-test
-    awscli
+    # client
+    cargo-make
+    wasm-pack
   ];
 
 }

@@ -1,7 +1,0 @@
-# rewind-local.skiffr.me
-
-- hosts: local
-  roles:
-    - { role: roles/env }
-    - { role: roles/app }
-
