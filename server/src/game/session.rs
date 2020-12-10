@@ -6,7 +6,8 @@ use log::{error, info, warn};
 use serde_json;
 use std::time::{Duration, Instant};
 
-use shared::*;
+use shared::messages;
+use shared::models;
 
 use crate::db;
 use crate::repos::wind_reports;
@@ -17,7 +18,13 @@ const CLIENT_TIMEOUT: Duration = Duration::from_secs(10);
 pub struct Session {
     pool: web::Data<db::Pool>,
     hb: Instant,
-    course: Course,
+    state: State,
+}
+
+#[derive(Clone)]
+pub enum State {
+    Idle,
+    Running(models::Course),
 }
 
 impl Actor for Session {
@@ -25,8 +32,8 @@ impl Actor for Session {
 
     fn started(&mut self, ctx: &mut Self::Context) {
         self.hb(ctx);
+        ctx.notify(LocalMessage::Tick);
         info!("Started a session");
-        ctx.text(serde_json::to_string(&ToPlayer::CourseInit(self.course.clone())).unwrap());
     }
 }
 
@@ -42,15 +49,14 @@ impl StreamHandler<Result<ws::Message, ws::ProtocolError>> for Session {
             }
             Ok(ws::Message::Text(text)) => match serde_json::from_str(&text) {
                 Ok(msg) => {
-                    Session::handle_from_player(self.pool.clone(), self.course.clone(), msg)
+                    Self::handle_player_message(self.pool.clone(), self.state.clone(), msg)
                         .into_actor(self)
-                        .map(|result, _act, _ctx| match result {
-                            Ok(to_player) => {
-                                _ctx.text(serde_json::to_string(&to_player).unwrap());
+                        .then(|res, act, ctx| {
+                            match res {
+                                Ok(local_msg) => ctx.notify(local_msg),
+                                _ => ctx.stop(),
                             }
-                            _ => {
-                                error!("TODO Actor error");
-                            }
+                            fut::ready(())
                         })
                         .wait(ctx);
                 }
@@ -70,35 +76,80 @@ impl StreamHandler<Result<ws::Message, ws::ProtocolError>> for Session {
     }
 }
 
+#[derive(Clone, Message)]
+#[rtype(result = "anyhow::Result<()>")]
+enum LocalMessage {
+    Tick,
+    SendToPlayer(messages::FromServer),
+}
+
+impl Handler<LocalMessage> for Session {
+    type Result = anyhow::Result<()>;
+
+    fn handle(&mut self, msg: LocalMessage, ctx: &mut Self::Context) -> Self::Result {
+        match msg {
+            LocalMessage::Tick => {
+                match self.state.clone() {
+                    State::Idle => {}
+                    State::Running(_course) => {
+                        // TODO send wind?
+                    }
+                };
+                ctx.notify_later(LocalMessage::Tick, Duration::from_secs(1));
+
+                Ok(())
+            }
+            LocalMessage::SendToPlayer(to_player) => {
+                Ok(ctx.text(serde_json::to_string(&to_player)?))
+            }
+        }
+    }
+}
+
 impl Session {
-    pub fn new(pool: web::Data<db::Pool>, course: Course) -> Self {
+    pub fn new(pool: web::Data<db::Pool>) -> Self {
         Self {
             hb: Instant::now(),
             pool,
-            course,
+            state: State::Idle,
         }
     }
 
-    async fn handle_from_player(
+    async fn handle_player_message(
         pool: web::Data<db::Pool>,
-        course: Course,
-        msg: FromPlayer,
-    ) -> anyhow::Result<ToPlayer> {
-        match msg {
-            FromPlayer::RunUpdate(state) => {
+        state: State,
+        msg: messages::ToServer,
+    ) -> anyhow::Result<LocalMessage> {
+        match (msg, state) {
+            (messages::ToServer::SelectCourse(_), State::Idle) => {
+                let course = shared::courses::vg20();
+                let initial_wind = models::WindState {
+                    time: course.start_time,
+                    points: Vec::new(),
+                };
+                Ok(LocalMessage::SendToPlayer(
+                    messages::FromServer::InitCourse(course, initial_wind),
+                ))
+            }
+            (messages::ToServer::UpdateRun(state), State::Running(course)) => {
                 let at = Self::real_time(course, state.clock);
 
                 let conn = pool.get().await?;
                 let report = wind_reports::find_closest(conn, at).await?;
-                Ok(ToPlayer::WindUpdate(WindState {
-                    time: report.target_time,
-                    points: Vec::new(),
-                }))
+                Ok(LocalMessage::SendToPlayer(
+                    messages::FromServer::RefreshWind(models::WindState {
+                        time: report.target_time,
+                        points: Vec::new(),
+                    }),
+                ))
             }
+            (msg, _) => Ok(LocalMessage::SendToPlayer(
+                messages::FromServer::Unexpected(msg.clone()),
+            )),
         }
     }
 
-    pub fn real_time(course: Course, clock: i64) -> DateTime<Utc> {
+    pub fn real_time(course: models::Course, clock: i64) -> DateTime<Utc> {
         course.start_time + chrono::Duration::milliseconds(clock) * course.time_factor.into()
     }
 

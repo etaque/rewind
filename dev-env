@@ -3,4 +3,3 @@ export PGUSER=rewind
 export PGDATABASE=rewind
 
 export REWIND_DATABASE_URL="postgresql://$PGUSER@$PGHOST/$PGDATABASE"
-export RUST_LOG=debug

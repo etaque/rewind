@@ -18,11 +18,7 @@ async fn session(
     stream: web::Payload,
     pool: web::Data<db::Pool>,
 ) -> Result<HttpResponse, Error> {
-    ws::start(
-        game::session::Session::new(pool, repos::courses::vg20()),
-        &req,
-        stream,
-    )
+    ws::start(game::session::Session::new(pool), &req, stream)
 }
 
 #[get("/health")]
@@ -48,7 +44,7 @@ async fn main() -> anyhow::Result<()> {
                 App::new()
                     .data(pool.clone())
                     .wrap(middleware::Logger::default())
-                    .service(web::resource("/game").route(web::get().to(session)))
+                    .service(web::resource("/session").route(web::get().to(session)))
                     .service(Files::new("/pkg", "./client/pkg"))
                     .service(health)
                     .default_service(web::get().to(index))

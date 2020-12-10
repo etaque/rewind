@@ -3,24 +3,27 @@ use postgis::ewkb;
 use postgres_types::{FromSql, ToSql};
 use tokio_pg_mapper_derive::PostgresMapper;
 
+use shared::models::LngLat;
+
 #[derive(Clone, Debug, FromSql, ToSql)]
 pub struct Point {
     pub lng: f64,
     pub lat: f64,
 }
 
-impl From<shared::LngLat> for Point {
-    fn from(p: shared::LngLat) -> Self {
+impl From<LngLat> for Point {
+    fn from(p: LngLat) -> Self {
         Self { lng: p.0, lat: p.1 }
     }
 }
 
-impl Into<shared::LngLat> for Point {
-    fn into(self) -> shared::LngLat {
-        shared::LngLat(self.lng, self.lat)
+impl Into<LngLat> for Point {
+    fn into(self) -> LngLat {
+        LngLat(self.lng, self.lat)
     }
 }
 
+// SQL derivation
 impl From<ewkb::Point> for Point {
     fn from(p: ewkb::Point) -> Self {
         Self { lng: p.x, lat: p.y }

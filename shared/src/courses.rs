@@ -1,8 +1,10 @@
 use chrono::{DateTime, NaiveDate, Utc};
-use shared::*;
+
+use super::models::*;
+
+static LSD: LngLat = LngLat(46.470243284275966, -1.788456535301071);
 
 pub fn vg20() -> Course {
-    let lsd = LngLat(46.470243284275966, -1.788456535301071);
     Course {
         key: "vg20".to_string(),
         name: "Vendée Globe 2020".to_string(),
@@ -10,8 +12,8 @@ pub fn vg20() -> Course {
             NaiveDate::from_ymd(2020, 11, 8).and_hms(11, 0, 0),
             Utc,
         ),
-        start: lsd.clone(),
-        finish: lsd.clone(),
+        start: LSD.clone(),
+        finish: LSD.clone(),
         time_factor: 100,
     }
 }
