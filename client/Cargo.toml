@@ -14,7 +14,9 @@ wasm-bindgen-test = "0.3.18"
 [dependencies]
 seed = "0.8.0"
 serde = "1.0"
-
+serde_json = "1.0"
+rmp-serde = "0.14"
+chrono = { version = "0.4", features = ["serde"] }
 shared = { path = "../shared"}
 
 # [profile.release]

@@ -1,13 +1,14 @@
 use actix::prelude::*;
 use actix_web::web;
 use actix_web_actors::ws;
-use log::{error, warn};
+use chrono::{DateTime, Utc};
+use log::{error, info, warn};
 use serde_json;
 use std::time::{Duration, Instant};
 
-use super::messages::*;
+use shared::*;
+
 use crate::db;
-use crate::models::*;
 use crate::repos::wind_reports;
 
 const HEARTBEAT_INTERVAL: Duration = Duration::from_secs(5);
@@ -24,6 +25,7 @@ impl Actor for Session {
 
     fn started(&mut self, ctx: &mut Self::Context) {
         self.hb(ctx);
+        info!("Started a session");
         ctx.text(serde_json::to_string(&ToPlayer::CourseInit(self.course.clone())).unwrap());
     }
 }
@@ -84,10 +86,10 @@ impl Session {
     ) -> anyhow::Result<ToPlayer> {
         match msg {
             FromPlayer::RunUpdate(state) => {
-                let real_time = course.real_time(state.clock);
+                let at = Self::real_time(course, state.clock);
 
                 let conn = pool.get().await?;
-                let report = wind_reports::find_closest(conn, real_time).await?;
+                let report = wind_reports::find_closest(conn, at).await?;
                 Ok(ToPlayer::WindUpdate(WindState {
                     time: report.target_time,
                     points: Vec::new(),
@@ -95,6 +97,11 @@ impl Session {
             }
         }
     }
+
+    pub fn real_time(course: Course, clock: i64) -> DateTime<Utc> {
+        course.start_time + chrono::Duration::milliseconds(clock) * course.time_factor.into()
+    }
+
     fn hb(&self, ctx: &mut <Self as Actor>::Context) {
         ctx.run_interval(HEARTBEAT_INTERVAL, |act, ctx| {
             if Instant::now().duration_since(act.hb) > CLIENT_TIMEOUT {

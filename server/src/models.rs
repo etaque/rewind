@@ -1,35 +1,33 @@
-use chrono::{DateTime, Duration, NaiveDate, Utc};
-use geo;
+use chrono::{DateTime, NaiveDate, Utc};
 use postgis::ewkb;
 use postgres_types::{FromSql, ToSql};
-use serde::{Deserialize, Serialize};
 use tokio_pg_mapper_derive::PostgresMapper;
 
-#[derive(Clone, Debug, Serialize, Deserialize, FromSql, ToSql)]
-pub struct Coord {
-    pub lon: f64,
+#[derive(Clone, Debug, FromSql, ToSql)]
+pub struct Point {
+    pub lng: f64,
     pub lat: f64,
 }
 
-#[derive(Clone, Debug, Deserialize, Serialize)]
-pub struct Area {
-    min: Coord,
-    max: Coord,
+impl From<shared::LngLat> for Point {
+    fn from(p: shared::LngLat) -> Self {
+        Self { lng: p.0, lat: p.1 }
+    }
 }
 
-impl From<ewkb::Point> for Coord {
+impl Into<shared::LngLat> for Point {
+    fn into(self) -> shared::LngLat {
+        shared::LngLat(self.lng, self.lat)
+    }
+}
+
+impl From<ewkb::Point> for Point {
     fn from(p: ewkb::Point) -> Self {
-        Self { lon: p.x, lat: p.y }
+        Self { lng: p.x, lat: p.y }
     }
 }
 
-impl From<geo::Coordinate<f64>> for Coord {
-    fn from(c: geo::Coordinate<f64>) -> Self {
-        Self { lon: c.x, lat: c.y }
-    }
-}
-
-#[derive(Clone, Debug, Deserialize, PostgresMapper, Serialize)]
+#[derive(Clone, Debug, PostgresMapper)]
 #[pg_mapper(table = "wind_reports")]
 pub struct WindReport {
     pub id: i64,
@@ -41,28 +39,12 @@ pub struct WindReport {
     pub creation_time: DateTime<Utc>,
 }
 
-#[derive(Clone, Debug, Deserialize, PostgresMapper, Serialize)]
+#[derive(Clone, Debug, PostgresMapper)]
 #[pg_mapper(table = "wind_points")]
 pub struct WindPoint {
     pub id: i64,
     pub wind_report_id: i64,
-    pub coord: Coord,
+    pub point: Point,
     pub u: f64,
     pub v: f64,
-}
-
-#[derive(Clone, Debug, Deserialize, Serialize)]
-pub struct Course {
-    pub key: String,
-    pub name: String,
-    pub start_time: DateTime<Utc>,
-    pub start_coord: Coord,
-    pub finish_coord: Coord,
-    pub time_factor: i8,
-}
-
-impl Course {
-    pub fn real_time(&self, clock: i64) -> DateTime<Utc> {
-        self.start_time + Duration::milliseconds(clock) * self.time_factor.into()
-    }
 }

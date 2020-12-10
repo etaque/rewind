@@ -15,7 +15,6 @@ dependencies = ["build_client_release", "build_server_release"]
 
 [tasks.build_client]
 description = "Build client"
-install_crate = { crate_name = "wasm-pack", binary = "wasm-pack", test_arg = "-V" }
 command = "wasm-pack"
 args = ["build", "client", "--target", "web", "--out-name", "package", "--dev"]
 

@@ -1,3 +1,10 @@
+use actix_files::{Files, NamedFile};
+use actix_web::{get, middleware, web, App, Error, HttpRequest, HttpResponse, HttpServer};
+use actix_web_actors::ws;
+use structopt::StructOpt;
+
+use cli::{Cli, Command};
+
 mod cli;
 mod db;
 mod error;
@@ -5,12 +12,6 @@ mod game;
 mod models;
 mod repos;
 mod tools;
-
-use actix_web::{get, middleware, web, App, Error, HttpRequest, HttpResponse, HttpServer};
-use actix_web_actors::ws;
-use structopt::StructOpt;
-
-use cli::{Cli, Command};
 
 async fn session(
     req: HttpRequest,
@@ -30,6 +31,10 @@ async fn health(pool: web::Data<db::Pool>) -> Result<&'static str, error::Error>
     Ok("All good")
 }
 
+async fn index() -> actix_web::Result<NamedFile> {
+    Ok(NamedFile::open("./client/index.html")?)
+}
+
 #[actix_web::main]
 async fn main() -> anyhow::Result<()> {
     env_logger::init();
@@ -44,7 +49,9 @@ async fn main() -> anyhow::Result<()> {
                     .data(pool.clone())
                     .wrap(middleware::Logger::default())
                     .service(web::resource("/game").route(web::get().to(session)))
+                    .service(Files::new("/pkg", "./client/pkg"))
                     .service(health)
+                    .default_service(web::get().to(index))
             })
             .bind(address)?
             .run()

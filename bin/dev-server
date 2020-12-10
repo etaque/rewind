@@ -5,6 +5,4 @@ cd `dirname "$0"`/..
 bin/container ensure
 source dev-env
 
-cargo make start
-
-# cargo watch -x 'run --bin rewind -- server'
+cargo watch -x 'make start'
