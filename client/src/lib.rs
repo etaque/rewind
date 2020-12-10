@@ -12,6 +12,7 @@ struct Model {
     state: State,
     web_socket: WebSocket,
     web_socket_reconnector: Option<StreamHandle>,
+    _tick: StreamHandle,
 }
 
 #[derive(Clone)]
@@ -31,6 +32,8 @@ struct Session {
 enum Msg {
     Open(Course),
     WsMsg(WsMsg),
+    Tick,
+    Rendered(RenderInfo),
 }
 
 enum WsMsg {
@@ -43,10 +46,13 @@ enum WsMsg {
 }
 
 fn init(_: Url, orders: &mut impl Orders<Msg>) -> Model {
+    orders.after_next_render(Msg::Rendered);
+    let _tick = orders.stream_with_handle(streams::interval(1000, || Msg::Tick));
     Model {
         state: State::Root,
         web_socket: create_websocket(orders),
         web_socket_reconnector: None,
+        _tick,
     }
 }
 
@@ -64,25 +70,26 @@ fn create_websocket(orders: &impl Orders<Msg>) -> WebSocket {
 
 fn update(msg: Msg, mut model: &mut Model, orders: &mut impl Orders<Msg>) {
     match msg {
+        Msg::Tick => match model.state.clone() {
+            State::Playing(session) => {
+                let msg = ToServer::UpdateRun(session.state.clone());
+                model.web_socket.send_json(&msg).unwrap();
+            }
+            _ => (),
+        },
         Msg::Open(course) => {
             let msg = ToServer::SelectCourse(course.key.clone());
             model.web_socket.send_json(&msg).unwrap();
             model.state = State::Opening(course.clone());
+        }
+        Msg::Rendered(info) => {
+            log!(info);
         }
         Msg::WsMsg(ws_msg) => {
             let reconnect = |i| Msg::WsMsg(WsMsg::ReconnectWebSocket(i));
             match ws_msg {
                 WsMsg::WebSocketOpened => {
                     model.web_socket_reconnector = None;
-                    let msg = ToServer::UpdateRun(PlayerState {
-                        clock: 0,
-                        position: LngLat(46.470243284275966, 46.470243284275966),
-                        viewport: LngLatBounds {
-                            sw: LngLat(0.0, 0.0),
-                            ne: LngLat(1.0, 1.0),
-                        },
-                    });
-                    model.web_socket.send_json(&msg).unwrap();
                     log!("WebSocket connection is open now");
                 }
                 WsMsg::TextMessageReceived(message) => {
@@ -143,7 +150,9 @@ fn update_from_server(msg: FromServer, model: &mut Model) {
             let new_session = Session { wind, ..session };
             model.state = State::Playing(new_session);
         }
-        (FromServer::Unexpected(_), _) => error!("Ooops, sent an unexpected message to server..."),
+        (FromServer::Unexpected(_msg), _) => {
+            error!("Ooops, sent an unexpected message to server...", _msg)
+        }
         _ => error!("Ooops, received an unexpected message from server..."),
     }
 }
@@ -175,12 +184,15 @@ fn view(model: &Model) -> Node<Msg> {
             ev(Ev::Click, |_| Msg::Open(shared::courses::vg20())),
         ],
         State::Opening(_course) => div!("Opening a course..."),
-        State::Playing(_session) => custom![
-            Tag::from("mapbox-gl"),
-            attrs! {
-            At::from("foo") => "bar"
-            }
-        ],
+        State::Playing(session) => div!(
+            h1!(&session.course.name),
+            custom![
+                Tag::from("mapbox-gl"),
+                attrs! {
+                At::from("foo") => "bar"
+                }
+            ]
+        ),
     }
 }
 

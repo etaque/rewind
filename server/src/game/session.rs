@@ -51,7 +51,7 @@ impl StreamHandler<Result<ws::Message, ws::ProtocolError>> for Session {
                 Ok(msg) => {
                     Self::handle_player_message(self.pool.clone(), self.state.clone(), msg)
                         .into_actor(self)
-                        .then(|res, act, ctx| {
+                        .then(|res, _, ctx| {
                             match res {
                                 Ok(local_msg) => ctx.notify(local_msg),
                                 _ => ctx.stop(),
@@ -80,6 +80,7 @@ impl StreamHandler<Result<ws::Message, ws::ProtocolError>> for Session {
 #[rtype(result = "anyhow::Result<()>")]
 enum LocalMessage {
     Tick,
+    StartCourse(models::Course, models::WindState),
     SendToPlayer(messages::FromServer),
 }
 
@@ -88,6 +89,11 @@ impl Handler<LocalMessage> for Session {
 
     fn handle(&mut self, msg: LocalMessage, ctx: &mut Self::Context) -> Self::Result {
         match msg {
+            LocalMessage::StartCourse(course, wind) => {
+                self.state = State::Running(course.clone());
+                let to_player = messages::FromServer::InitCourse(course, wind);
+                Ok(ctx.text(serde_json::to_string(&to_player)?))
+            }
             LocalMessage::Tick => {
                 match self.state.clone() {
                     State::Idle => {}
@@ -120,6 +126,7 @@ impl Session {
         state: State,
         msg: messages::ToServer,
     ) -> anyhow::Result<LocalMessage> {
+        info!("Handling message from player: {:?}", msg);
         match (msg, state) {
             (messages::ToServer::SelectCourse(_), State::Idle) => {
                 let course = shared::courses::vg20();
@@ -127,9 +134,7 @@ impl Session {
                     time: course.start_time,
                     points: Vec::new(),
                 };
-                Ok(LocalMessage::SendToPlayer(
-                    messages::FromServer::InitCourse(course, initial_wind),
-                ))
+                Ok(LocalMessage::StartCourse(course, initial_wind))
             }
             (messages::ToServer::UpdateRun(state), State::Running(course)) => {
                 let at = Self::real_time(course, state.clock);
@@ -143,9 +148,12 @@ impl Session {
                     }),
                 ))
             }
-            (msg, _) => Ok(LocalMessage::SendToPlayer(
-                messages::FromServer::Unexpected(msg.clone()),
-            )),
+            (msg, _) => {
+                warn!("Unexpected player message: {:?}", msg.clone());
+                Ok(LocalMessage::SendToPlayer(
+                    messages::FromServer::Unexpected(msg.clone()),
+                ))
+            }
         }
     }
 
