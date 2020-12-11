@@ -13,7 +13,7 @@ pub struct Cli {
 #[derive(Debug, StructOpt)]
 pub enum Command {
     Http {
-        #[structopt(default_value = "127.0.0.1:3000")]
+        #[structopt(env = "REWIND_HTTP_ADDRESS")]
         address: String,
     },
     Db(DbCommand),

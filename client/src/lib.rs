@@ -6,7 +6,7 @@ use std::rc::Rc;
 use shared::messages::*;
 use shared::models::*;
 
-const WS_URL: &str = "ws://127.0.0.1:3000/session";
+const WS_URL: &str = "ws://127.0.0.1:3001/session";
 
 struct Model {
     state: State,
@@ -180,7 +180,8 @@ fn decode_message(message: WebSocketMessage, msg_sender: Rc<dyn Fn(Option<Msg>)>
 fn view(model: &Model) -> Node<Msg> {
     match &model.state {
         State::Root => button![
-            "Start!",
+            C!["btn-blue"],
+            "Start! come on!",
             ev(Ev::Click, |_| Msg::Open(shared::courses::vg20())),
         ],
         State::Opening(_course) => div!("Opening a course..."),

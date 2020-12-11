@@ -22,19 +22,22 @@ mkShell {
     # infra
     terraform
 
+    # base
+    rustStable
+    cargo
+    cargo-make
+    cargo-watch
+
     # server
     ansible_2_9
     postgresql_11
     postgis
-    rustStable
-    cargo
-    cargo-watch
     osm2pgsql
     eccodes
 
     # client
-    cargo-make
     wasm-pack
+    nodePackages.webpack-cli
   ];
 
 }

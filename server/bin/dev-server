@@ -5,4 +5,4 @@ cd `dirname "$0"`/..
 bin/container ensure
 source dev-env
 
-cargo watch -x 'make start'
+cargo watch -w . -w ../shared -x 'run -- http'

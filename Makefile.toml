@@ -41,6 +41,12 @@ command = "cargo"
 args = ["run", "--package", "server", "--", "http" ]
 dependencies = ["build"]
 
+[tasks.start_server]
+description = "Build and start Actix server on port 3000"
+command = "cargo"
+args = ["run", "--package", "server", "--", "http" ]
+dependencies = ["build_server"]
+
 [tasks.start_release]
 extend = "start"
 description = "Build and start Actix server with client on port 3000 in release mode"
