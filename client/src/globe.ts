@@ -1,0 +1,37 @@
+import { sphereProjection } from "@here/harp-geoutils";
+import { MapView } from "@here/harp-mapview";
+import { VectorTileDataSource } from "@here/harp-vectortile-datasource";
+
+import { hereApiKey } from "../config";
+
+export class Globe {
+  readonly mapView: MapView;
+
+  constructor(canvas: HTMLCanvasElement) {
+    this.mapView = new MapView({
+      canvas,
+      projection: sphereProjection,
+      theme: "/resources/berlin_tilezen_night_reduced.json",
+      decoderUrl: "decoder.js",
+    });
+
+    this.mapView.renderLabels = false;
+
+    this.mapView.resize(window.innerWidth, window.innerHeight);
+
+    window.addEventListener("resize", () => {
+      this.mapView.resize(window.innerWidth, window.innerHeight);
+    });
+
+    const omvDataSource = new VectorTileDataSource({
+      baseUrl: "https://vector.hereapi.com/v2/vectortiles/base/mc",
+      authenticationCode: hereApiKey,
+    });
+
+    this.mapView.addDataSource(omvDataSource);
+  }
+}
+
+export function init(id: string) {
+  new Globe(document.getElementById(id) as HTMLCanvasElement);
+}

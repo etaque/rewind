@@ -6,11 +6,16 @@
     "build": "webpack",
     "serve": "webpack-dev-server"
   },
-  "dependencies": {},
-  "devDependencies": {
+  "dependencies": {
+    "@here/harp-map-controls": "^0.21.1",
+    "@here/harp-map-theme": "^0.21.1",
+    "@here/harp-mapview": "^0.21.1",
+    "@here/harp-omv-datasource": "^0.21.1",
+    "@here/harp-vectortile-datasource": "^0.21.1",
     "@wasm-tool/wasm-pack-plugin": "1.0.1",
     "autoprefixer": "^9.8.6",
     "clean-webpack-plugin": "^3.0.0",
+    "copy-webpack-plugin": "^6.4.0",
     "css-loader": "^4.3.0",
     "file-loader": "^6.1.0",
     "html-webpack-plugin": "^4.5.0",
@@ -21,6 +26,7 @@
     "serve": "^11.3.2",
     "tailwindcss": "npm:@tailwindcss/postcss7-compat@^2.0.2",
     "text-encoding": "^0.7.0",
+    "three": "^0.120.1",
     "ts-loader": "^8.0.4",
     "typescript": "^4.0.3",
     "webpack": "^4.44.2",

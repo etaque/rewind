@@ -6,18 +6,61 @@ const HtmlWebpackPlugin = require("html-webpack-plugin");
 const WasmPackPlugin = require("@wasm-tool/wasm-pack-plugin");
 const { CleanWebpackPlugin } = require("clean-webpack-plugin");
 const MiniCssExtractPlugin = require("mini-css-extract-plugin");
+const CopyWebpackPlugin = require("copy-webpack-plugin");
 
 const mode = 'development';
 
-module.exports = {
+const baseConfig =  {
+    devtool: "source-map",
+    externals: {
+        three: "THREE"
+    },
+    // Webpack try to guess how to resolve imports in this order:
+    resolve: {
+        extensions: [".ts", ".js", ".wasm"],
+        alias: {
+            crate: __dirname
+        }
+    },
+    
+    module: {
+        rules: [
+            {
+                test: /\.ts$/,
+                loader: "ts-loader?configFile=tsconfig.json"
+            },
+            {
+                test: /\.css$/,
+                use: [
+                    MiniCssExtractPlugin.loader,
+                    "css-loader",
+                    {
+                        loader: "postcss-loader",
+                        options: {
+                            config: {
+                                // Path to postcss.config.js.
+                                path: __dirname,
+                                // Pass mode into `postcss.config.js` (see more info in that file).
+                                ctx: { mode }
+                            }
+                        }
+                    }
+                ]
+            },
+        ]
+    },
+    mode
+};
+
+const mainConfig = { 
+    name: "Main",
     entry: path.resolve(__dirname, 'src', 'index.ts'),
     output: {
         path: path.resolve(__dirname, 'dist'),
-        filename:'[name].[contenthash].js'
+        filename:'index.[contenthash].js'
     },
     devServer: {
         contentBase: dist,
-        // You can connect to dev server from devices in your network (e.g. 192.168.0.3:8000).
         host: "0.0.0.0",
         port: 3000,
         // Route everything to index to support SPA. It should be the same like `publicPath` above.
@@ -49,41 +92,30 @@ module.exports = {
         // Compile Rust.
         new WasmPackPlugin({
             crateDirectory: __dirname
+        }),
+        new CopyWebpackPlugin({
+            patterns: [
+                require.resolve("three/build/three.min.js"),
+                {
+                    from: path.resolve(require.resolve("@here/harp-map-theme"), "..", "resources"),
+                    to: "resources/",
+                    toType: "dir"
+                }
+            ]
         })
     ],
-    // Webpack try to guess how to resolve imports in this order:
-    resolve: {
-      extensions: [".ts", ".js", ".wasm"],
-      alias: {
-        crate: __dirname
-      }
-    },
-    
-    module: {
-      rules: [
-        {
-          test: /\.ts$/,
-          loader: "ts-loader?configFile=tsconfig.json"
-        },
-        {
-          test: /\.css$/,
-          use: [
-            MiniCssExtractPlugin.loader,
-            "css-loader",
-            {
-              loader: "postcss-loader",
-              options: {
-                config: {
-                  // Path to postcss.config.js.
-                  path: __dirname,
-                  // Pass mode into `postcss.config.js` (see more info in that file).
-                  ctx: { mode }
-                }
-              }
-            }
-          ]
-        }
-      ]
-    },
-    mode
+    ...baseConfig
 };
+
+const workerConfig = {
+    name: "Harp Decoder",
+    entry: path.resolve(__dirname, 'src', 'map-worker', 'index.js'),
+    target: "webworker",
+    output: {
+        path: path.resolve(__dirname, 'dist'),
+        filename: 'decoder.js'
+    },
+    ...baseConfig
+};
+
+module.exports = [ mainConfig, workerConfig ];

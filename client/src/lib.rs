@@ -179,11 +179,21 @@ fn decode_message(message: WebSocketMessage, msg_sender: Rc<dyn Fn(Option<Msg>)>
 
 fn view(model: &Model) -> Node<Msg> {
     match &model.state {
-        State::Root => button![
-            C!["btn-blue"],
-            "Start! come on!",
-            ev(Ev::Click, |_| Msg::Open(shared::courses::vg20())),
-        ],
+        State::Root => div!(
+            C!["modal fixed inset-0 flex items-center justify-center"],
+            div!(
+                C!["modal-container bg-white w-11/12 md:max-w-md mx-auto rounded shadow-lg z-50 overflow-y-auto"],
+                div!(
+                    C!["modal-content py-4 text-left px-6"],
+                    h1!("Welcome to REWIND"),
+                    button![
+                    C!["btn-blue"],
+                    "Start",
+                    ev(Ev::Click, |_| Msg::Open(shared::courses::vg20()))
+                    ]
+                )
+            )
+        ),
         State::Opening(_course) => div!("Opening a course..."),
         State::Playing(session) => div!(
             h1!(&session.course.name),
@@ -200,4 +210,13 @@ fn view(model: &Model) -> Node<Msg> {
 #[wasm_bindgen(start)]
 pub fn start() {
     App::start("app", init, update, view);
+}
+
+#[wasm_bindgen]
+pub struct JsLngLat(f64, f64);
+
+#[wasm_bindgen]
+extern "C" {
+    #[wasm_bindgen(catch)]
+    fn init_map(location: JsLngLat) -> Result<JsValue, JsValue>;
 }
