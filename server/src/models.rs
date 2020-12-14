@@ -13,13 +13,19 @@ pub struct Point {
 
 impl From<LngLat> for Point {
     fn from(p: LngLat) -> Self {
-        Self { lng: p.0, lat: p.1 }
+        Self {
+            lng: p.lng,
+            lat: p.lat,
+        }
     }
 }
 
 impl Into<LngLat> for Point {
     fn into(self) -> LngLat {
-        LngLat(self.lng, self.lat)
+        LngLat {
+            lng: self.lng,
+            lat: self.lat,
+        }
     }
 }
 
@@ -50,4 +56,14 @@ pub struct WindPoint {
     pub point: Point,
     pub u: f64,
     pub v: f64,
+}
+
+impl Into<shared::models::WindPoint> for WindPoint {
+    fn into(self) -> shared::models::WindPoint {
+        shared::models::WindPoint {
+            position: self.point.into(),
+            u: self.u,
+            v: self.v,
+        }
+    }
 }

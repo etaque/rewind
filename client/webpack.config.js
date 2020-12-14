@@ -3,119 +3,130 @@ const dist = path.resolve(__dirname, "dist");
 
 const WebpackBar = require("webpackbar");
 const HtmlWebpackPlugin = require("html-webpack-plugin");
-const WasmPackPlugin = require("@wasm-tool/wasm-pack-plugin");
+// const WasmPackPlugin = require("@wasm-tool/wasm-pack-plugin");
 const { CleanWebpackPlugin } = require("clean-webpack-plugin");
 const MiniCssExtractPlugin = require("mini-css-extract-plugin");
 const CopyWebpackPlugin = require("copy-webpack-plugin");
 
-const mode = 'development';
+const mode = "development";
 
-const baseConfig =  {
-    devtool: "source-map",
-    externals: {
-        three: "THREE"
+const baseConfig = {
+  devtool: "source-map",
+  externals: {
+    three: "THREE",
+  },
+  // Webpack try to guess how to resolve imports in this order:
+  resolve: {
+    extensions: [".ts", ".js", ".wasm", ".elm"],
+    alias: {
+      crate: __dirname,
     },
-    // Webpack try to guess how to resolve imports in this order:
-    resolve: {
-        extensions: [".ts", ".js", ".wasm"],
-        alias: {
-            crate: __dirname
-        }
-    },
-    
-    module: {
-        rules: [
-            {
-                test: /\.ts$/,
-                loader: "ts-loader?configFile=tsconfig.json"
+  },
+
+  module: {
+    rules: [
+      {
+        test: /\.ts$/,
+        loader: "ts-loader?configFile=tsconfig.json",
+      },
+      {
+        test: /\.elm$/,
+        exclude: [/elm-stuff/, /node_modules/],
+        loader: "elm-webpack-loader",
+      },
+      {
+        test: /\.css$/,
+        use: [
+          MiniCssExtractPlugin.loader,
+          "css-loader",
+          {
+            loader: "postcss-loader",
+            options: {
+              config: {
+                // Path to postcss.config.js.
+                path: __dirname,
+                // Pass mode into `postcss.config.js` (see more info in that file).
+                ctx: { mode },
+              },
             },
-            {
-                test: /\.css$/,
-                use: [
-                    MiniCssExtractPlugin.loader,
-                    "css-loader",
-                    {
-                        loader: "postcss-loader",
-                        options: {
-                            config: {
-                                // Path to postcss.config.js.
-                                path: __dirname,
-                                // Pass mode into `postcss.config.js` (see more info in that file).
-                                ctx: { mode }
-                            }
-                        }
-                    }
-                ]
-            },
-        ]
-    },
-    mode
+          },
+        ],
+      },
+    ],
+  },
+  mode,
 };
 
-const mainConfig = { 
-    name: "Main",
-    entry: path.resolve(__dirname, 'src', 'index.ts'),
-    output: {
-        path: path.resolve(__dirname, 'dist'),
-        filename:'index.[contenthash].js'
+const mainConfig = {
+  name: "Main",
+  entry: path.resolve(__dirname, "src", "index.ts"),
+  output: {
+    path: path.resolve(__dirname, "dist"),
+    filename: "index.[hash].js",
+  },
+  devServer: {
+    inline: false,
+    hot: false,
+    contentBase: dist,
+    host: "0.0.0.0",
+    port: 3000,
+    // Route everything to index to support SPA. It should be the same like `publicPath` above.
+    historyApiFallback: {
+      index: "/",
     },
-    devServer: {
-        contentBase: dist,
-        host: "0.0.0.0",
-        port: 3000,
-        // Route everything to index to support SPA. It should be the same like `publicPath` above.
-        historyApiFallback: {
-            index: '/'
-        },
-        noInfo: true,
-        stats: "errors-only",
-        overlay: {
-            // Commented to prevent error:
-            // `./crate/pkg/index_bg.js 382:14-53   Critical dependency: the request of a dependency is an expression`
-            // warnings: true,
-            errors: true
-        },
+    noInfo: true,
+    stats: "errors-only",
+    overlay: {
+      // Commented to prevent error:
+      // `./crate/pkg/index_bg.js 382:14-53   Critical dependency: the request of a dependency is an expression`
+      // warnings: true,
+      errors: true,
     },
-    plugins: [
-        // Show compilation progress bar in console.
-        new WebpackBar(),
-        // Clean `dist` folder before compilation.
-        new CleanWebpackPlugin(),
-        // Extract CSS styles into a file.
-        new MiniCssExtractPlugin({
-            filename:'[name].[contenthash].css'
-        }),
-        // Add scripts, css, ... to html template.
-        new HtmlWebpackPlugin({
-            template: path.resolve(__dirname, "src/index.html")
-        }),
-        // Compile Rust.
-        new WasmPackPlugin({
-            crateDirectory: __dirname
-        }),
-        new CopyWebpackPlugin({
-            patterns: [
-                require.resolve("three/build/three.min.js"),
-                {
-                    from: path.resolve(require.resolve("@here/harp-map-theme"), "..", "resources"),
-                    to: "resources/",
-                    toType: "dir"
-                }
-            ]
-        })
-    ],
-    ...baseConfig
+  },
+  plugins: [
+    // Show compilation progress bar in console.
+    new WebpackBar(),
+    // Clean `dist` folder before compilation.
+    new CleanWebpackPlugin(),
+    // Extract CSS styles into a file.
+    new MiniCssExtractPlugin({
+      filename: "[name].[contenthash].css",
+    }),
+    // Add scripts, css, ... to html template.
+    new HtmlWebpackPlugin({
+      template: path.resolve(__dirname, "src/index.html"),
+    }),
+    // Compile Rust.
+    // new WasmPackPlugin({
+    //   crateDirectory: __dirname,
+    // }),
+    new CopyWebpackPlugin({
+      patterns: [
+        require.resolve("three/build/three.min.js"),
+        {
+          from: path.resolve(
+            require.resolve("@here/harp-map-theme"),
+            "..",
+            "resources"
+          ),
+          to: "resources/",
+          toType: "dir",
+        },
+      ],
+    }),
+  ],
+  ...baseConfig,
 };
 
 const workerConfig = {
-    name: "Harp Decoder",
-    entry: path.resolve(__dirname, 'src', 'map-worker', 'index.js'),
-    target: "webworker",
-    output: {
-        path: path.resolve(__dirname, 'dist'),
-        filename: 'decoder.js'
-    },
-    ...baseConfig
+  name: "Harp Decoder",
+  entry: path.resolve(__dirname, "src", "map-worker", "index.js"),
+  target: "webworker",
+  output: {
+    path: path.resolve(__dirname, "dist"),
+    filename: "decoder.js",
+  },
+  ...baseConfig,
 };
 
-module.exports = [ mainConfig, workerConfig ];
+module.exports = [mainConfig, workerConfig];

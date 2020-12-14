@@ -5,8 +5,8 @@ use crate::models::WindReport;
 use tokio_pg_mapper::FromTokioPostgresRow;
 
 pub async fn find_closest<'a>(
-    conn: db::Conn<'a>,
-    time: DateTime<Utc>,
+    conn: &db::Conn<'a>,
+    time: &DateTime<Utc>,
 ) -> anyhow::Result<WindReport> {
     let stmt = "SELECT * FROM wind_reports \
                 ORDER BY abs(extract(epoch from ($1 - target_time))) asc LIMIT 1";

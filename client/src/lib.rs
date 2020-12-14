@@ -1,5 +1,6 @@
 #![allow(clippy::wildcard_imports)]
 
+use chrono::{DateTime, Utc};
 use seed::{prelude::*, *};
 use std::rc::Rc;
 
@@ -17,20 +18,21 @@ struct Model {
 
 #[derive(Clone)]
 enum State {
-    Root,
-    Opening(Course),
+    Idle,
     Playing(Session),
 }
 
 #[derive(Clone)]
 struct Session {
-    state: PlayerState,
+    clock: i64,
+    time: DateTime<Utc>,
+    position: LngLat,
     course: Course,
-    wind: WindState,
+    wind: WindReport,
 }
 
 enum Msg {
-    Open(Course),
+    Start(Course),
     WsMsg(WsMsg),
     Tick,
     Rendered(RenderInfo),
@@ -49,7 +51,7 @@ fn init(_: Url, orders: &mut impl Orders<Msg>) -> Model {
     orders.after_next_render(Msg::Rendered);
     let _tick = orders.stream_with_handle(streams::interval(1000, || Msg::Tick));
     Model {
-        state: State::Root,
+        state: State::Idle,
         web_socket: create_websocket(orders),
         web_socket_reconnector: None,
         _tick,
@@ -70,17 +72,26 @@ fn create_websocket(orders: &impl Orders<Msg>) -> WebSocket {
 
 fn update(msg: Msg, mut model: &mut Model, orders: &mut impl Orders<Msg>) {
     match msg {
-        Msg::Tick => match model.state.clone() {
+        Msg::Tick => match &model.state {
             State::Playing(session) => {
-                let msg = ToServer::UpdateRun(session.state.clone());
+                let msg = ToServer::GetWind(session.time, session.position.clone());
                 model.web_socket.send_json(&msg).unwrap();
             }
             _ => (),
         },
-        Msg::Open(course) => {
-            let msg = ToServer::SelectCourse(course.key.clone());
+        Msg::Start(course) => {
+            let msg = ToServer::StartCourse(course.key.clone());
             model.web_socket.send_json(&msg).unwrap();
-            model.state = State::Opening(course.clone());
+
+            let wind = WindReport::initial(&course);
+            let session = Session {
+                clock: 0,
+                time: course.start_time.clone(),
+                position: course.start.clone(),
+                course,
+                wind,
+            };
+            model.state = State::Playing(session);
         }
         Msg::Rendered(info) => {
             log!(info);
@@ -130,28 +141,9 @@ fn update(msg: Msg, mut model: &mut Model, orders: &mut impl Orders<Msg>) {
 
 fn update_from_server(msg: FromServer, model: &mut Model) {
     match (msg, model.state.clone()) {
-        (FromServer::InitCourse(course, wind), _) => {
-            let state = PlayerState {
-                clock: 0,
-                position: course.start.clone(),
-                viewport: LngLatBounds {
-                    sw: LngLat(0.0, 0.0),
-                    ne: LngLat(1.0, 1.0),
-                },
-            };
-            let session = Session {
-                state,
-                course,
-                wind,
-            };
-            model.state = State::Playing(session);
-        }
-        (FromServer::RefreshWind(wind), State::Playing(session)) => {
+        (FromServer::SendWind(wind), State::Playing(session)) => {
             let new_session = Session { wind, ..session };
             model.state = State::Playing(new_session);
-        }
-        (FromServer::Unexpected(_msg), _) => {
-            error!("Ooops, sent an unexpected message to server...", _msg)
         }
         _ => error!("Ooops, received an unexpected message from server..."),
     }
@@ -179,32 +171,33 @@ fn decode_message(message: WebSocketMessage, msg_sender: Rc<dyn Fn(Option<Msg>)>
 
 fn view(model: &Model) -> Node<Msg> {
     match &model.state {
-        State::Root => div!(
-            C!["modal fixed inset-0 flex items-center justify-center"],
-            div!(
-                C!["modal-container bg-white w-11/12 md:max-w-md mx-auto rounded shadow-lg z-50 overflow-y-auto"],
-                div!(
-                    C!["modal-content py-4 text-left px-6"],
-                    h1!("Welcome to REWIND"),
-                    button![
-                    C!["btn-blue"],
-                    "Start",
-                    ev(Ev::Click, |_| Msg::Open(shared::courses::vg20()))
-                    ]
-                )
-            )
-        ),
-        State::Opening(_course) => div!("Opening a course..."),
-        State::Playing(session) => div!(
-            h1!(&session.course.name),
-            custom![
-                Tag::from("mapbox-gl"),
-                attrs! {
-                At::from("foo") => "bar"
-                }
+        State::Idle => div!(
+            C!["fixed inset-0 flex flex-col space-y-4 items-center justify-center bg-black bg-opacity-10"],
+            h1!["Re:wind", C!["logo"]],
+            button![
+                C!["btn-start"],
+                ev(Ev::Click, |_| Msg::Start(shared::courses::vg20())),
+                rewind_icon(),
             ]
         ),
+        State::Playing(_session) => div!(),
     }
+}
+
+fn rewind_icon() -> Node<Msg> {
+    icon("M8.445 14.832A1 1 0 0010 14v-2.798l5.445 3.63A1 1 0 0017 14V6a1 1 0 00-1.555-.832L10 8.798V6a1 1 0 00-1.555-.832l-6 4a1 1 0 000 1.664l6 4z")
+}
+
+fn icon(d: &str) -> Node<Msg> {
+    svg![
+        attrs! {
+            At::ViewBox => "0 0 20 20",
+            At::Fill => "currentColor",
+        },
+        path![attrs! {
+            At::D => d
+        }]
+    ]
 }
 
 #[wasm_bindgen(start)]
@@ -217,6 +210,13 @@ pub struct JsLngLat(f64, f64);
 
 #[wasm_bindgen]
 extern "C" {
-    #[wasm_bindgen(catch)]
-    fn init_map(location: JsLngLat) -> Result<JsValue, JsValue>;
+
+    #[derive(Debug)]
+    pub type Globe;
+
+    #[wasm_bindgen(constructor)]
+    pub fn new() -> Globe;
+
+    #[wasm_bindgen(method)]
+    pub fn move_to(this: &Globe, lng: f64, lat: f64);
 }

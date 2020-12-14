@@ -2,7 +2,10 @@ use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 
 #[derive(Clone, Debug, Deserialize, Serialize)]
-pub struct LngLat(pub f64, pub f64);
+pub struct LngLat {
+    pub lng: f64,
+    pub lat: f64,
+}
 
 #[derive(Clone, Debug, Deserialize, Serialize)]
 pub struct LngLatBounds {
@@ -27,15 +30,35 @@ pub struct Course {
     pub time_factor: i8,
 }
 
-#[derive(Clone, Debug, Deserialize, Serialize)]
-pub struct PlayerState {
-    pub clock: i64,
-    pub position: LngLat,
-    pub viewport: LngLatBounds,
+impl Course {
+    pub fn real_time(&self, clock: i64) -> DateTime<Utc> {
+        self.start_time + chrono::Duration::milliseconds(clock) * self.time_factor.into()
+    }
 }
 
+// #[derive(Clone, Debug, Deserialize, Serialize)]
+// pub struct PlayerState {
+//     pub time: DateTime<Utc>,
+//     pub position: LngLat,
+// }
+
 #[derive(Clone, Debug, Deserialize, Serialize)]
-pub struct WindState {
+pub struct WindReport {
     pub time: DateTime<Utc>,
-    pub points: Vec<WindPoint>,
+    pub closest: WindPoint,
+    pub all: Vec<WindPoint>,
+}
+
+impl WindReport {
+    pub fn initial(course: &Course) -> Self {
+        Self {
+            time: course.start_time.clone(),
+            closest: WindPoint {
+                position: course.start.clone(),
+                u: 0.0,
+                v: 0.0,
+            },
+            all: Vec::new(),
+        }
+    }
 }

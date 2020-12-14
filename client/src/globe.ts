@@ -2,7 +2,7 @@ import { sphereProjection } from "@here/harp-geoutils";
 import { MapView } from "@here/harp-mapview";
 import { VectorTileDataSource } from "@here/harp-vectortile-datasource";
 
-import { hereApiKey } from "../config";
+import { hereApiKey } from "./config";
 
 export class Globe {
   readonly mapView: MapView;
@@ -30,8 +30,8 @@ export class Globe {
 
     this.mapView.addDataSource(omvDataSource);
   }
-}
 
-export function init(id: string) {
-  new Globe(document.getElementById(id) as HTMLCanvasElement);
+  update(text: string) {
+    console.log("update!", text);
+  }
 }

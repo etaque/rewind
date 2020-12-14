@@ -2191,6 +2191,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "serde_postgres"
+version = "0.2.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "05272a9cdfedf1b7b43cd14151bd9566db49b6396254a4cf42aa3cf8df06fe7f"
+dependencies = [
+ "serde",
+ "tokio-postgres",
+]
+
+[[package]]
 name = "serde_urlencoded"
 version = "0.7.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2229,6 +2239,7 @@ dependencies = [
  "serde",
  "serde_derive",
  "serde_json",
+ "serde_postgres",
  "shared",
  "structopt",
  "tempfile",

@@ -1,8 +1,7 @@
 use actix::prelude::*;
 use actix_web::web;
 use actix_web_actors::ws;
-use chrono::{DateTime, Utc};
-use log::{error, info, warn};
+use log::{info, warn};
 use serde_json;
 use std::time::{Duration, Instant};
 
@@ -10,7 +9,7 @@ use shared::messages;
 use shared::models;
 
 use crate::db;
-use crate::repos::wind_reports;
+use crate::repos::*;
 
 const HEARTBEAT_INTERVAL: Duration = Duration::from_secs(5);
 const CLIENT_TIMEOUT: Duration = Duration::from_secs(10);
@@ -53,7 +52,8 @@ impl StreamHandler<Result<ws::Message, ws::ProtocolError>> for Session {
                         .into_actor(self)
                         .then(|res, _, ctx| {
                             match res {
-                                Ok(local_msg) => ctx.notify(local_msg),
+                                Ok(Some(local_msg)) => ctx.notify(local_msg),
+                                Ok(None) => (),
                                 _ => ctx.stop(),
                             }
                             fut::ready(())
@@ -80,7 +80,7 @@ impl StreamHandler<Result<ws::Message, ws::ProtocolError>> for Session {
 #[rtype(result = "anyhow::Result<()>")]
 enum LocalMessage {
     Tick,
-    StartCourse(models::Course, models::WindState),
+    StartCourse(models::Course),
     SendToPlayer(messages::FromServer),
 }
 
@@ -89,20 +89,12 @@ impl Handler<LocalMessage> for Session {
 
     fn handle(&mut self, msg: LocalMessage, ctx: &mut Self::Context) -> Self::Result {
         match msg {
-            LocalMessage::StartCourse(course, wind) => {
-                self.state = State::Running(course.clone());
-                let to_player = messages::FromServer::InitCourse(course, wind);
-                Ok(ctx.text(serde_json::to_string(&to_player)?))
+            LocalMessage::StartCourse(course) => {
+                self.state = State::Running(course);
+                Ok(())
             }
             LocalMessage::Tick => {
-                match self.state.clone() {
-                    State::Idle => {}
-                    State::Running(_course) => {
-                        // TODO send wind?
-                    }
-                };
                 ctx.notify_later(LocalMessage::Tick, Duration::from_secs(1));
-
                 Ok(())
             }
             LocalMessage::SendToPlayer(to_player) => {
@@ -125,40 +117,37 @@ impl Session {
         pool: web::Data<db::Pool>,
         state: State,
         msg: messages::ToServer,
-    ) -> anyhow::Result<LocalMessage> {
+    ) -> anyhow::Result<Option<LocalMessage>> {
         info!("Handling message from player: {:?}", msg);
         match (msg, state) {
-            (messages::ToServer::SelectCourse(_), State::Idle) => {
+            (messages::ToServer::StartCourse { .. }, State::Idle) => {
                 let course = shared::courses::vg20();
-                let initial_wind = models::WindState {
-                    time: course.start_time,
-                    points: Vec::new(),
-                };
-                Ok(LocalMessage::StartCourse(course, initial_wind))
+                Ok(Some(LocalMessage::StartCourse(course)))
             }
-            (messages::ToServer::UpdateRun(state), State::Running(course)) => {
-                let at = Self::real_time(course, state.clock);
-
+            (messages::ToServer::GetWind { time, position }, State::Running(_)) => {
                 let conn = pool.get().await?;
-                let report = wind_reports::find_closest(conn, at).await?;
-                Ok(LocalMessage::SendToPlayer(
-                    messages::FromServer::RefreshWind(models::WindState {
+                let report = wind_reports::find_closest(&conn, &time).await?;
+                let all = wind_points::by_report_id(&conn, report.id)
+                    .await?
+                    .into_iter()
+                    .map(crate::models::WindPoint::into)
+                    .collect();
+                let closest = wind_points::closest(&conn, report.id, &position.into())
+                    .await?
+                    .into();
+                Ok(Some(LocalMessage::SendToPlayer(
+                    messages::FromServer::SendWind(models::WindReport {
                         time: report.target_time,
-                        points: Vec::new(),
+                        closest,
+                        all,
                     }),
-                ))
+                )))
             }
             (msg, _) => {
-                warn!("Unexpected player message: {:?}", msg.clone());
-                Ok(LocalMessage::SendToPlayer(
-                    messages::FromServer::Unexpected(msg.clone()),
-                ))
+                warn!("Unexpected player message: {:?}", &msg);
+                Ok(None)
             }
         }
-    }
-
-    pub fn real_time(course: models::Course, clock: i64) -> DateTime<Utc> {
-        course.start_time + chrono::Duration::milliseconds(clock) * course.time_factor.into()
     }
 
     fn hb(&self, ctx: &mut <Self as Actor>::Context) {

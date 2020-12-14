@@ -38,6 +38,10 @@ mkShell {
     # client
     wasm-pack
     nodePackages.webpack-cli
+    elmPackages.elm
+    elmPackages.elm-format
+    elmPackages.elm-analyse
+    elmPackages.elm-test
   ];
 
 }

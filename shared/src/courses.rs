@@ -2,7 +2,10 @@ use chrono::{DateTime, NaiveDate, Utc};
 
 use super::models::*;
 
-static LSD: LngLat = LngLat(46.470243284275966, -1.788456535301071);
+static LSD: LngLat = LngLat {
+    lng: 46.470243284275966,
+    lat: -1.788456535301071,
+};
 
 pub fn vg20() -> Course {
     Course {
