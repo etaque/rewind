@@ -88,7 +88,7 @@ update message model =
                     , courseTime = course.startTime
                     , position = course.start
                     , course = course
-                    , wind = M.WindReport course.startTime (M.WindPoint course.start 0 0) []
+                    , wind = M.WindReport course.startTime (M.WindPoint course.start 0 0)
                     }
             in
             ( { model | state = Playing session }, P.send (P.StartCourse course.key) )

@@ -32,7 +32,7 @@ const baseConfig = {
       {
         test: /\.elm$/,
         exclude: [/elm-stuff/, /node_modules/],
-        loader: "elm-webpack-loader",
+        loader: "elm-webpack-loader?debug=false",
       },
       {
         test: /\.css$/,
