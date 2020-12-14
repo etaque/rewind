@@ -42,8 +42,7 @@ windPointDecoder =
 
 type alias WindReport =
     { time : Posix
-    , closest : WindPoint
-    , all : List WindPoint
+    , at : WindPoint
     }
 
 
@@ -51,8 +50,7 @@ windReportDecoder : Decoder WindReport
 windReportDecoder =
     succeed WindReport
         |> required "time" (int |> JD.map Time.millisToPosix)
-        |> required "closest" windPointDecoder
-        |> required "all" (JD.list windPointDecoder)
+        |> required "at" windPointDecoder
 
 
 type alias Course =

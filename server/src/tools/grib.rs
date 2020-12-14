@@ -27,7 +27,7 @@ pub async fn exec(db_url: String, args: GribArgs) -> anyhow::Result<()> {
     let v_output = parse_file(&path, args.forecast, "10v")?;
 
     let pool = db::pool(db_url).await?;
-    let client: db::Conn = pool.get().await?;
+    let client = pool.get().await?;
 
     const GRID_SIZE: usize = 65160;
     let mut u_grid: HashMap<Coords, Value> = HashMap::with_capacity(GRID_SIZE);
@@ -45,15 +45,15 @@ pub async fn exec(db_url: String, args: GribArgs) -> anyhow::Result<()> {
         Utc,
     );
 
-    let record_id: i64 = client
+    let report_id: i64 = client
         .query_one(
-            "INSERT INTO wind_records (url, day, hour, forecast, target_time) VALUES ($1, $2, $3, $4, $5) RETURNING id",
+            "INSERT INTO wind_reports (url, day, hour, forecast, target_time) VALUES ($1, $2, $3, $4, $5) RETURNING id",
             &[&args.url, &args.day, &args.hour, &args.forecast, &target_time],
         )
         .await?.get("id");
 
     let sink = client
-        .copy_in("COPY wind_points (wind_record_id, point, u, v) FROM STDIN BINARY")
+        .copy_in("COPY wind_points (wind_report_id, point, u, v) FROM STDIN BINARY")
         .await?;
 
     // Geom has a dynamic OID hence the 0. Ignored by rust-postgis anyway:
@@ -76,7 +76,7 @@ pub async fn exec(db_url: String, args: GribArgs) -> anyhow::Result<()> {
                     let point = &ewkb::Point::new(lat as f64, lon as f64, None);
                     writer
                         .as_mut()
-                        .write(&[&record_id, &point, &u, &v])
+                        .write(&[&report_id, &point, &u, &v])
                         .await
                         .unwrap();
                 }

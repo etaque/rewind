@@ -1,7 +1,6 @@
 use actix::prelude::*;
 use actix_web::web;
 use actix_web_actors::ws;
-use log::{info, warn};
 use serde_json;
 use std::time::{Duration, Instant};
 
@@ -31,8 +30,7 @@ impl Actor for Session {
 
     fn started(&mut self, ctx: &mut Self::Context) {
         self.hb(ctx);
-        ctx.notify(LocalMessage::Tick);
-        info!("Started a session");
+        log::info!("Started a session");
     }
 }
 
@@ -52,22 +50,29 @@ impl StreamHandler<Result<ws::Message, ws::ProtocolError>> for Session {
                         .into_actor(self)
                         .then(|res, _, ctx| {
                             match res {
-                                Ok(Some(local_msg)) => ctx.notify(local_msg),
+                                Ok(Some(local_msg)) => {
+                                    log::debug!("Forwarding local message");
+                                    ctx.notify(local_msg)
+                                }
                                 Ok(None) => (),
-                                _ => ctx.stop(),
+                                Err(e) => {
+                                    log::error!("Failed to handle player message: {:#?}", e);
+                                    ctx.stop()
+                                }
                             }
                             fut::ready(())
                         })
                         .wait(ctx);
                 }
                 Err(e) => {
-                    warn!("Unable to deserialize message: {:#?}", e);
+                    log::warn!("Unable to deserialize message: {:#?}", e);
                 }
             },
             Ok(ws::Message::Binary(_)) => {
-                warn!("Binary message, ignoring.");
+                log::warn!("Binary message, ignoring.");
             }
             Ok(ws::Message::Close(reason)) => {
+                log::error!("Closing WS because of: {:#?}", reason);
                 ctx.close(reason);
                 ctx.stop();
             }
@@ -76,10 +81,9 @@ impl StreamHandler<Result<ws::Message, ws::ProtocolError>> for Session {
     }
 }
 
-#[derive(Clone, Message)]
+#[derive(Debug, Clone, Message)]
 #[rtype(result = "anyhow::Result<()>")]
 enum LocalMessage {
-    Tick,
     StartCourse(models::Course),
     SendToPlayer(messages::FromServer),
 }
@@ -91,10 +95,6 @@ impl Handler<LocalMessage> for Session {
         match msg {
             LocalMessage::StartCourse(course) => {
                 self.state = State::Running(course);
-                Ok(())
-            }
-            LocalMessage::Tick => {
-                ctx.notify_later(LocalMessage::Tick, Duration::from_secs(1));
                 Ok(())
             }
             LocalMessage::SendToPlayer(to_player) => {
@@ -118,7 +118,7 @@ impl Session {
         state: State,
         msg: messages::ToServer,
     ) -> anyhow::Result<Option<LocalMessage>> {
-        info!("Handling message from player: {:?}", msg);
+        log::info!("Handling message from player: {:?}", msg);
         match (msg, state) {
             (messages::ToServer::StartCourse { .. }, State::Idle) => {
                 let course = shared::courses::vg20();
@@ -127,24 +127,30 @@ impl Session {
             (messages::ToServer::GetWind { time, position }, State::Running(_)) => {
                 let conn = pool.get().await?;
                 let report = wind_reports::find_closest(&conn, &time).await?;
-                let all = wind_points::by_report_id(&conn, report.id)
+                // let all = wind_points::by_report_id(&conn, report.id)
+                //     .await?
+                //     .into_iter()
+                //     .map(crate::models::WindPoint::into)
+                //     .collect();
+                let empty_wind = models::WindPoint {
+                    position: position.clone(),
+                    u: 0.0,
+                    v: 0.0,
+                };
+                let point = postgis::ewkb::Point::new(position.lng, position.lat, None);
+                let wind = wind_points::at(&conn, report.id, &point)
                     .await?
-                    .into_iter()
-                    .map(crate::models::WindPoint::into)
-                    .collect();
-                let closest = wind_points::closest(&conn, report.id, &position.into())
-                    .await?
-                    .into();
+                    .map(|wp| wp.into())
+                    .unwrap_or(empty_wind);
                 Ok(Some(LocalMessage::SendToPlayer(
                     messages::FromServer::SendWind(models::WindReport {
                         time: report.target_time,
-                        closest,
-                        all,
+                        wind,
                     }),
                 )))
             }
             (msg, _) => {
-                warn!("Unexpected player message: {:?}", &msg);
+                log::warn!("Unexpected player message: {:?}", &msg);
                 Ok(None)
             }
         }

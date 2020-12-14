@@ -15,8 +15,8 @@ type WindPoint = {
 
 type WindReport = {
   time: number;
-  closest: WindPoint;
-  all: [WindPoint];
+  at: WindPoint;
+  // all: [WindPoint];
 };
 
 type SendWind = {

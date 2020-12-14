@@ -1,40 +1,40 @@
 use chrono::{DateTime, NaiveDate, Utc};
 use postgis::ewkb;
-use postgres_types::{FromSql, ToSql};
+// use postgres_types::{FromSql, ToSql};
 use tokio_pg_mapper_derive::PostgresMapper;
 
 use shared::models::LngLat;
 
-#[derive(Clone, Debug, FromSql, ToSql)]
-pub struct Point {
-    pub lng: f64,
-    pub lat: f64,
-}
+// #[derive(Clone, Debug, FromSql, ToSql)]
+// pub struct Point {
+//     pub lng: f64,
+//     pub lat: f64,
+// }
 
-impl From<LngLat> for Point {
-    fn from(p: LngLat) -> Self {
-        Self {
-            lng: p.lng,
-            lat: p.lat,
-        }
-    }
-}
+// impl From<LngLat> for Point {
+//     fn from(p: LngLat) -> Self {
+//         Self {
+//             lng: p.lng,
+//             lat: p.lat,
+//         }
+//     }
+// }
 
-impl Into<LngLat> for Point {
-    fn into(self) -> LngLat {
-        LngLat {
-            lng: self.lng,
-            lat: self.lat,
-        }
-    }
-}
+// impl Into<LngLat> for Point {
+//     fn into(self) -> LngLat {
+//         LngLat {
+//             lng: self.lng,
+//             lat: self.lat,
+//         }
+//     }
+// }
 
-// SQL derivation
-impl From<ewkb::Point> for Point {
-    fn from(p: ewkb::Point) -> Self {
-        Self { lng: p.x, lat: p.y }
-    }
-}
+// // SQL derivation
+// impl From<ewkb::Point> for Point {
+//     fn from(p: ewkb::Point) -> Self {
+//         Self { lng: p.x, lat: p.y }
+//     }
+// }
 
 #[derive(Clone, Debug, PostgresMapper)]
 #[pg_mapper(table = "wind_reports")]
@@ -53,7 +53,7 @@ pub struct WindReport {
 pub struct WindPoint {
     pub id: i64,
     pub wind_report_id: i64,
-    pub point: Point,
+    pub point: ewkb::Point,
     pub u: f64,
     pub v: f64,
 }
@@ -61,7 +61,10 @@ pub struct WindPoint {
 impl Into<shared::models::WindPoint> for WindPoint {
     fn into(self) -> shared::models::WindPoint {
         shared::models::WindPoint {
-            position: self.point.into(),
+            position: LngLat {
+                lng: self.point.x,
+                lat: self.point.y,
+            },
             u: self.u,
             v: self.v,
         }

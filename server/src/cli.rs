@@ -4,7 +4,7 @@ use structopt::StructOpt;
 #[derive(Debug, StructOpt)]
 #[structopt(about = "Rewind CLI.")]
 pub struct Cli {
-    #[structopt(env = "REWIND_DATABASE_URL")]
+    #[structopt(env = "REWIND_DATABASE_URL", short, long)]
     pub database_url: String,
     #[structopt(subcommand)]
     pub cmd: Command,
@@ -28,8 +28,12 @@ pub enum DbCommand {
 
 #[derive(Debug, StructOpt)]
 pub struct GribArgs {
+    #[structopt(long)]
     pub url: String,
+    #[structopt(long)]
     pub day: NaiveDate,
+    #[structopt(long)]
     pub hour: i16,
+    #[structopt(long)]
     pub forecast: i16,
 }

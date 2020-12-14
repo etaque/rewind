@@ -45,20 +45,18 @@ impl Course {
 #[derive(Clone, Debug, Deserialize, Serialize)]
 pub struct WindReport {
     pub time: DateTime<Utc>,
-    pub closest: WindPoint,
-    pub all: Vec<WindPoint>,
+    pub wind: WindPoint,
 }
 
 impl WindReport {
     pub fn initial(course: &Course) -> Self {
         Self {
             time: course.start_time.clone(),
-            closest: WindPoint {
+            wind: WindPoint {
                 position: course.start.clone(),
                 u: 0.0,
                 v: 0.0,
             },
-            all: Vec::new(),
         }
     }
 }

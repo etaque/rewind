@@ -24,10 +24,15 @@ main =
         , update = update
         , view = view
         , subscriptions =
-            \_ ->
+            \model ->
                 Sub.batch
                     [ P.inputs Input
-                    , Browser.Events.onAnimationFrameDelta Tick
+                    , case model.state of
+                        Playing _ ->
+                            Browser.Events.onAnimationFrameDelta Tick
+
+                        _ ->
+                            Sub.none
                     ]
         }
 

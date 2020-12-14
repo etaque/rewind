@@ -49,7 +49,7 @@ async fn main() -> anyhow::Result<()> {
         }
         Command::Db(db_cmd) => match db_cmd {
             cli::DbCommand::Migrate => db::migrate(args.database_url).await,
-            cli::DbCommand::Reset => Ok(()),
+            cli::DbCommand::Reset => db::reset(args.database_url).await,
         },
         Command::Grib(grib_args) => tools::grib::exec(args.database_url, grib_args).await,
     }
