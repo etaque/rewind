@@ -98,6 +98,9 @@ update message model =
                 Ok (P.SendWind report) ->
                     ( { model | state = Playing { session | wind = report } }, Cmd.none )
 
+                Ok P.Disconnected ->
+                    ( { model | state = Idle }, Cmd.none )
+
                 Err _ ->
                     ( model, Cmd.none )
 

@@ -28,7 +28,8 @@ type Output
 
 
 type Input
-    = SendWind M.WindReport
+    = Disconnected
+    | SendWind M.WindReport
 
 
 inputDecoder : JD.Decoder Input
@@ -42,6 +43,9 @@ decodeInput tag =
     case tag of
         "SendWind" ->
             JD.map SendWind (JD.field "report" M.windReportDecoder)
+
+        "Disconnected" ->
+            JD.succeed Disconnected
 
         _ ->
             JD.fail ("Unknown FromServer tag: " ++ tag)

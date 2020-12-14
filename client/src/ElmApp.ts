@@ -24,7 +24,11 @@ type SendWind = {
   report: WindReport;
 };
 
-type Input = SendWind;
+type Disconnected = {
+  tag: "Disconnected";
+};
+
+type Input = SendWind | Disconnected;
 
 type GetWind = {
   tag: "GetWind";
