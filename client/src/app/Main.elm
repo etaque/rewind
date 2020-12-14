@@ -14,7 +14,7 @@ import Time exposing (Posix)
 
 
 type alias Flags =
-    { serverAddress : String }
+    {}
 
 
 main : Program Flags Model Msg
@@ -91,7 +91,7 @@ update message model =
                     , wind = M.WindReport course.startTime (M.WindPoint course.start 0 0)
                     }
             in
-            ( { model | state = Playing session }, P.send (P.StartCourse course.key) )
+            ( { model | state = Playing session }, Cmd.none )
 
         ( Input value, Playing session ) ->
             case P.receive value of

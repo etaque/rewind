@@ -5,6 +5,6 @@ cd `dirname "$0"`/..
 bin/container ensure
 source dev-env
 
-export RUST_LOG=debug
+export RUST_LOG=info
 
-cargo watch -w . -w ../shared -x 'run -- http'
+cargo watch -x 'run -- http'

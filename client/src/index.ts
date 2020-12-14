@@ -8,7 +8,7 @@ const appNode = document.getElementById("app");
 
 if (globeNode instanceof HTMLCanvasElement && appNode) {
   new Globe(globeNode);
-  const app = startApplication(appNode, { serverAddress });
+  const app = startApplication(appNode, {});
 
   var ws: WebSocket;
 
@@ -27,7 +27,6 @@ if (globeNode instanceof HTMLCanvasElement && appNode) {
       app.ports.outputs.subscribe((output) => {
         switch (output.tag) {
           case "GetWind":
-          case "StartCourse":
             ws.send(JSON.stringify(output));
             break;
         }
@@ -43,5 +42,5 @@ if (globeNode instanceof HTMLCanvasElement && appNode) {
 
   connect();
 } else {
-  console.log("Failed to mount apps, invalid nodes...", globeNode, appNode);
+  console.log("Failed to mount apps", globeNode, appNode);
 }

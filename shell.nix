@@ -4,7 +4,6 @@ let
     overlays = [ mozOverlay ];
   };
   rustStable = (nixpkgs.latest.rustChannels.stable.rust.override {
-    targets = [ "wasm32-unknown-unknown" "x86_64-unknown-linux-gnu" ];
     extensions = [ 
       "rust-src"
       "rls-preview"
@@ -25,7 +24,6 @@ mkShell {
     # base
     rustStable
     cargo
-    cargo-make
     cargo-watch
 
     # server
@@ -36,7 +34,6 @@ mkShell {
     eccodes
 
     # client
-    wasm-pack
     nodePackages.webpack-cli
     elmPackages.elm
     elmPackages.elm-format

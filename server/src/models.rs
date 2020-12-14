@@ -2,7 +2,8 @@ use chrono::{DateTime, NaiveDate, Utc};
 use postgis::ewkb;
 use tokio_pg_mapper_derive::PostgresMapper;
 
-use shared::models::LngLat;
+use crate::messages;
+use crate::messages::LngLat;
 
 #[derive(Clone, Debug, PostgresMapper)]
 #[pg_mapper(table = "wind_reports")]
@@ -26,9 +27,9 @@ pub struct WindPoint {
     pub v: f64,
 }
 
-impl Into<shared::models::WindPoint> for WindPoint {
-    fn into(self) -> shared::models::WindPoint {
-        shared::models::WindPoint {
+impl Into<messages::WindPoint> for WindPoint {
+    fn into(self) -> messages::WindPoint {
+        messages::WindPoint {
             position: LngLat {
                 lng: self.point.x,
                 lat: self.point.y,

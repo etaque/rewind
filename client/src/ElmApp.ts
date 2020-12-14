@@ -1,6 +1,6 @@
 import { Elm } from "./app/Main.elm";
 
-type Flags = { serverAddress: string };
+type Flags = {};
 
 type LngLat = {
   lng: number;
@@ -15,8 +15,7 @@ type WindPoint = {
 
 type WindReport = {
   time: number;
-  at: WindPoint;
-  // all: [WindPoint];
+  wind: WindPoint;
 };
 
 type SendWind = {
@@ -36,12 +35,7 @@ type GetWind = {
   position: LngLat;
 };
 
-type StartCourse = {
-  tag: "StartCourse";
-  key: string;
-};
-
-type Output = GetWind | StartCourse;
+type Output = GetWind;
 
 export interface JstoElmPort<T> {
   send: (params: T) => void;

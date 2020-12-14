@@ -24,7 +24,6 @@ receive =
 
 type Output
     = GetWind Posix M.LngLat
-    | StartCourse String
 
 
 type Input
@@ -59,10 +58,4 @@ encodeOutput output =
                 [ ( "tag", JE.string "GetWind" )
                 , ( "time", JE.int (Time.posixToMillis time) )
                 , ( "position", M.encodeLngLat position )
-                ]
-
-        StartCourse key ->
-            JE.object
-                [ ( "tag", JE.string "StartCourse" )
-                , ( "key", JE.string key )
                 ]

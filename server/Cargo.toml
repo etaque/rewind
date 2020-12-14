@@ -39,4 +39,3 @@ uuid = { version = "0.8", features = ["serde", "v4"] }
 bytes = "0.5"
 geo = "0.16"
 
-shared = { path = "../shared" }

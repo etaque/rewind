@@ -32,3 +32,19 @@ pub struct WindReport {
     pub time: DateTime<Utc>,
     pub wind: WindPoint,
 }
+
+#[derive(Clone, Debug, Deserialize, Serialize)]
+#[serde(tag = "tag")]
+pub enum ToServer {
+    GetWind {
+        #[serde(with = "ts_milliseconds")]
+        time: DateTime<Utc>,
+        position: LngLat,
+    },
+}
+
+#[derive(Clone, Debug, Deserialize, Serialize)]
+#[serde(tag = "tag")]
+pub enum FromServer {
+    SendWind(WindReport),
+}

@@ -7,9 +7,10 @@ use cli::{Cli, Command};
 mod cli;
 mod db;
 mod error;
-mod game;
+mod messages;
 mod models;
 mod repos;
+mod session;
 mod tools;
 
 async fn session(
@@ -17,7 +18,7 @@ async fn session(
     stream: web::Payload,
     pool: web::Data<db::Pool>,
 ) -> Result<HttpResponse, Error> {
-    ws::start(game::session::Session::new(pool), &req, stream)
+    ws::start(session::Session::new(pool), &req, stream)
 }
 
 #[get("/health")]

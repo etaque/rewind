@@ -4,8 +4,7 @@ use actix_web_actors::ws;
 use serde_json;
 use std::time::{Duration, Instant};
 
-use shared::messages;
-use shared::models;
+use crate::messages;
 
 use crate::db;
 use crate::repos::*;
@@ -16,13 +15,6 @@ const CLIENT_TIMEOUT: Duration = Duration::from_secs(10);
 pub struct Session {
     pool: web::Data<db::Pool>,
     hb: Instant,
-    state: State,
-}
-
-#[derive(Clone)]
-pub enum State {
-    Idle,
-    Running(models::Course),
 }
 
 impl Actor for Session {
@@ -46,14 +38,11 @@ impl StreamHandler<Result<ws::Message, ws::ProtocolError>> for Session {
             }
             Ok(ws::Message::Text(text)) => match serde_json::from_str(&text) {
                 Ok(msg) => {
-                    Self::handle_player_message(self.pool.clone(), self.state.clone(), msg)
+                    Self::handle_player_message(self.pool.clone(), msg)
                         .into_actor(self)
                         .then(|res, _, ctx| {
                             match res {
-                                Ok(Some(local_msg)) => {
-                                    log::debug!("Forwarding local message");
-                                    ctx.notify(local_msg)
-                                }
+                                Ok(Some(local_msg)) => ctx.notify(local_msg),
                                 Ok(None) => (),
                                 Err(e) => {
                                     log::error!("Failed to handle player message: {:#?}", e);
@@ -84,7 +73,6 @@ impl StreamHandler<Result<ws::Message, ws::ProtocolError>> for Session {
 #[derive(Debug, Clone, Message)]
 #[rtype(result = "anyhow::Result<()>")]
 enum LocalMessage {
-    StartCourse(models::Course),
     SendToPlayer(messages::FromServer),
 }
 
@@ -93,10 +81,6 @@ impl Handler<LocalMessage> for Session {
 
     fn handle(&mut self, msg: LocalMessage, ctx: &mut Self::Context) -> Self::Result {
         match msg {
-            LocalMessage::StartCourse(course) => {
-                self.state = State::Running(course);
-                Ok(())
-            }
             LocalMessage::SendToPlayer(to_player) => {
                 Ok(ctx.text(serde_json::to_string(&to_player)?))
             }
@@ -109,30 +93,19 @@ impl Session {
         Self {
             hb: Instant::now(),
             pool,
-            state: State::Idle,
         }
     }
 
     async fn handle_player_message(
         pool: web::Data<db::Pool>,
-        state: State,
         msg: messages::ToServer,
     ) -> anyhow::Result<Option<LocalMessage>> {
         log::info!("Handling message from player: {:?}", msg);
-        match (msg, state) {
-            (messages::ToServer::StartCourse { .. }, State::Idle) => {
-                let course = shared::courses::vg20();
-                Ok(Some(LocalMessage::StartCourse(course)))
-            }
-            (messages::ToServer::GetWind { time, position }, State::Running(_)) => {
+        match msg {
+            messages::ToServer::GetWind { time, position } => {
                 let conn = pool.get().await?;
                 let report = wind_reports::find_closest(&conn, &time).await?;
-                // let all = wind_points::by_report_id(&conn, report.id)
-                //     .await?
-                //     .into_iter()
-                //     .map(crate::models::WindPoint::into)
-                //     .collect();
-                let empty_wind = models::WindPoint {
+                let empty_wind = messages::WindPoint {
                     position: position.clone(),
                     u: 0.0,
                     v: 0.0,
@@ -143,15 +116,11 @@ impl Session {
                     .map(|wp| wp.into())
                     .unwrap_or(empty_wind);
                 Ok(Some(LocalMessage::SendToPlayer(
-                    messages::FromServer::SendWind(models::WindReport {
+                    messages::FromServer::SendWind(messages::WindReport {
                         time: report.target_time,
                         wind,
                     }),
                 )))
-            }
-            (msg, _) => {
-                log::warn!("Unexpected player message: {:?}", &msg);
-                Ok(None)
             }
         }
     }
