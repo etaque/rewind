@@ -24,6 +24,7 @@ receive =
 
 type Output
     = GetWind Posix M.LngLat
+    | MoveTo M.LngLat
 
 
 type Input
@@ -50,12 +51,20 @@ decodeInput tag =
             JD.fail ("Unknown FromServer tag: " ++ tag)
 
 
+tagged : String -> List ( String, JE.Value ) -> JE.Value
+tagged tag fields =
+    JE.object <| ( "tag", JE.string tag ) :: fields
+
+
 encodeOutput : Output -> JE.Value
 encodeOutput output =
     case output of
         GetWind time position ->
-            JE.object
-                [ ( "tag", JE.string "GetWind" )
-                , ( "time", JE.int (Time.posixToMillis time) )
+            tagged "GetWind"
+                [ ( "time", JE.int (Time.posixToMillis time) )
                 , ( "position", M.encodeLngLat position )
                 ]
+
+        MoveTo position ->
+            tagged "MoveTo"
+                [ ( "position", M.encodeLngLat position ) ]

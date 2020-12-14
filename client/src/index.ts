@@ -1,13 +1,13 @@
 import "./styles.css";
 import { startApplication } from "./ElmApp";
-import { Globe } from "./globe";
+import { HarpGlobe } from "./globe";
 import { serverAddress } from "./config";
 
 const globeNode = document.getElementById("globe");
 const appNode = document.getElementById("app");
 
 if (globeNode instanceof HTMLCanvasElement && appNode) {
-  new Globe(globeNode);
+  const globe = new HarpGlobe(globeNode);
   const app = startApplication(appNode, {});
 
   var ws: WebSocket;
@@ -28,6 +28,9 @@ if (globeNode instanceof HTMLCanvasElement && appNode) {
         switch (output.tag) {
           case "GetWind":
             ws.send(JSON.stringify(output));
+            break;
+          case "MoveTo":
+            globe.moveTo(output.position);
             break;
         }
       });

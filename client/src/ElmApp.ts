@@ -2,18 +2,18 @@ import { Elm } from "./app/Main.elm";
 
 type Flags = {};
 
-type LngLat = {
+export type LngLat = {
   lng: number;
   lat: number;
 };
 
-type WindPoint = {
+export type WindPoint = {
   position: LngLat;
   u: number;
   v: number;
 };
 
-type WindReport = {
+export type WindReport = {
   time: number;
   wind: WindPoint;
 };
@@ -35,7 +35,12 @@ type GetWind = {
   position: LngLat;
 };
 
-type Output = GetWind;
+type MoveTo = {
+  tag: "MoveTo";
+  position: LngLat;
+};
+
+type Output = GetWind | MoveTo;
 
 export interface JstoElmPort<T> {
   send: (params: T) => void;

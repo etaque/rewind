@@ -18,9 +18,6 @@ const baseConfig = {
   // Webpack try to guess how to resolve imports in this order:
   resolve: {
     extensions: [".ts", ".js", ".wasm", ".elm"],
-    alias: {
-      crate: __dirname,
-    },
   },
 
   module: {
@@ -77,9 +74,6 @@ const mainConfig = {
     noInfo: true,
     stats: "errors-only",
     overlay: {
-      // Commented to prevent error:
-      // `./crate/pkg/index_bg.js 382:14-53   Critical dependency: the request of a dependency is an expression`
-      // warnings: true,
       errors: true,
     },
   },
@@ -96,10 +90,6 @@ const mainConfig = {
     new HtmlWebpackPlugin({
       template: path.resolve(__dirname, "src/index.html"),
     }),
-    // Compile Rust.
-    // new WasmPackPlugin({
-    //   crateDirectory: __dirname,
-    // }),
     new CopyWebpackPlugin({
       patterns: [
         require.resolve("three/build/three.min.js"),

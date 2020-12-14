@@ -70,7 +70,7 @@ vg20 =
             Iso8601.toTime >> Result.withDefault (Time.millisToPosix 0)
 
         lsd =
-            LngLat 46.470243284275966 -1.788456535301071
+            LngLat -1.788456535301071 46.470243284275966
     in
     { key = "vg20"
     , name = "Vendée Globe 2020"

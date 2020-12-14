@@ -3,8 +3,9 @@ import { MapView } from "@here/harp-mapview";
 import { VectorTileDataSource } from "@here/harp-vectortile-datasource";
 
 import { hereApiKey } from "./config";
+import { LngLat } from "./ElmApp";
 
-export class Globe {
+export class HarpGlobe {
   readonly mapView: MapView;
 
   constructor(canvas: HTMLCanvasElement) {
@@ -31,7 +32,8 @@ export class Globe {
     this.mapView.addDataSource(omvDataSource);
   }
 
-  update(text: string) {
-    console.log("update!", text);
+  moveTo(position: LngLat) {
+    console.log("moveTo", position);
+    this.mapView.lookAt({ target: position, zoomLevel: 7 });
   }
 }
