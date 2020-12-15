@@ -3,7 +3,7 @@ import { MapView } from "@here/harp-mapview";
 import { VectorTileDataSource } from "@here/harp-vectortile-datasource";
 
 import { hereApiKey } from "./config";
-import { LngLat } from "./ElmApp";
+import { LngLat } from "./app/App";
 
 export class HarpGlobe {
   readonly mapView: MapView;

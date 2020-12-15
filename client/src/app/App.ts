@@ -1,4 +1,4 @@
-import { Elm } from "./app/Main.elm";
+import { Elm } from "./Main.elm";
 
 type Flags = {};
 
@@ -57,6 +57,6 @@ export type App = {
   };
 };
 
-export function startApplication(node: HTMLElement, flags: Flags): App {
+export function startApp(node: HTMLElement, flags: Flags): App {
   return Elm.Main.init({ node, flags });
 }

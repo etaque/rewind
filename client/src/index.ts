@@ -1,5 +1,5 @@
 import "./styles.css";
-import { startApplication } from "./ElmApp";
+import { startApp } from "./app/App";
 import { HarpGlobe } from "./globe";
 import { serverAddress } from "./config";
 
@@ -8,7 +8,7 @@ const appNode = document.getElementById("app");
 
 if (globeNode instanceof HTMLCanvasElement && appNode) {
   const globe = new HarpGlobe(globeNode);
-  const app = startApplication(appNode, {});
+  const app = startApp(appNode, {});
 
   var ws: WebSocket;
 
