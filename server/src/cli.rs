@@ -14,7 +14,7 @@ pub struct Cli {
 pub enum Command {
     Http {
         #[structopt(env = "REWIND_HTTP_ADDRESS")]
-        address: String,
+        address: std::net::SocketAddr,
     },
     Db(DbCommand),
     Grib(GribArgs),

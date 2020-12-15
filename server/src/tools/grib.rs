@@ -13,7 +13,7 @@ use std::str::FromStr;
 use tokio_postgres::binary_copy::BinaryCopyInWriter;
 use tokio_postgres::types::{Kind, Type};
 
-pub async fn exec(db_url: String, args: GribArgs) -> anyhow::Result<()> {
+pub async fn exec(db_url: &str, args: GribArgs) -> anyhow::Result<()> {
     let res = reqwest::get(&args.url).await?;
     let mut content = Cursor::new(res.bytes().await?);
 
