@@ -91,7 +91,9 @@ update message model =
                     , wind = M.WindReport course.startTime (M.WindPoint course.start 0 0)
                     }
             in
-            ( { model | state = Playing session }, P.send (P.MoveTo course.start) )
+            ( { model | state = Playing session }
+            , Cmd.batch [ P.send P.StartSession, P.send (P.MoveTo course.start) ]
+            )
 
         ( Input value, Playing session ) ->
             case P.receive value of

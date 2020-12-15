@@ -1,11 +1,18 @@
 use chrono::serde::ts_milliseconds;
 use chrono::{DateTime, Utc};
+use postgis::ewkb::Point as PgPoint;
 use serde::{Deserialize, Serialize};
 
 #[derive(Clone, Debug, Deserialize, Serialize)]
 pub struct LngLat {
     pub lng: f64,
     pub lat: f64,
+}
+
+impl Into<PgPoint> for LngLat {
+    fn into(self) -> PgPoint {
+        PgPoint::new(self.lng, self.lat, Some(crate::models::SRID))
+    }
 }
 
 #[derive(Clone, Debug, Deserialize, Serialize)]

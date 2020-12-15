@@ -27,7 +27,10 @@ pub async fn migrate(url: &str) -> anyhow::Result<()> {
     let mut conn = pool(url).await?.dedicated_connection().await?;
 
     println!("Running migrations");
-    embedded::migrations::runner().run_async(&mut conn).await?;
+    embedded::migrations::runner()
+        .set_abort_divergent(false)
+        .run_async(&mut conn)
+        .await?;
     Ok(())
 }
 

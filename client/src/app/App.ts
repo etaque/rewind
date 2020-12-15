@@ -29,6 +29,10 @@ type Disconnected = {
 
 type Input = SendWind | Disconnected;
 
+type StartSession = {
+  tag: "StartSession";
+};
+
 type GetWind = {
   tag: "GetWind";
   time: number;
@@ -40,7 +44,7 @@ type MoveTo = {
   position: LngLat;
 };
 
-type Output = GetWind | MoveTo;
+type Output = StartSession | GetWind | MoveTo;
 
 export interface JstoElmPort<T> {
   send: (params: T) => void;

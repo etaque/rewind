@@ -1,0 +1,12 @@
+#!/usr/bin/env bash
+set -e
+cd `dirname "$0"`/..
+
+bin/container ensure
+source dev-env
+
+export RUST_LOG=info
+export DATABASE_URL=$REWIND_DATABASE_URL
+
+martin --listen-addresses=0.0.0.0:3002 --watch
+

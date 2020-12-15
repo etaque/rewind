@@ -5,6 +5,8 @@ use tokio_pg_mapper_derive::PostgresMapper;
 use crate::messages;
 use crate::messages::LngLat;
 
+pub const SRID: i32 = 4326;
+
 #[derive(Clone, Debug, PostgresMapper)]
 #[pg_mapper(table = "wind_reports")]
 pub struct WindReport {

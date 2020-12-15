@@ -1,5 +1,6 @@
 use crate::cli::GribArgs;
 use crate::db;
+use crate::models::{WindReport, SRID};
 use chrono::{DateTime, Utc};
 use futures::pin_mut;
 use postgis::ewkb;
@@ -10,6 +11,7 @@ use std::num::ParseFloatError;
 use std::path::Path;
 use std::process::Command;
 use std::str::FromStr;
+use tokio_pg_mapper::FromTokioPostgresRow;
 use tokio_postgres::binary_copy::BinaryCopyInWriter;
 use tokio_postgres::types::{Kind, Type};
 
@@ -45,12 +47,14 @@ pub async fn exec(db_url: &str, args: GribArgs) -> anyhow::Result<()> {
         Utc,
     );
 
-    let report_id: i64 = client
+    let row = client
         .query_one(
-            "INSERT INTO wind_reports (url, day, hour, forecast, target_time) VALUES ($1, $2, $3, $4, $5) RETURNING id",
+            "INSERT INTO wind_reports (url, day, hour, forecast, target_time) VALUES ($1, $2, $3, $4, $5) RETURNING *",
             &[&args.url, &args.day, &args.hour, &args.forecast, &target_time],
         )
-        .await?.get("id");
+        .await?;
+
+    let report = WindReport::from_row(row)?;
 
     let sink = client
         .copy_in("COPY wind_points (wind_report_id, point, u, v) FROM STDIN BINARY")
@@ -68,15 +72,16 @@ pub async fn exec(db_url: &str, args: GribArgs) -> anyhow::Result<()> {
         BinaryCopyInWriter::new(sink, &[Type::INT8, geom_type, Type::FLOAT8, Type::FLOAT8]);
     pin_mut!(writer);
 
-    for lat in -90..90 {
+    for lat in -85..85 {
         for lon in 0..360 {
             let k = (format!("{}.000", lat), format!("{}.000", lon));
             match u_grid.get(&k).zip(v_grid.get(&k)) {
                 Some((u, v)) => {
-                    let point = &ewkb::Point::new(lat as f64, lon as f64, None);
+                    let corrected_lon = if lon > 180 { lon - 360 } else { lon };
+                    let point = &ewkb::Point::new(corrected_lon as f64, lat as f64, Some(SRID));
                     writer
                         .as_mut()
-                        .write(&[&report_id, &point, &u, &v])
+                        .write(&[&report.id, &point, &u, &v])
                         .await
                         .unwrap();
                 }
@@ -86,6 +91,7 @@ pub async fn exec(db_url: &str, args: GribArgs) -> anyhow::Result<()> {
     }
     writer.finish().await.unwrap();
 
+    println!("{:#?}", report);
     Ok(())
 }
 

@@ -155,8 +155,7 @@ mod session {
                         u: 0.0,
                         v: 0.0,
                     };
-                    let point = postgis::ewkb::Point::new(position.lng, position.lat, None);
-                    let wind = wind_points::at(&conn, report.id, &point)
+                    let wind = wind_points::at(&conn, report.id, &position.into())
                         .await?
                         .map(|wp| wp.into())
                         .unwrap_or(empty_wind);

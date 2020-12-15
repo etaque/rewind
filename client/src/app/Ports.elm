@@ -23,8 +23,9 @@ receive =
 
 
 type Output
-    = GetWind Posix M.LngLat
+    = StartSession
     | MoveTo M.LngLat
+    | GetWind Posix M.LngLat
 
 
 type Input
@@ -64,6 +65,9 @@ encodeOutput output =
                 [ ( "time", JE.int (Time.posixToMillis time) )
                 , ( "position", M.encodeLngLat position )
                 ]
+
+        StartSession ->
+            tagged "StartSession" []
 
         MoveTo position ->
             tagged "MoveTo"

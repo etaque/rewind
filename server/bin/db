@@ -12,6 +12,9 @@ if [ "$1" == "console" ]; then
 elif  [ "$1" == "migrate" ]; then
   cargo run -- db migrate
 
+elif  [ "$1" == "reset" ]; then
+  cargo run -- db reset
+
 elif  [ "$1" == "prepare" ]; then
   SHP_NAME=simplified-land-polygons-complete
   SRID=3857

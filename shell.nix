@@ -32,6 +32,7 @@ mkShell {
     postgis
     osm2pgsql
     eccodes
+    martin
 
     # client
     nodePackages.webpack-cli

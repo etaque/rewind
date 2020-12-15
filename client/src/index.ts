@@ -12,9 +12,8 @@ if (globeNode instanceof HTMLCanvasElement && appNode) {
 
   var ws: WebSocket;
 
-  const connect = () => {
+  const startSession = () => {
     ws = new WebSocket(`ws://${serverAddress}/session`);
-
     ws.onmessage = (ev: MessageEvent<any>) => {
       switch (ev.data.tag) {
         case "SendWind":
@@ -22,28 +21,26 @@ if (globeNode instanceof HTMLCanvasElement && appNode) {
           break;
       }
     };
-
-    ws.onopen = (_: Event) => {
-      app.ports.outputs.subscribe((output) => {
-        switch (output.tag) {
-          case "GetWind":
-            ws.send(JSON.stringify(output));
-            break;
-          case "MoveTo":
-            globe.moveTo(output.position);
-            break;
-        }
-      });
-    };
-
     ws.onclose = () => {
       app.ports.inputs.send({ tag: "Disconnected" });
-
-      setTimeout(connect, 1000);
     };
   };
 
-  connect();
+  app.ports.outputs.subscribe((output) => {
+    switch (output.tag) {
+      case "StartSession":
+        startSession();
+        break;
+
+      case "GetWind":
+        ws.send(JSON.stringify(output));
+        break;
+
+      case "MoveTo":
+        globe.moveTo(output.position);
+        break;
+    }
+  });
 } else {
   console.log("Failed to mount apps", globeNode, appNode);
 }
