@@ -160,6 +160,7 @@ mod session {
                         .map(|wp| wp.into())
                         .unwrap_or(empty_wind);
                     let to_player = FromServer::SendWind(messages::WindReport {
+                        id: report.id,
                         time: report.target_time,
                         wind,
                     });

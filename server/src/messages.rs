@@ -35,6 +35,7 @@ pub struct Course {
 
 #[derive(Clone, Debug, Deserialize, Serialize)]
 pub struct WindReport {
+    pub id: i64,
     #[serde(with = "ts_milliseconds")]
     pub time: DateTime<Utc>,
     pub wind: WindPoint,

@@ -40,26 +40,46 @@ windPointDecoder =
         |> required "v" float
 
 
+encodeWindPoint : WindPoint -> JE.Value
+encodeWindPoint { position, u, v } =
+    JE.object
+        [ ( "position", encodeLngLat position )
+        , ( "u", JE.float u )
+        , ( "v", JE.float v )
+        ]
+
+
 type alias WindReport =
-    { time : Posix
-    , at : WindPoint
+    { id : Int
+    , time : Int
+    , wind : WindPoint
     }
 
 
 windReportDecoder : Decoder WindReport
 windReportDecoder =
     succeed WindReport
-        |> required "time" (int |> JD.map Time.millisToPosix)
-        |> required "at" windPointDecoder
+        |> required "id" int
+        |> required "time" int
+        |> required "wind" windPointDecoder
+
+
+encodeWindReport : WindReport -> JE.Value
+encodeWindReport { id, time, wind } =
+    JE.object
+        [ ( "id", JE.int id )
+        , ( "time", JE.int time )
+        , ( "wind", encodeWindPoint wind )
+        ]
 
 
 type alias Course =
     { key : String
     , name : String
-    , startTime : Posix
+    , startTime : Int
     , start : LngLat
     , finish : LngLat
-    , timeFactor : Int
+    , timeFactor : Float
     }
 
 
@@ -74,7 +94,7 @@ vg20 =
     in
     { key = "vg20"
     , name = "Vendée Globe 2020"
-    , startTime = parseTime "2020-11-08T11:00:00+01:00"
+    , startTime = parseTime "2020-11-08T11:00:00+01:00" |> Time.posixToMillis
     , start = lsd
     , finish = lsd
     , timeFactor = 100

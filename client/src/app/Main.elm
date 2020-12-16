@@ -10,7 +10,6 @@ import Model as M
 import Ports as P
 import Svg as S
 import Svg.Attributes as SA
-import Time exposing (Posix)
 
 
 type alias Flags =
@@ -51,7 +50,7 @@ type State
 type alias Session =
     { clock : Float
     , lastWindRefresh : Float
-    , courseTime : Posix
+    , courseTime : Int
     , position : M.LngLat
     , course : M.Course
     , wind : M.WindReport
@@ -88,34 +87,49 @@ update message model =
                     , courseTime = course.startTime
                     , position = course.start
                     , course = course
-                    , wind = M.WindReport course.startTime (M.WindPoint course.start 0 0)
+                    , wind = M.WindReport -1 course.startTime (M.WindPoint course.start 0 0)
                     }
             in
             ( { model | state = Playing session }
-            , Cmd.batch [ P.send P.StartSession, P.send (P.MoveTo course.start) ]
+            , Cmd.batch
+                [ P.send P.StartSession
+                , P.send (P.UpdateMap (P.MoveTo session.position))
+                ]
             )
 
         ( Input value, Playing session ) ->
-            case P.receive value of
+            case P.decodeInputValue value of
                 Ok (P.SendWind report) ->
-                    ( { model | state = Playing { session | wind = report } }, Cmd.none )
+                    ( { model | state = Playing { session | wind = report } }, P.send (P.UpdateMap (P.SetWind report)) )
 
                 Ok P.Disconnected ->
                     ( { model | state = Idle }, Cmd.none )
 
-                Err _ ->
+                Err e ->
+                    let
+                        _ =
+                            Debug.log "Failed to decode input" (Debug.toString e)
+                    in
                     ( model, Cmd.none )
 
         ( Tick delta, Playing session ) ->
             let
                 newClock =
                     session.clock + delta
+
+                newCourseTime =
+                    session.course.startTime + round (newClock * session.course.timeFactor)
+
+                newSession =
+                    { session | clock = newClock, courseTime = newCourseTime }
             in
             if newClock - session.lastWindRefresh > windRefreshInterval then
-                ( { model | state = Playing { session | clock = newClock, lastWindRefresh = newClock } }, P.send (P.GetWind session.courseTime session.position) )
+                ( { model | state = Playing { newSession | lastWindRefresh = newClock } }
+                , P.send (P.GetWind newSession.courseTime newSession.position)
+                )
 
             else
-                ( { model | state = Playing { session | clock = newClock } }, Cmd.none )
+                ( { model | state = Playing newSession }, Cmd.none )
 
         _ ->
             ( model, Cmd.none )

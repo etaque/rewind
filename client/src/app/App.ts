@@ -14,6 +14,7 @@ export type WindPoint = {
 };
 
 export type WindReport = {
+  id: number;
   time: number;
   wind: WindPoint;
 };
@@ -27,7 +28,7 @@ type Disconnected = {
   tag: "Disconnected";
 };
 
-type Input = SendWind | Disconnected;
+export type Input = SendWind | Disconnected;
 
 type StartSession = {
   tag: "StartSession";
@@ -39,12 +40,22 @@ type GetWind = {
   position: LngLat;
 };
 
+export type UpdateMap = {
+  tag: "UpdateMap";
+  updateMap: MoveTo | SetWind;
+};
+
 type MoveTo = {
   tag: "MoveTo";
   position: LngLat;
 };
 
-type Output = StartSession | GetWind | MoveTo;
+type SetWind = {
+  tag: "SetWind";
+  windReport: WindReport;
+};
+
+export type Output = StartSession | GetWind | UpdateMap;
 
 export interface JstoElmPort<T> {
   send: (params: T) => void;

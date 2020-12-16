@@ -1,9 +1,8 @@
-port module Ports exposing (Input(..), Output(..), encodeOutput, inputDecoder, inputs, outputs, receive, send)
+port module Ports exposing (Input(..), Output(..), UpdateMap(..), decodeInput, decodeInputValue, encodeOutput, inputDecoder, inputs, outputs, send)
 
 import Json.Decode as JD
 import Json.Encode as JE
 import Model as M
-import Time exposing (Posix)
 
 
 port outputs : JE.Value -> Cmd msg
@@ -17,15 +16,20 @@ send output =
 port inputs : (JE.Value -> msg) -> Sub msg
 
 
-receive : JD.Value -> Result JD.Error Input
-receive =
+decodeInputValue : JD.Value -> Result JD.Error Input
+decodeInputValue =
     JD.decodeValue inputDecoder
 
 
 type Output
     = StartSession
-    | MoveTo M.LngLat
-    | GetWind Posix M.LngLat
+    | UpdateMap UpdateMap
+    | GetWind Int M.LngLat
+
+
+type UpdateMap
+    = MoveTo M.LngLat
+    | SetWind M.WindReport
 
 
 type Input
@@ -43,7 +47,7 @@ decodeInput : String -> JD.Decoder Input
 decodeInput tag =
     case tag of
         "SendWind" ->
-            JD.map SendWind (JD.field "report" M.windReportDecoder)
+            JD.map SendWind M.windReportDecoder
 
         "Disconnected" ->
             JD.succeed Disconnected
@@ -62,13 +66,27 @@ encodeOutput output =
     case output of
         GetWind time position ->
             tagged "GetWind"
-                [ ( "time", JE.int (Time.posixToMillis time) )
+                [ ( "time", JE.int time )
                 , ( "position", M.encodeLngLat position )
                 ]
 
         StartSession ->
             tagged "StartSession" []
 
+        UpdateMap updateMap ->
+            tagged "UpdateMap" <|
+                [ ( "updateMap", encodeUpdateMap updateMap ) ]
+
+
+encodeUpdateMap : UpdateMap -> JE.Value
+encodeUpdateMap updateMap =
+    case updateMap of
         MoveTo position ->
             tagged "MoveTo"
-                [ ( "position", M.encodeLngLat position ) ]
+                [ ( "position", M.encodeLngLat position )
+                ]
+
+        SetWind windReport ->
+            tagged "SetWind"
+                [ ( "windReport", M.encodeWindReport windReport )
+                ]

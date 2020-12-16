@@ -1,25 +1,21 @@
 import "./styles.css";
-import { startApp } from "./app/App";
-import { HarpGlobe } from "./globe";
-import { serverAddress } from "./config";
+import { Input, startApp } from "./app/App";
+import { Map } from "./Map";
+import { tileServerAddress, wsAddress } from "./config";
 
-const globeNode = document.getElementById("globe");
+const mapNode = document.getElementById("map");
 const appNode = document.getElementById("app");
 
-if (globeNode instanceof HTMLCanvasElement && appNode) {
-  const globe = new HarpGlobe(globeNode);
+if (mapNode instanceof HTMLCanvasElement && appNode) {
+  const map = new Map(mapNode, tileServerAddress);
   const app = startApp(appNode, {});
 
   var ws: WebSocket;
 
   const startSession = () => {
-    ws = new WebSocket(`ws://${serverAddress}/session`);
-    ws.onmessage = (ev: MessageEvent<any>) => {
-      switch (ev.data.tag) {
-        case "SendWind":
-          app.ports.inputs.send(ev.data);
-          break;
-      }
+    ws = new WebSocket(wsAddress + "/session");
+    ws.onmessage = (ev: MessageEvent<Input>) => {
+      app.ports.inputs.send(ev.data);
     };
     ws.onclose = () => {
       app.ports.inputs.send({ tag: "Disconnected" });
@@ -33,14 +29,22 @@ if (globeNode instanceof HTMLCanvasElement && appNode) {
         break;
 
       case "GetWind":
-        ws.send(JSON.stringify(output));
+        if (ws.readyState === ws.OPEN) ws.send(JSON.stringify(output));
         break;
 
-      case "MoveTo":
-        globe.moveTo(output.position);
+      case "UpdateMap":
+        switch (output.updateMap.tag) {
+          case "MoveTo":
+            map.moveTo(output.updateMap.position);
+            break;
+
+          case "SetWind":
+            map.setWindReport(output.updateMap.windReport);
+            break;
+        }
         break;
     }
   });
 } else {
-  console.log("Failed to mount apps", globeNode, appNode);
+  console.log("Failed to mount apps", mapNode, appNode);
 }
