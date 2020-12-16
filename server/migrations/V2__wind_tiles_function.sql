@@ -43,9 +43,11 @@ CREATE OR REPLACE FUNCTION public.wind_tiles(z integer, x integer, y integer, qu
 DECLARE
   mvt bytea;
 BEGIN
-  SELECT INTO mvt ST_AsMVT(tile, 'public.wind_tiles', 4096, 'geom') FROM (
+  SELECT INTO mvt ST_AsMVT(tile, 'wind', 4096, 'geom') FROM (
     SELECT
-      ST_AsMVTGeom(ST_Transform(point, 3857), TileBBox(z, x, y, 3857), 4096, 64, true) AS geom
+      ST_AsMVTGeom(ST_Transform(point, 3857), TileBBox(z, x, y, 3857), 4096, 64, true) AS geom,
+      u,
+      v
     FROM public.wind_points
     WHERE point && TileBBox(z, x, y, 4326)
     AND wind_report_id = (query_params->>'wind_report_id')::int

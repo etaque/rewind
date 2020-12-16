@@ -22,8 +22,23 @@ export class Map {
     this.mapView = new MapView({
       canvas,
       projection: sphereProjection,
-      theme: "/resources/berlin_tilezen_night_reduced.json",
       decoderUrl: "decoder.bundle.js",
+      theme: {
+        extends: "/resources/berlin_tilezen_night_reduced.json",
+        styles: {
+          wind: [
+            {
+              when: ["==", ["geometry-type"], "Point"],
+              technique: "circles",
+              renderOrder: 10000,
+              attr: {
+                color: "#ca6",
+                size: 6,
+              },
+            },
+          ],
+        },
+      },
     });
 
     this.mapView.renderLabels = false;
@@ -44,7 +59,10 @@ export class Map {
 
     const mapControls = new MapControls(this.mapView);
     mapControls.maxTiltAngle = 90;
-    const ui = new MapControlsUI(mapControls, { zoomLevel: "input" });
+    const ui = new MapControlsUI(mapControls, {
+      zoomLevel: "input",
+      projectionSwitch: true,
+    });
     this.mapView.canvas.parentElement!.appendChild(ui.domElement);
   }
 
@@ -59,6 +77,7 @@ export class Map {
         baseUrl: this.tileServerAddress + "/rpc/public.wind_tiles",
         urlParams: { wind_report_id: windReport.id.toString() },
         name: "report/" + windReport.id,
+        styleSetName: "wind",
       });
       this.mapView.addDataSource(newDataSource);
       if (this._currentDataSource) {
