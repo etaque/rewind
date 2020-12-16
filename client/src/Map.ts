@@ -3,7 +3,7 @@ import { MapView } from "@here/harp-mapview";
 
 import { hereApiKey } from "./config";
 import { LngLat, WindReport } from "./app/App";
-import { OmvDataSource } from "@here/harp-omv-datasource";
+import { APIFormat, OmvDataSource } from "@here/harp-omv-datasource";
 import { MapControls, MapControlsUI } from "@here/harp-map-controls";
 
 export class Map {
@@ -49,17 +49,19 @@ export class Map {
   }
 
   setWindReport(windReport: WindReport) {
-    if (this._currentWindReport && this._currentDataSource) {
-      if (this._currentWindReport.id != windReport.id) {
+    if (windReport.id != this._currentWindReport?.id) {
+      const newDataSource = new OmvDataSource({
+        apiFormat: APIFormat.XYZMVT,
+        baseUrl: this.tileServerAddress + "/rpc/public.wind_tiles",
+        name: "report/" + windReport.id,
+      });
+      this.mapView.addDataSource(newDataSource);
+      if (this._currentDataSource) {
+        this.mapView.removeDataSource(this._currentDataSource);
         this._currentDataSource.dispose();
       }
+      this._currentDataSource = newDataSource;
+      this._currentWindReport = windReport;
     }
-    this._currentDataSource = new OmvDataSource({
-      baseUrl: this.tileServerAddress + "/rpc/public.wind_tiles",
-      name: "report/" + windReport.id,
-    });
-    this.mapView.addDataSource(this._currentDataSource);
-    console.log(this._currentDataSource);
-    this._currentWindReport = windReport;
   }
 }
