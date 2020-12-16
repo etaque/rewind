@@ -3,10 +3,9 @@ const dist = path.resolve(__dirname, "dist");
 
 const WebpackBar = require("webpackbar");
 const HtmlWebpackPlugin = require("html-webpack-plugin");
-// const WasmPackPlugin = require("@wasm-tool/wasm-pack-plugin");
+const CopyWebpackPlugin = require("copy-webpack-plugin");
 const { CleanWebpackPlugin } = require("clean-webpack-plugin");
 const MiniCssExtractPlugin = require("mini-css-extract-plugin");
-const CopyWebpackPlugin = require("copy-webpack-plugin");
 
 const mode = "development";
 
@@ -17,7 +16,7 @@ const baseConfig = {
   },
   // Webpack try to guess how to resolve imports in this order:
   resolve: {
-    extensions: [".ts", ".js", ".wasm", ".elm"],
+    extensions: [".ts", ".js", ".elm"],
   },
 
   module: {
@@ -63,7 +62,7 @@ const mainConfig = {
   },
   devServer: {
     inline: true,
-    hot: true,
+    // hot: true,
     contentBase: dist,
     host: "0.0.0.0",
     port: 3000,
@@ -114,7 +113,7 @@ const workerConfig = {
   target: "webworker",
   output: {
     path: path.resolve(__dirname, "dist"),
-    filename: "decoder.js",
+    filename: "decoder.bundle.js",
   },
   ...baseConfig,
 };

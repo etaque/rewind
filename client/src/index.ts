@@ -1,5 +1,5 @@
 import "./styles.css";
-import { Input, startApp } from "./app/App";
+import { startApp } from "./app/App";
 import { Map } from "./Map";
 import { tileServerAddress, wsAddress } from "./config";
 
