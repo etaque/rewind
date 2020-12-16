@@ -21,17 +21,6 @@ decodeInputValue =
     JD.decodeValue inputDecoder
 
 
-type Output
-    = StartSession
-    | UpdateMap UpdateMap
-    | GetWind Int M.LngLat
-
-
-type UpdateMap
-    = MoveTo M.LngLat
-    | SetWind M.WindReport
-
-
 type Input
     = Disconnected
     | SendWind M.WindReport
@@ -47,7 +36,7 @@ decodeInput : String -> JD.Decoder Input
 decodeInput tag =
     case tag of
         "SendWind" ->
-            JD.map SendWind M.windReportDecoder
+            JD.map SendWind (JD.field "report" M.windReportDecoder)
 
         "Disconnected" ->
             JD.succeed Disconnected
@@ -56,15 +45,21 @@ decodeInput tag =
             JD.fail ("Unknown FromServer tag: " ++ tag)
 
 
-tagged : String -> List ( String, JE.Value ) -> JE.Value
-tagged tag fields =
-    JE.object <| ( "tag", JE.string tag ) :: fields
+type Output
+    = StartSession
+    | UpdateMap UpdateMap
+    | GetWind { time : Int, position : M.LngLat }
+
+
+type UpdateMap
+    = MoveTo M.LngLat
+    | SetWind M.WindReport
 
 
 encodeOutput : Output -> JE.Value
 encodeOutput output =
     case output of
-        GetWind time position ->
+        GetWind { time, position } ->
             tagged "GetWind"
                 [ ( "time", JE.int time )
                 , ( "position", M.encodeLngLat position )
@@ -86,7 +81,12 @@ encodeUpdateMap updateMap =
                 [ ( "position", M.encodeLngLat position )
                 ]
 
-        SetWind windReport ->
+        SetWind report ->
             tagged "SetWind"
-                [ ( "windReport", M.encodeWindReport windReport )
+                [ ( "report", M.encodeWindReport report )
                 ]
+
+
+tagged : String -> List ( String, JE.Value ) -> JE.Value
+tagged tag fields =
+    JE.object <| ( "tag", JE.string tag ) :: fields

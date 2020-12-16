@@ -14,8 +14,8 @@ if (mapNode instanceof HTMLCanvasElement && appNode) {
 
   const startSession = () => {
     ws = new WebSocket(wsAddress + "/session");
-    ws.onmessage = (ev: MessageEvent<Input>) => {
-      app.ports.inputs.send(ev.data);
+    ws.onmessage = (ev: MessageEvent) => {
+      app.ports.inputs.send(JSON.parse(ev.data));
     };
     ws.onclose = () => {
       app.ports.inputs.send({ tag: "Disconnected" });
@@ -39,7 +39,7 @@ if (mapNode instanceof HTMLCanvasElement && appNode) {
             break;
 
           case "SetWind":
-            map.setWindReport(output.updateMap.windReport);
+            map.setWindReport(output.updateMap.report);
             break;
         }
         break;

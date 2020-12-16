@@ -52,7 +52,7 @@ type MoveTo = {
 
 type SetWind = {
   tag: "SetWind";
-  windReport: WindReport;
+  report: WindReport;
 };
 
 export type Output = StartSession | GetWind | UpdateMap;

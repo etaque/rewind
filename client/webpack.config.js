@@ -62,8 +62,8 @@ const mainConfig = {
     filename: "index.[hash].js",
   },
   devServer: {
-    inline: false,
-    hot: false,
+    inline: true,
+    hot: true,
     contentBase: dist,
     host: "0.0.0.0",
     port: 3000,

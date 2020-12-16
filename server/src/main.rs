@@ -159,11 +159,13 @@ mod session {
                         .await?
                         .map(|wp| wp.into())
                         .unwrap_or(empty_wind);
-                    let to_player = FromServer::SendWind(messages::WindReport {
-                        id: report.id,
-                        time: report.target_time,
-                        wind,
-                    });
+                    let to_player = FromServer::SendWind {
+                        report: messages::WindReport {
+                            id: report.id,
+                            time: report.target_time,
+                            wind,
+                        },
+                    };
                     Ok(Some(to_player))
                 }
             }

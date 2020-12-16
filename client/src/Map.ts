@@ -4,13 +4,14 @@ import { MapView } from "@here/harp-mapview";
 import { hereApiKey } from "./config";
 import { LngLat, WindReport } from "./app/App";
 import { OmvDataSource } from "@here/harp-omv-datasource";
+import { MapControls, MapControlsUI } from "@here/harp-map-controls";
 
 export class Map {
   readonly mapView: MapView;
   readonly tileServerAddress: string;
 
-  private _currentDataSource: OmvDataSource | null = null;
-  private _currentWindReport: WindReport | null = null;
+  private _currentDataSource?: OmvDataSource;
+  private _currentWindReport?: WindReport;
 
   constructor(canvas: HTMLCanvasElement, tileServerAddress: string) {
     this.tileServerAddress = tileServerAddress;
@@ -21,6 +22,10 @@ export class Map {
       theme: "/resources/berlin_tilezen_night_reduced.json",
       decoderUrl: "decoder.js",
     });
+
+    const mapControls = new MapControls(this.mapView);
+    const ui = new MapControlsUI(mapControls);
+    // canvas.parentElement.appendChild(ui.domElement);
 
     this.mapView.renderLabels = false;
 
@@ -40,7 +45,7 @@ export class Map {
   }
 
   moveTo(position: LngLat) {
-    this.mapView.lookAt({ target: position, zoomLevel: 7 });
+    this.mapView.lookAt({ target: position, zoomLevel: 6 });
   }
 
   setWindReport(windReport: WindReport) {

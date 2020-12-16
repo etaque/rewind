@@ -54,5 +54,5 @@ pub enum ToServer {
 #[derive(Clone, Debug, Deserialize, Serialize)]
 #[serde(tag = "tag")]
 pub enum FromServer {
-    SendWind(WindReport),
+    SendWind { report: WindReport },
 }

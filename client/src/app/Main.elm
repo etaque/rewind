@@ -5,6 +5,7 @@ import Browser.Events
 import Html as H exposing (Html)
 import Html.Attributes as HA
 import Html.Events as HE
+import Json.Decode as JD
 import Json.Encode as JE
 import Model as M
 import Ports as P
@@ -97,19 +98,25 @@ update message model =
                 ]
             )
 
-        ( Input value, Playing session ) ->
-            case P.decodeInputValue value of
-                Ok (P.SendWind report) ->
-                    ( { model | state = Playing { session | wind = report } }, P.send (P.UpdateMap (P.SetWind report)) )
+        ( Input value, _ ) ->
+            case ( P.decodeInputValue value, model.state ) of
+                ( Ok (P.SendWind report), Playing session ) ->
+                    ( { model | state = Playing { session | wind = report } }
+                    , P.send (P.UpdateMap (P.SetWind report))
+                    )
 
-                Ok P.Disconnected ->
+                ( Ok P.Disconnected, Playing _ ) ->
                     ( { model | state = Idle }, Cmd.none )
 
-                Err e ->
+                ( Err e, _ ) ->
                     let
                         _ =
-                            Debug.log "Failed to decode input" (Debug.toString e)
+                            Debug.log (JD.errorToString e) (JE.encode 0 value)
                     in
+                    ( model, Cmd.none )
+
+                _ ->
+                    -- unexpected input
                     ( model, Cmd.none )
 
         ( Tick delta, Playing session ) ->
@@ -125,7 +132,7 @@ update message model =
             in
             if newClock - session.lastWindRefresh > windRefreshInterval then
                 ( { model | state = Playing { newSession | lastWindRefresh = newClock } }
-                , P.send (P.GetWind newSession.courseTime newSession.position)
+                , P.send (P.GetWind { time = newSession.courseTime, position = newSession.position })
                 )
 
             else
