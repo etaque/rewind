@@ -25,8 +25,8 @@ pub struct WindPoint {
     pub id: i64,
     pub wind_report_id: i64,
     pub point: ewkb::Point,
-    pub u: f64,
-    pub v: f64,
+    pub direction: f64,
+    pub speed: f64,
 }
 
 impl Into<messages::WindPoint> for WindPoint {
@@ -36,8 +36,8 @@ impl Into<messages::WindPoint> for WindPoint {
                 lng: self.point.x,
                 lat: self.point.y,
             },
-            u: self.u,
-            v: self.v,
+            direction: self.direction,
+            speed: self.speed,
         }
     }
 }

@@ -57,7 +57,7 @@ pub async fn exec(db_url: &str, args: GribArgs) -> anyhow::Result<()> {
     let report = WindReport::from_row(row)?;
 
     let sink = client
-        .copy_in("COPY wind_points (wind_report_id, point, u, v) FROM STDIN BINARY")
+        .copy_in("COPY wind_points (wind_report_id, point, speed, direction) FROM STDIN BINARY")
         .await?;
 
     // Geom has a dynamic OID hence the 0. Ignored by rust-postgis anyway:
@@ -78,10 +78,13 @@ pub async fn exec(db_url: &str, args: GribArgs) -> anyhow::Result<()> {
             match u_grid.get(&k).zip(v_grid.get(&k)) {
                 Some((u, v)) => {
                     let corrected_lon = if lon > 180 { lon - 360 } else { lon };
+                    // http://colaweb.gmu.edu/dev/clim301/lectures/wind/wind-uv
+                    let speed = (u.powi(2) + v.powi(2)).sqrt();
+                    let direction = v.atan2(*u).to_degrees();
                     let point = &ewkb::Point::new(corrected_lon as f64, lat as f64, Some(SRID));
                     writer
                         .as_mut()
-                        .write(&[&report.id, &point, &u, &v])
+                        .write(&[&report.id, &point, &speed, &direction])
                         .await
                         .unwrap();
                 }

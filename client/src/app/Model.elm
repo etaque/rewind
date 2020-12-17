@@ -27,8 +27,8 @@ encodeLngLat { lng, lat } =
 
 type alias WindPoint =
     { position : LngLat
-    , u : Float
-    , v : Float
+    , direction : Float
+    , speed : Float
     }
 
 
@@ -36,16 +36,16 @@ windPointDecoder : Decoder WindPoint
 windPointDecoder =
     succeed WindPoint
         |> required "position" lngLatDecoder
-        |> required "u" float
-        |> required "v" float
+        |> required "direction" float
+        |> required "speed" float
 
 
 encodeWindPoint : WindPoint -> JE.Value
-encodeWindPoint { position, u, v } =
+encodeWindPoint wp =
     JE.object
-        [ ( "position", encodeLngLat position )
-        , ( "u", JE.float u )
-        , ( "v", JE.float v )
+        [ ( "position", encodeLngLat wp.position )
+        , ( "direction", JE.float wp.direction )
+        , ( "speed", JE.float wp.speed )
         ]
 
 

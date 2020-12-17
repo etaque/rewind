@@ -18,8 +18,8 @@ impl Into<PgPoint> for LngLat {
 #[derive(Clone, Debug, Deserialize, Serialize)]
 pub struct WindPoint {
     pub position: LngLat,
-    pub u: f64,
-    pub v: f64,
+    pub direction: f64,
+    pub speed: f64,
 }
 
 #[derive(Clone, Debug, Deserialize, Serialize)]

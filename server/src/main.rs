@@ -152,8 +152,8 @@ mod session {
                     let report = wind_reports::find_closest(&conn, &time).await?;
                     let empty_wind = messages::WindPoint {
                         position: position.clone(),
-                        u: 0.0,
-                        v: 0.0,
+                        direction: 0.0,
+                        speed: 0.0,
                     };
                     let wind = wind_points::at(&conn, report.id, &position.into())
                         .await?

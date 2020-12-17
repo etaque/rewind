@@ -9,8 +9,8 @@ export type LngLat = {
 
 export type WindPoint = {
   position: LngLat;
-  u: number;
-  v: number;
+  direction: number;
+  speed: number;
 };
 
 export type WindReport = {
