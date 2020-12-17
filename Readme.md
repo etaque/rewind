@@ -2,7 +2,7 @@
 
 ## Development
 
-All dependencies are declared in `shell.nix`. Either enter `nix-shell` ([hint](https://github.com/nix-community/nix-direnv) or install them by hand.
+All dependencies are declared in `shell.nix`. Either enter `nix-shell` ([hint](https://github.com/nix-community/nix-direnv)) or install them by hand.
 
 Backend (`sudo` will be required to initialize NixOS container on first start):
 
