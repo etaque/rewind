@@ -1,3 +1,6 @@
+create extension if not exists postgis; 
+create extension if not exists hstore;
+
 create table wind_reports (
   id bigserial primary key,
   url text not null,

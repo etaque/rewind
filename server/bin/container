@@ -8,8 +8,6 @@ if [ "$1" == "init" ]; then
 
   sudo nixos-container create rewind --config-file container.nix || true
   sudo nixos-container start rewind
-  sudo nixos-container run rewind -- \
-    su -c "psql -d rewind -c 'create extension if not exists postgis; create extension if not exists hstore;'" postgres
 
 elif [ "$1" == "ensure" ]; then
   if [ $(nixos-container status rewind || true) != "up" ]; then
