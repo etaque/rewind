@@ -36,4 +36,6 @@ pub struct GribArgs {
     pub hour: i16,
     #[structopt(long)]
     pub forecast: i16,
+    #[structopt(long)]
+    pub silent: bool,
 }

@@ -91,7 +91,9 @@ pub async fn exec(db_url: &str, args: GribArgs) -> anyhow::Result<()> {
     }
     writer.finish().await.unwrap();
 
-    println!("{:#?}", report);
+    if !args.silent {
+        println!("{:#?}", report);
+    }
     Ok(())
 }
 
