@@ -28,7 +28,7 @@ mkShell {
 
     # server
     ansible_2_9
-    postgresql_13
+    postgresql_11
     postgis
     osm2pgsql
     eccodes
@@ -40,8 +40,6 @@ mkShell {
     elmPackages.elm-format
     elmPackages.elm-analyse
     elmPackages.elm-test
-  ] ++ lib.optionals stdenv.isDarwin [
-    darwin.apple_sdk.frameworks.Security # To build `mime_guess` crate on MacOS
   ];
 
 }

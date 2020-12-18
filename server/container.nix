@@ -7,7 +7,7 @@
 
   services.postgresql = {
     enable = true;
-    package = pkgs.postgresql_13;
+    package = pkgs.postgresql_11;
     enableTCPIP = true;
     extraPlugins = with pkgs.postgresql.pkgs; [ postgis ];
     authentication = "host all all 10.233.0.0/16 trust";
