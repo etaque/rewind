@@ -6,6 +6,7 @@ const HtmlWebpackPlugin = require("html-webpack-plugin");
 const CopyWebpackPlugin = require("copy-webpack-plugin");
 const { CleanWebpackPlugin } = require("clean-webpack-plugin");
 const MiniCssExtractPlugin = require("mini-css-extract-plugin");
+const Dotenv = require("dotenv-webpack");
 
 const mode = "development";
 
@@ -77,6 +78,7 @@ const mainConfig = {
     },
   },
   plugins: [
+    new Dotenv({ path: "../.env", expand: true }),
     // Show compilation progress bar in console.
     new WebpackBar(),
     // Clean `dist` folder before compilation.

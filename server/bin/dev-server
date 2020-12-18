@@ -2,9 +2,6 @@
 set -e
 cd `dirname "$0"`/..
 
-bin/container ensure
-source dev-env
-
 export RUST_LOG=info
 
 cargo watch -x 'run -- http'

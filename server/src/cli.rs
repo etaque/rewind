@@ -13,7 +13,7 @@ pub struct Cli {
 #[derive(Debug, StructOpt)]
 pub enum Command {
     Http {
-        #[structopt(env = "REWIND_HTTP_ADDRESS")]
+        #[structopt(env = "REWIND_SERVER_ADDRESS")]
         address: std::net::SocketAddr,
     },
     Db(DbCommand),

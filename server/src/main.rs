@@ -1,4 +1,5 @@
 use cli::{Cli, Command};
+use dotenv::dotenv;
 use std::convert::Infallible;
 use structopt::StructOpt;
 use warp::Filter;
@@ -12,6 +13,7 @@ mod tools;
 
 #[tokio::main]
 async fn main() {
+    dotenv().ok();
     env_logger::init();
 
     let args = Cli::from_args();

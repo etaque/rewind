@@ -2,7 +2,5 @@
 set -e
 cd `dirname "$0"`/..
 
-source dev-env
-
-npm run serve
+npm start
 

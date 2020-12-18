@@ -1,13 +1,16 @@
 import "./styles.css";
 import { startApp } from "./app/App";
 import { Map } from "./Map";
-import { tileServerAddress, wsAddress } from "./config";
 
 const mapNode = document.getElementById("map");
 const appNode = document.getElementById("app");
 
+const wsAddress = process.env.REWIND_WS_URL!;
+const tileServerAddress = process.env.REWIND_TILE_URL!;
+const hereToken = process.env.HERE_API_KEY!;
+
 if (mapNode instanceof HTMLCanvasElement && appNode) {
-  const map = new Map(mapNode, tileServerAddress);
+  const map = new Map(mapNode, tileServerAddress, hereToken);
   const app = startApp(appNode, {});
 
   var ws: WebSocket;

@@ -2,11 +2,9 @@
 set -e
 cd `dirname "$0"`/..
 
-bin/container ensure
-source dev-env
+source ../.env
 
 export RUST_LOG=info
-export DATABASE_URL=$REWIND_DATABASE_URL
 
-martin --listen-addresses=0.0.0.0:3002 --watch
+martin --listen-addresses=$REWIND_MARTIN_ADDRESS --watch $REWIND_DATABASE_URL
 

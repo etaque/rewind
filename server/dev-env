@@ -1,6 +1,0 @@
-export PGHOST=$(nixos-container show-ip rewind)
-export PGUSER=rewind
-export PGDATABASE=rewind
-
-export REWIND_HTTP_ADDRESS=127.0.0.1:3001
-export REWIND_DATABASE_URL="postgresql://$PGUSER@$PGHOST/$PGDATABASE"

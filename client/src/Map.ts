@@ -1,7 +1,6 @@
 import { sphereProjection } from "@here/harp-geoutils";
 import { MapView } from "@here/harp-mapview";
 
-import { hereApiKey } from "./config";
 import { LngLat, WindReport } from "./app/App";
 import { MapControls, MapControlsUI } from "@here/harp-map-controls";
 import {
@@ -16,7 +15,11 @@ export class Map {
   private _currentDataSource?: VectorTileDataSource;
   private _currentWindReport?: WindReport;
 
-  constructor(canvas: HTMLCanvasElement, tileServerAddress: string) {
+  constructor(
+    canvas: HTMLCanvasElement,
+    tileServerAddress: string,
+    hereToken: string
+  ) {
     this.tileServerAddress = tileServerAddress;
 
     this.mapView = new MapView({
@@ -51,7 +54,7 @@ export class Map {
 
     const omvDataSource = new VectorTileDataSource({
       baseUrl: "https://vector.hereapi.com/v2/vectortiles/base/mc",
-      authenticationCode: hereApiKey,
+      authenticationCode: hereToken,
       name: "base",
     });
 
