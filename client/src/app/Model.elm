@@ -5,6 +5,7 @@ import Json.Decode as JD exposing (Decoder, float, int, string, succeed)
 import Json.Decode.Pipeline exposing (hardcoded, optional, required)
 import Json.Encode as JE
 import Time exposing (Posix)
+import UUID exposing (UUID)
 
 
 type alias LngLat =
@@ -50,7 +51,7 @@ encodeWindPoint { position, u, v } =
 
 
 type alias WindReport =
-    { id : Int
+    { id : UUID
     , time : Int
     , wind : WindPoint
     }
@@ -59,7 +60,7 @@ type alias WindReport =
 windReportDecoder : Decoder WindReport
 windReportDecoder =
     succeed WindReport
-        |> required "id" int
+        |> required "id" UUID.jsonDecoder
         |> required "time" int
         |> required "wind" windPointDecoder
 
@@ -67,7 +68,7 @@ windReportDecoder =
 encodeWindReport : WindReport -> JE.Value
 encodeWindReport { id, time, wind } =
     JE.object
-        [ ( "id", JE.int id )
+        [ ( "id", UUID.toValue id )
         , ( "time", JE.int time )
         , ( "wind", encodeWindPoint wind )
         ]

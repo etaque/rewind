@@ -2,6 +2,7 @@ use chrono::serde::ts_milliseconds;
 use chrono::{DateTime, Utc};
 use postgis::ewkb::Point as PgPoint;
 use serde::{Deserialize, Serialize};
+use uuid::Uuid;
 
 #[derive(Clone, Debug, Deserialize, Serialize)]
 pub struct LngLat {
@@ -35,7 +36,7 @@ pub struct Course {
 
 #[derive(Clone, Debug, Deserialize, Serialize)]
 pub struct WindReport {
-    pub id: i64,
+    pub id: Uuid,
     #[serde(with = "ts_milliseconds")]
     pub time: DateTime<Utc>,
     pub wind: WindPoint,
