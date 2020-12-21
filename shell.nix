@@ -35,6 +35,7 @@ mkShell {
     martin
 
     # client
+    nodejs
     nodePackages.webpack-cli
     elmPackages.elm
     elmPackages.elm-format
