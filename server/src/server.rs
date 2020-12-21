@@ -26,13 +26,18 @@ pub async fn run(address: std::net::SocketAddr, database_url: &str) {
             ws.on_upgrade(move |socket| crate::session::start(socket, pool))
         });
 
-    let rasters_route = warp::path!("wind-reports" / Uuid / RasterBand)
+    let uv_png_route = warp::path!("wind-reports" / Uuid / RasterBand)
         .and(with_db(pool.clone()))
-        .and_then(png_raster);
+        .and_then(uv_png);
+
+    let speed_png_route = warp::path!("wind-reports" / Uuid / "speed.png")
+        .and(with_db(pool.clone()))
+        .and_then(speed_png);
 
     let routes = health_route
         .or(session_route)
-        .or(rasters_route)
+        .or(uv_png_route)
+        .or(speed_png_route)
         .recover(rejection);
 
     warp::serve(routes).run(address).await
@@ -65,7 +70,11 @@ impl FromStr for RasterBand {
     }
 }
 
-pub async fn png_raster(
+// TODO:
+// - reduce verbosity of error casting
+// - factorize png code
+
+pub async fn uv_png(
     report_id: Uuid,
     band: RasterBand,
     pool: db::Pool,
@@ -83,7 +92,27 @@ pub async fn png_raster(
         RasterBand::V => repos::wind_rasters::V_BAND,
     };
 
-    let blob = repos::wind_rasters::as_png(&client, &report.raster_id, band_id)
+    let blob = repos::wind_rasters::band_as_png(&client, &report.raster_id, band_id)
+        .await
+        .map_err(|e| warp::reject::custom(Error(e.into())))?;
+
+    Response::builder()
+        .header("Content-Type", HeaderValue::from_static("image/png"))
+        .body(blob)
+        .map_err(|e| warp::reject::custom(Error(e.into())))
+}
+
+pub async fn speed_png(report_id: Uuid, pool: db::Pool) -> Result<impl Reply, Rejection> {
+    let client = pool
+        .get()
+        .await
+        .map_err(|e| warp::reject::custom(Error(e.into())))?;
+
+    let report = repos::wind_reports::get(&client, report_id)
+        .await
+        .map_err(|_| warp::reject::not_found())?;
+
+    let blob = repos::wind_rasters::speed_as_png(&client, &report.raster_id)
         .await
         .map_err(|e| warp::reject::custom(Error(e.into())))?;
 

@@ -35,7 +35,7 @@ pub async fn wind_at_point<'a>(
     Ok((u, v))
 }
 
-pub async fn as_png<'a>(
+pub async fn band_as_png<'a>(
     client: &db::Client<'a>,
     id: &Uuid,
     band_id: i32,
@@ -44,6 +44,22 @@ pub async fn as_png<'a>(
                     ST_Reclass(rast, $2::int, '-30-30:0-255', '8BUI'), $2) \
                     FROM wind_rasters WHERE id=$1";
     let row = client.query_one(stmt, &[&id, &band_id]).await?;
+    let png = row.try_get(0)?;
+    Ok(png)
+}
+
+pub async fn speed_as_png<'a>(client: &db::Client<'a>, id: &Uuid) -> anyhow::Result<Vec<u8>> {
+    let stmt = r#"
+        SELECT
+            ST_AsPNG(
+                ST_Reclass(
+                    ST_MapAlgebra(rast, 1, rast, 2, 'sqrt([rast1] ^ 2 + [rast2] ^2)', '64BF'), 
+                    '0-30:0-255',
+                    '8BUI'
+                ) 
+            ) FROM wind_rasters WHERE id=$1
+        "#;
+    let row = client.query_one(stmt, &[&id]).await?;
     let png = row.try_get(0)?;
     Ok(png)
 }
