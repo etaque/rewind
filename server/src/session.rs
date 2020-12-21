@@ -50,12 +50,9 @@ async fn handle_message(msg: Message, pool: &db::Pool) -> anyhow::Result<Option<
             ToServer::GetWind { time, position } => {
                 let conn = pool.get().await?;
                 let report = wind_reports::find_closest(&conn, &time).await?;
-                let (u, v) = wind_rasters::values_at_point(
-                    &conn,
-                    &report.raster_id,
-                    &position.clone().into(),
-                )
-                .await?;
+                let (u, v) =
+                    wind_rasters::wind_at_point(&conn, &report.raster_id, &position.clone().into())
+                        .await?;
                 let wind = messages::WindPoint { position, u, v };
                 let to_player = FromServer::SendWind {
                     report: messages::WindReport {

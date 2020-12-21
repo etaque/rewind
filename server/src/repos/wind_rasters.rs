@@ -18,14 +18,15 @@ pub async fn create<'a>(client: &db::Client<'a>, id: &Uuid, path: &Path) -> anyh
     Ok(())
 }
 
-pub async fn values_at_point<'a>(
+pub async fn wind_at_point<'a>(
     client: &db::Client<'a>,
     id: &Uuid,
     point: &Point,
 ) -> anyhow::Result<(f64, f64)> {
-    let stmt = "SELECT ST_Value(rast, $3, ($1)::geometry) AS u, \
-                ST_Value(rast, $4, ($1)::geometry) AS v \
-                FROM wind_rasters WHERE id=$2";
+    let stmt = "SELECT ST_Value(rast, $3, shifted.pt) AS u, \
+                ST_Value(rast, $4, shifted.pt) AS v \
+                FROM wind_rasters, (SELECT ST_ShiftLongitude($1) as pt) as shifted \
+                WHERE id=$2";
     let row = client
         .query_one(stmt, &[&point, &id, &U_BAND, &V_BAND])
         .await?;
