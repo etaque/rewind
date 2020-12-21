@@ -18,34 +18,45 @@ A NixOS container already configured with these settings, see `./server/bin/cont
 
 Migrations:
 
-    cd server
-    cargo run -- db migrate
+```
+cd server
+cargo run -- db migrate
+```
 
 ### Server
 
- * Main server:
+- Main server:
 
-    cd server
-    ./bin/dev-server
+```
+cd server
+./bin/dev-server
+```
 
- * Tile server:
+- Tile server:
 
-    cd server
-    ./bin/tile-server
+```
+cd server
+./bin/tile-server
+```
 
 ### Client
 
-    cd client
-    npm install
-    ./bin/dev-server
+```
+cd client
+npm install
+./bin/dev-server
+```
 
 ## Scripts
 
 * Import Vendée Globe 2020 GRIB files:
   
-    ./server/scripts/vlm-vg20.sh
+``` 
+./server/scripts/vlm-vg20.sh
+```
 
 * Load coastal lines (useless in current state of project):
 
-    ./server/scripts/import-osm.sh
-
+```
+./server/scripts/import-osm.sh
+```
