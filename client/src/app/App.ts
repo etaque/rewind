@@ -14,7 +14,7 @@ export type WindPoint = {
 };
 
 export type WindReport = {
-  id: number;
+  id: string;
   time: number;
   wind: WindPoint;
 };

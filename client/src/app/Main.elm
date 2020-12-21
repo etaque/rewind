@@ -11,6 +11,7 @@ import Model as M
 import Ports as P
 import Svg as S
 import Svg.Attributes as SA
+import UUID
 
 
 type alias Flags =
@@ -54,7 +55,7 @@ type alias Session =
     , courseTime : Int
     , position : M.LngLat
     , course : M.Course
-    , wind : M.WindReport
+    , wind : Maybe M.WindReport
     }
 
 
@@ -88,7 +89,7 @@ update message model =
                     , courseTime = course.startTime
                     , position = course.start
                     , course = course
-                    , wind = M.WindReport -1 course.startTime (M.WindPoint course.start 0 0)
+                    , wind = Nothing
                     }
             in
             ( { model | state = Playing session }
@@ -101,7 +102,7 @@ update message model =
         ( Input value, _ ) ->
             case ( P.decodeInputValue value, model.state ) of
                 ( Ok (P.SendWind report), Playing session ) ->
-                    ( { model | state = Playing { session | wind = report } }
+                    ( { model | state = Playing { session | wind = Just report } }
                     , P.send (P.UpdateMap (P.SetWind report))
                     )
 
