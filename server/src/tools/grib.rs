@@ -2,15 +2,30 @@ use crate::cli::GribArgs;
 use crate::db;
 use crate::models::WindReport;
 use crate::repos;
+use anyhow::anyhow;
 use chrono::{DateTime, Duration, Utc};
 use reqwest;
 use std::io::{copy, Cursor};
 use uuid::Uuid;
 
 pub async fn exec(db_url: &str, args: GribArgs) -> anyhow::Result<()> {
-    let res = reqwest::get(&args.url).await?;
+    let response = reqwest::get(&args.url).await?;
 
-    let mut content = Cursor::new(res.bytes().await?);
+    let bytes = match response.status() {
+        reqwest::StatusCode::OK => response.bytes().await?,
+        reqwest::StatusCode::NOT_FOUND => {
+            println!("GRIB download failed with: 404 Not Found");
+            return Ok(());
+        }
+        status => {
+            return Err(anyhow!(format!(
+                "GRIB download failed with status: {}",
+                status
+            )))
+        }
+    };
+
+    let mut content = Cursor::new(bytes);
     let mut tmp = tempfile::NamedTempFile::new()?;
     copy(&mut content, &mut tmp)?;
     let path = tmp.into_temp_path().keep()?;
