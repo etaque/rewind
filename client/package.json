@@ -7,6 +7,12 @@
     "start": "webpack-dev-server"
   },
   "dependencies": {
+    "@danmarshall/deckgl-typings": "^4.4.0",
+    "@deck.gl/carto": "^8.3.11",
+    "@deck.gl/core": "^8.3.11",
+    "@deck.gl/geo-layers": "^8.3.11",
+    "@deck.gl/layers": "^8.3.11",
+    "@deck.gl/mesh-layers": "^8.3.11",
     "@here/harp-geoutils": "^0.21.0",
     "@here/harp-map-controls": "^0.21.1",
     "@here/harp-map-theme": "^0.21.1",

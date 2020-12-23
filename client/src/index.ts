@@ -3,14 +3,19 @@ import { startApp } from "./app/App";
 import { Map } from "./Map";
 
 const mapNode = document.getElementById("map");
+const deckNode = document.getElementById("deck");
 const appNode = document.getElementById("app");
 
 const wsAddress = process.env.REWIND_WS_URL!;
 const tileServerAddress = process.env.REWIND_TILE_URL!;
 const hereToken = process.env.HERE_API_KEY!;
 
-if (mapNode instanceof HTMLCanvasElement && appNode) {
-  const map = new Map(mapNode, tileServerAddress, hereToken);
+if (
+  mapNode instanceof HTMLCanvasElement &&
+  deckNode instanceof HTMLCanvasElement &&
+  appNode
+) {
+  const map = new Map(mapNode, deckNode, tileServerAddress, hereToken);
   const app = startApp(appNode, {});
 
   var ws: WebSocket;
@@ -26,6 +31,7 @@ if (mapNode instanceof HTMLCanvasElement && appNode) {
   };
 
   app.ports.outputs.subscribe((output) => {
+    console.log("APP OUTPUT", output);
     switch (output.tag) {
       case "StartSession":
         startSession();

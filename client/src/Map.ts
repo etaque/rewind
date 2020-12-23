@@ -1,30 +1,40 @@
-import { sphereProjection } from "@here/harp-geoutils";
-import { MapView } from "@here/harp-mapview";
-
+// import { sphereProjection } from "@here/harp-geoutils";
+import { Deck } from "@deck.gl/core";
+import { GeoCoordinates } from "@here/harp-geoutils";
+import { MapView, MapViewUtils } from "@here/harp-mapview";
+import { MVTLayer } from "@deck.gl/geo-layers";
 import { LngLat, WindReport } from "./app/App";
 import { MapControls, MapControlsUI } from "@here/harp-map-controls";
-import {
-  APIFormat,
-  VectorTileDataSource,
-} from "@here/harp-vectortile-datasource";
+import { VectorTileDataSource } from "@here/harp-vectortile-datasource";
+import { ViewStateProps } from "@deck.gl/core/lib/deck";
+
+const INITIAL_VIEW_STATE: ViewStateProps = {
+  latitude: 51.47,
+  longitude: 0.45,
+  zoom: 4,
+  bearing: 0,
+  pitch: 30,
+};
 
 export class Map {
   readonly mapView: MapView;
   readonly tileServerAddress: string;
+  readonly deck: Deck;
 
-  private _currentDataSource?: VectorTileDataSource;
-  private _currentWindReport?: WindReport;
+  // private _currentWindLayer?: MVTLayer<any, any>; // TODO figure out type of this
+  // private _currentWindReport?: WindReport;
 
   constructor(
-    canvas: HTMLCanvasElement,
+    mapCanvas: HTMLCanvasElement,
+    deckCanvas: HTMLCanvasElement,
     tileServerAddress: string,
     hereToken: string
   ) {
     this.tileServerAddress = tileServerAddress;
 
     this.mapView = new MapView({
-      canvas,
-      projection: sphereProjection,
+      canvas: mapCanvas,
+      // projection: sphereProjection,
       decoderUrl: "decoder.bundle.js",
       theme: {
         extends: "/resources/berlin_tilezen_night_reduced.json",
@@ -48,9 +58,9 @@ export class Map {
 
     this.mapView.resize(window.innerWidth, window.innerHeight);
 
-    window.addEventListener("resize", () => {
-      this.mapView.resize(window.innerWidth, window.innerHeight);
-    });
+    // window.addEventListener("resize", () => {
+    //   this.mapView.resize(window.innerWidth, window.innerHeight);
+    // });
 
     const omvDataSource = new VectorTileDataSource({
       baseUrl: "https://vector.hereapi.com/v2/vectortiles/base/mc",
@@ -67,6 +77,34 @@ export class Map {
       projectionSwitch: true,
     });
     this.mapView.canvas.parentElement!.appendChild(ui.domElement);
+
+    this.updateMapCamera(INITIAL_VIEW_STATE);
+
+    this.deck = new Deck({
+      canvas: deckCanvas,
+      width: "100%",
+      height: "100%",
+      initialViewState: INITIAL_VIEW_STATE,
+      controller: true,
+      // Synchronize deck camera and map camer
+      onViewStateChange: ({ viewState }) => this.updateMapCamera(viewState),
+      onResize: ({ width, height }) => this.mapView.resize(width, height),
+      layers: [],
+      effects: [],
+    });
+  }
+
+  updateMapCamera(viewState: ViewStateProps) {
+    const coords = new GeoCoordinates(
+      viewState.latitude!,
+      viewState.longitude!
+    );
+    const dist = MapViewUtils.calculateDistanceFromZoomLevel(
+      { focalLength: this.mapView.focalLength },
+      viewState.zoom! + 1
+    );
+    this.mapView.lookAt(coords, dist, viewState.pitch, viewState.bearing);
+    this.mapView.zoomLevel = viewState.zoom!! + 1;
   }
 
   moveTo(position: LngLat) {
@@ -74,21 +112,15 @@ export class Map {
   }
 
   setWindReport(windReport: WindReport) {
-    if (windReport.id != this._currentWindReport?.id) {
-      const newDataSource = new VectorTileDataSource({
-        apiFormat: APIFormat.XYZMVT,
-        baseUrl: this.tileServerAddress + "/rpc/public.wind_tiles",
-        urlParams: { wind_report_id: windReport.id.toString() },
-        name: "report/" + windReport.id,
-        styleSetName: "wind",
-      });
-      this.mapView.addDataSource(newDataSource);
-      if (this._currentDataSource) {
-        this.mapView.removeDataSource(this._currentDataSource);
-        this._currentDataSource.dispose();
-      }
-      this._currentDataSource = newDataSource;
-      this._currentWindReport = windReport;
-    }
+    const url = `${this.tileServerAddress}/rpc/public.wind_tiles?wind_report_id=${windReport.id}`;
+    // if (this._currentWindLayer === undefined) {
+    //   this._currentWindLayer = new MVTLayer({
+    //     id: "wind-reports",
+    //     data: url,
+    //     minZoom: 4,
+    //     maxZoom: 14,
+    //   });
+    // }
+    // this._currentWindReport = windReport;
   }
 }
