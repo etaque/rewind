@@ -1,0 +1,19 @@
+version: '3.1'
+
+services:
+  postgis:
+    image: kartoza/postgis:13.0
+    ports: 
+      - "25432:5432"
+    restart: always
+    volumes:
+      - ./config/setup-db.sql:/docker-entrypoint-initdb.d/setup-db.sql
+      - db-data:/var/lib/data
+    environment:
+      POSTGRES_PASS: rewind
+      POSTGRES_DBNAME: rewind
+      POSTGRES_USER: rewind
+      POSTGRES_MULTIPLE_EXTENSIONS: postgis,hstore,postgis_topology,postgis_raster,pgrouting
+volumes:
+  db-data:
+    name: "postgis-data"

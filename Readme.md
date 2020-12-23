@@ -8,11 +8,19 @@ Create a `.env` at root from `sample.env`.
 
 ### Database
 
-Required:
+Docker container with postgis/postgres/gdal available with:
 
- * PostgreSQL 11
- * Postgis with [GDAL drivers enabled](https://postgis.net/docs/postgis_gdal_enabled_drivers.html)
- * Extensions `postgis`, `hstore` and `postgis_raster` created in DB
+```
+docker-compose up -d
+```
+
+Connect via psql :
+
+```
+psql rewind -U rewind --port 25432 -h localhost --password
+# password rewind
+```
+
 
 A NixOS container already configured with these settings, see `./server/bin/container`.
 
