@@ -1,3 +1,4 @@
+use contour::ContourBuilder;
 use serde::Serialize;
 use std::convert::Infallible;
 use std::str::FromStr;
@@ -8,6 +9,7 @@ use warp::http::StatusCode;
 use warp::{Filter, Rejection, Reply};
 
 use super::db;
+use super::models::RasterRenderingMode;
 use super::repos;
 
 pub async fn run(address: std::net::SocketAddr, database_url: &str) {
@@ -26,18 +28,18 @@ pub async fn run(address: std::net::SocketAddr, database_url: &str) {
             ws.on_upgrade(move |socket| crate::session::start(socket, pool))
         });
 
-    let uv_png_route = warp::path!("wind-reports" / Uuid / RasterBand)
+    let isotachs = warp::path!("wind-reports" / Uuid / "isotachs.json")
         .and(with_db(pool.clone()))
-        .and_then(uv_png);
+        .and_then(isotachs_json);
 
-    let speed_png_route = warp::path!("wind-reports" / Uuid / "speed.png")
+    let raster_route = warp::path!("wind-reports" / Uuid / RasterRenderingMode)
         .and(with_db(pool.clone()))
-        .and_then(speed_png);
+        .and_then(raster_png);
 
     let routes = health_route
         .or(session_route)
-        .or(uv_png_route)
-        .or(speed_png_route)
+        .or(isotachs)
+        .or(raster_route)
         .recover(rejection);
 
     warp::serve(routes).run(address).await
@@ -54,17 +56,13 @@ pub async fn health(pool: db::Pool) -> Result<impl Reply, Rejection> {
         .map(|_| StatusCode::OK)
 }
 
-pub enum RasterBand {
-    U,
-    V,
-}
-
-impl FromStr for RasterBand {
+impl FromStr for RasterRenderingMode {
     type Err = ();
-    fn from_str(s: &str) -> Result<RasterBand, ()> {
+    fn from_str(s: &str) -> Result<RasterRenderingMode, ()> {
         match s {
-            "u.png" => Ok(RasterBand::U),
-            "v.png" => Ok(RasterBand::V),
+            "u.png" => Ok(RasterRenderingMode::U),
+            "v.png" => Ok(RasterRenderingMode::V),
+            "speed.png" => Ok(RasterRenderingMode::Speed),
             _ => Err(()),
         }
     }
@@ -72,27 +70,22 @@ impl FromStr for RasterBand {
 
 // TODO:
 // - reduce verbosity of error casting
-// - factorize png code
 
-pub async fn uv_png(
+pub async fn raster_png(
     report_id: Uuid,
-    band: RasterBand,
+    mode: RasterRenderingMode,
     pool: db::Pool,
 ) -> Result<impl Reply, Rejection> {
     let client = pool
         .get()
         .await
         .map_err(|e| warp::reject::custom(Error(e.into())))?;
+
     let report = repos::wind_reports::get(&client, report_id)
         .await
         .map_err(|_| warp::reject::not_found())?;
 
-    let band_id = match band {
-        RasterBand::U => repos::wind_rasters::U_BAND,
-        RasterBand::V => repos::wind_rasters::V_BAND,
-    };
-
-    let blob = repos::wind_rasters::band_as_png(&client, &report.raster_id, band_id)
+    let blob = repos::wind_rasters::raster(&client, &report.raster_id, mode)
         .await
         .map_err(|e| warp::reject::custom(Error(e.into())))?;
 
@@ -102,7 +95,8 @@ pub async fn uv_png(
         .map_err(|e| warp::reject::custom(Error(e.into())))
 }
 
-pub async fn speed_png(report_id: Uuid, pool: db::Pool) -> Result<impl Reply, Rejection> {
+//  Painfully slow, not even parallelized.  Keeping it around until we figure out rendering.
+pub async fn isotachs_json(report_id: Uuid, pool: db::Pool) -> Result<impl Reply, Rejection> {
     let client = pool
         .get()
         .await
@@ -112,14 +106,24 @@ pub async fn speed_png(report_id: Uuid, pool: db::Pool) -> Result<impl Reply, Re
         .await
         .map_err(|_| warp::reject::not_found())?;
 
-    let blob = repos::wind_rasters::speed_as_png(&client, &report.raster_id)
+    let values_arr = repos::wind_rasters::speed_values(&client, &report.raster_id)
         .await
         .map_err(|e| warp::reject::custom(Error(e.into())))?;
 
-    Response::builder()
-        .header("Content-Type", HeaderValue::from_static("image/png"))
-        .body(blob)
-        .map_err(|e| warp::reject::custom(Error(e.into())))
+    match values_arr.dimensions() {
+        [x, y] => {
+            let c = ContourBuilder::new(x.len as u32, y.len as u32, false); // x dim., y dim., smoothing
+            let res = c
+                .contours(&values_arr.into_inner(), &[5.0, 10.0, 15.0, 20.0])
+                .map_err(|e| warp::reject::custom(Error(e.into())))?;
+
+            Ok(warp::reply::json(&res))
+        }
+        _ => Err(warp::reject::custom(Error(anyhow::Error::msg(format!(
+            "Unexpected wind array dimensions: {:#?}",
+            values_arr.dimensions(),
+        ))))),
+    }
 }
 
 #[derive(Debug)]
@@ -132,6 +136,7 @@ struct ErrorMessage {
     message: String,
 }
 
+// TODO properly handle 404
 pub async fn rejection(err: warp::Rejection) -> Result<impl Reply, Infallible> {
     let code = StatusCode::INTERNAL_SERVER_ERROR;
     let message = "Internal server error.";
