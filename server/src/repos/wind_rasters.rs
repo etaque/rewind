@@ -1,10 +1,12 @@
-use crate::db;
-use crate::models::SRID;
 use postgis::ewkb::Point;
+use postgres_array::Array;
 use std::fs::File;
 use std::io::prelude::*;
 use std::path::Path;
 use uuid::Uuid;
+
+use crate::db;
+use crate::models::{RasterRenderingMode, SRID};
 
 pub const U_BAND: i32 = 1;
 pub const V_BAND: i32 = 2;
@@ -35,15 +37,34 @@ pub async fn wind_at_point<'a>(
     Ok((u, v))
 }
 
-pub async fn as_png<'a>(
+const UV_STMT: &str = r#"
+    SELECT ST_AsPNG(ST_Reclass(rast, $2::int, '-30-30:0-255', '8BUI'), $2, 90)
+    FROM wind_rasters
+    WHERE id=$1"#;
+
+const SPEED_STMT: &str = r#"
+    SELECT ST_AsPNG(ST_Reclass(MapWindSpeed(rast), '0-30:0-255', '8BUI'), 1)
+    FROM wind_rasters 
+    WHERE id=$1"#;
+
+pub async fn raster<'a>(
     client: &db::Client<'a>,
     id: &Uuid,
-    band_id: i32,
+    mode: RasterRenderingMode,
 ) -> anyhow::Result<Vec<u8>> {
-    let stmt = "SELECT ST_AsPNG(\
-                    ST_Reclass(rast, $2::int, '-30-30:0-255', '8BUI'), $2) \
-                    FROM wind_rasters WHERE id=$1";
-    let row = client.query_one(stmt, &[&id, &band_id]).await?;
+    let row = match mode {
+        RasterRenderingMode::U => client.query_one(UV_STMT, &[&id, &U_BAND]).await?,
+        RasterRenderingMode::V => client.query_one(UV_STMT, &[&id, &V_BAND]).await?,
+        RasterRenderingMode::Speed => client.query_one(SPEED_STMT, &[&id]).await?,
+    };
+
     let png = row.try_get(0)?;
     Ok(png)
+}
+
+pub async fn speed_values<'a>(client: &db::Client<'a>, id: &Uuid) -> anyhow::Result<Array<f64>> {
+    let stmt = "SELECT ST_DumpValues(MapWindSpeed(rast), 1) FROM wind_rasters WHERE id=$1";
+    let row = client.query_one(stmt, &[&id]).await?;
+    let values = row.try_get(0)?;
+    Ok(values)
 }

@@ -2,7 +2,7 @@ use chrono::{DateTime, NaiveDate, Utc};
 use tokio_pg_mapper_derive::PostgresMapper;
 use uuid::Uuid;
 
-pub const SRID: i32 = 4326;
+pub const SRID: i32 = 4326; // WGS 84, used by GRIB and GPS
 
 #[derive(Clone, Debug, PostgresMapper)]
 #[pg_mapper(table = "wind_reports")]
@@ -15,4 +15,11 @@ pub struct WindReport {
     pub forecast: i16,
     pub target_time: DateTime<Utc>,
     pub creation_time: DateTime<Utc>,
+}
+
+#[derive(Clone, Debug)]
+pub enum RasterRenderingMode {
+    U,
+    V,
+    Speed,
 }
