@@ -6,7 +6,7 @@ use uuid::Uuid;
 use warp::http::header::HeaderValue;
 use warp::http::Response;
 use warp::http::StatusCode;
-use warp::{Filter, Rejection, Reply};
+use warp::{path, Filter, Rejection, Reply};
 
 use super::db;
 use super::models::RasterRenderingMode;
@@ -17,28 +17,37 @@ pub async fn run(address: std::net::SocketAddr, database_url: &str) {
         .await
         .expect(format!("Failed to connect to DB: {}", &database_url).as_str());
 
-    let health_route = warp::path!("health")
-        .and(with_db(pool.clone()))
-        .and_then(health);
+    let health_route = path!("health").and(with_db(pool.clone())).and_then(health);
 
-    let session_route = warp::path("session")
+    let session_route = path!("session")
         .and(warp::ws())
         .and(with_db(pool.clone()))
         .map(|ws: warp::ws::Ws, pool: db::Pool| {
             ws.on_upgrade(move |socket| crate::session::start(socket, pool))
         });
 
-    let isotachs = warp::path!("wind-reports" / Uuid / "isotachs.json")
+    let isotachs = path!("wind-reports" / Uuid / "isotachs.json")
         .and(with_db(pool.clone()))
         .and_then(isotachs_json);
 
-    let raster_route = warp::path!("wind-reports" / Uuid / RasterRenderingMode)
+    let points_blob = path!("wind-reports" / Uuid / "points.blob")
+        .and(with_db(pool.clone()))
+        .and_then(points_blob)
+        .with(warp::compression::gzip());
+
+    let points_json = path!("wind-reports" / Uuid / "points.json")
+        .and(with_db(pool.clone()))
+        .and_then(points_geojson);
+
+    let raster_route = path!("wind-reports" / Uuid / RasterRenderingMode)
         .and(with_db(pool.clone()))
         .and_then(raster_png);
 
     let routes = health_route
         .or(session_route)
         .or(isotachs)
+        .or(points_json)
+        .or(points_blob)
         .or(raster_route)
         .recover(rejection);
 
@@ -91,6 +100,46 @@ pub async fn raster_png(
 
     Response::builder()
         .header("Content-Type", HeaderValue::from_static("image/png"))
+        .body(blob)
+        .map_err(|e| warp::reject::custom(Error(e.into())))
+}
+
+pub async fn points_geojson(report_id: Uuid, pool: db::Pool) -> Result<impl Reply, Rejection> {
+    let client = pool
+        .get()
+        .await
+        .map_err(|e| warp::reject::custom(Error(e.into())))?;
+
+    let report = repos::wind_reports::get(&client, report_id)
+        .await
+        .map_err(|_| warp::reject::not_found())?;
+
+    let geojson = repos::wind_rasters::points_geojson(&client, &report.raster_id)
+        .await
+        .map_err(|e| warp::reject::custom(Error(e.into())))?;
+
+    Ok(warp::reply::json(&geojson))
+}
+
+pub async fn points_blob(report_id: Uuid, pool: db::Pool) -> Result<impl Reply, Rejection> {
+    let client = pool
+        .get()
+        .await
+        .map_err(|e| warp::reject::custom(Error(e.into())))?;
+
+    let report = repos::wind_reports::get(&client, report_id)
+        .await
+        .map_err(|_| warp::reject::not_found())?;
+
+    let blob = repos::wind_rasters::points_blob(&client, &report.raster_id)
+        .await
+        .map_err(|e| warp::reject::custom(Error(e.into())))?;
+
+    Response::builder()
+        .header(
+            "Content-Type",
+            HeaderValue::from_static("binary/octet-stream"),
+        )
         .body(blob)
         .map_err(|e| warp::reject::custom(Error(e.into())))
 }

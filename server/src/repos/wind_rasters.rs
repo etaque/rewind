@@ -68,3 +68,26 @@ pub async fn speed_values<'a>(client: &db::Client<'a>, id: &Uuid) -> anyhow::Res
     let values = row.try_get(0)?;
     Ok(values)
 }
+
+pub async fn points_geojson<'a>(
+    client: &db::Client<'a>,
+    id: &Uuid,
+) -> anyhow::Result<serde_json::Value> {
+    let stmt = r#"
+        SELECT json_build_object('type', 'FeatureCollection', 'features', json_agg(ST_AsGeoJSON(points.*)::json)) 
+        FROM (SELECT (ST_PixelAsPoints(ST_Rescale(MapWindSpeed(rast), 1))).* FROM wind_rasters WHERE id=$1) AS points
+    "#;
+    let row = client.query_one(stmt, &[&id]).await?;
+    let geojson = row.try_get(0)?;
+    Ok(geojson)
+}
+
+// See https://github.com/postgis/postgis/blob/master/raster/doc/RFC2-WellKnownBinaryFormat
+pub async fn points_blob<'a>(client: &db::Client<'a>, id: &Uuid) -> anyhow::Result<Vec<u8>> {
+    let stmt = r#"
+        SELECT ST_AsBinary(rast) FROM wind_rasters WHERE id=$1
+    "#;
+    let row = client.query_one(stmt, &[&id]).await?;
+    let geojson = row.try_get(0)?;
+    Ok(geojson)
+}
