@@ -1,4 +1,3 @@
-// import { sphereProjection } from "@here/harp-geoutils";
 import { Deck } from "@deck.gl/core";
 import { GeoCoordinates } from "@here/harp-geoutils";
 import { MapView, MapViewUtils } from "@here/harp-mapview";
@@ -21,8 +20,7 @@ export class Map {
   readonly tileServerAddress: string;
   readonly deck: Deck;
 
-  // private _currentWindLayer?: MVTLayer<any, any>; // TODO figure out type of this
-  // private _currentWindReport?: WindReport;
+  private _currentWindReport?: WindReport;
 
   constructor(
     mapCanvas: HTMLCanvasElement,
@@ -31,10 +29,10 @@ export class Map {
     hereToken: string
   ) {
     this.tileServerAddress = tileServerAddress;
+    this._currentWindReport = undefined;
 
     this.mapView = new MapView({
       canvas: mapCanvas,
-      // projection: sphereProjection,
       decoderUrl: "decoder.bundle.js",
       theme: {
         extends: "/resources/berlin_tilezen_night_reduced.json",
@@ -112,15 +110,21 @@ export class Map {
   }
 
   setWindReport(windReport: WindReport) {
-    const url = `${this.tileServerAddress}/rpc/public.wind_tiles?wind_report_id=${windReport.id}`;
-    // if (this._currentWindLayer === undefined) {
-    //   this._currentWindLayer = new MVTLayer({
-    //     id: "wind-reports",
-    //     data: url,
-    //     minZoom: 4,
-    //     maxZoom: 14,
-    //   });
-    // }
-    // this._currentWindReport = windReport;
+    if (this._currentWindReport?.id != windReport.id) {
+      const layer: any = new MVTLayer({
+        id: "wind-points",
+        data: `${this.tileServerAddress}/rpc/public.wind_tiles/{z}/{x}/{y}.pbf?wind_report_id=${windReport.id}`,
+        minZoom: 9,
+        maxZoom: 23,
+        // @ts-expect-error
+        getLineWidth: (f) => 15,
+        lineWidthMinPixels: 1,
+        getLineColor: [192, 192, 192],
+      });
+      this.deck.setProps({
+        layers: [layer],
+      });
+    }
+    this._currentWindReport = windReport;
   }
 }
