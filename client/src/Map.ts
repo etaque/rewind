@@ -114,7 +114,7 @@ export class Map {
       const layer: any = new MVTLayer({
         id: "wind-points",
         data: `${this.tileServerAddress}/rpc/public.wind_tiles/{z}/{x}/{y}.pbf?wind_report_id=${windReport.id}`,
-        minZoom: 9,
+        minZoom: 3,
         maxZoom: 23,
         // @ts-expect-error
         getLineWidth: (f) => 15,
