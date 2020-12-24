@@ -8,13 +8,11 @@ Create a `.env` at root from `sample.env`.
 
 ### Database
 
-Required:
+Required features:
 
  * PostgreSQL 11
  * Postgis with [GDAL drivers enabled](https://postgis.net/docs/postgis_gdal_enabled_drivers.html)
  * Extensions `postgis`, `hstore` and `postgis_raster` created in DB
-
-A NixOS container already configured with these settings, see `./server/bin/container`.
 
 Migrations:
 
@@ -22,6 +20,25 @@ Migrations:
 cd server
 cargo run -- db migrate
 ```
+
+#### Docker instance
+
+Docker container with postgis/postgres/gdal available with:
+
+```
+docker-compose up -d
+```
+
+Connect via psql :
+
+```
+psql rewind -U rewind --port 25432 -h localhost --password
+# password rewind
+```
+
+#### Nix container
+
+A NixOS container is available, see `./server/bin/container`.
 
 ### Server
 
