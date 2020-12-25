@@ -1,4 +1,4 @@
-@import url('https://fonts.googleapis.com/css2?family=Montserrat:wght@500&family=Permanent+Marker&display=swap');
+@import url("https://fonts.googleapis.com/css2?family=Montserrat:wght@500&family=Permanent+Marker&display=swap");
 
 @tailwind base;
 
@@ -18,11 +18,10 @@
 @layer components {
   .logo {
     @apply text-white text-5xl;
-    font-family: 'Permanent Marker', cursive;
+    font-family: "Permanent Marker", cursive;
   }
   .btn-start {
-    @apply h-24 w-24 bg-gradient-to-r from-green-400 to-blue-500 hover:from-pink-500 hover:to-yellow-500 text-white py-2 px-6 rounded-full shadow-md ;
-    font-family: 'Montserrat', sans-serif;
+    @apply h-24 w-24 bg-gradient-to-r from-green-400 to-blue-500 hover:from-pink-500 hover:to-yellow-500 text-white py-2 px-6 rounded-full shadow-md;
+    font-family: "Montserrat", sans-serif;
   }
 }
-

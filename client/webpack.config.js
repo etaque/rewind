@@ -10,20 +10,36 @@ const Dotenv = require("dotenv-webpack");
 
 const mode = "development";
 
-const baseConfig = {
+const config = {
+  entry: path.resolve(__dirname, "src", "index.ts"),
+  output: {
+    path: path.resolve(__dirname, "dist"),
+    filename: "index.[hash].js",
+  },
+  devServer: {
+    inline: true,
+    // hot: true,
+    contentBase: dist,
+    host: "0.0.0.0",
+    port: 3000,
+    // Route everything to index to support SPA. It should be the same like `publicPath` above.
+    historyApiFallback: {
+      index: "/",
+    },
+    noInfo: true,
+    stats: "errors-only",
+    overlay: {
+      errors: true,
+    },
+  },
   devtool: "source-map",
-  externals: {
-    three: "THREE",
-  },
-  // Webpack try to guess how to resolve imports in this order:
   resolve: {
-    extensions: [".ts", ".js", ".elm"],
+    extensions: [".ts", ".tsx", ".js", ".jsx", ".elm"],
   },
-
   module: {
     rules: [
       {
-        test: /\.ts$/,
+        test: /\.tsx?$/,
         loader: "ts-loader?configFile=tsconfig.json",
       },
       {
@@ -52,31 +68,6 @@ const baseConfig = {
     ],
   },
   mode,
-};
-
-const mainConfig = {
-  name: "Main",
-  entry: path.resolve(__dirname, "src", "index.ts"),
-  output: {
-    path: path.resolve(__dirname, "dist"),
-    filename: "index.[hash].js",
-  },
-  devServer: {
-    inline: true,
-    // hot: true,
-    contentBase: dist,
-    host: "0.0.0.0",
-    port: 3000,
-    // Route everything to index to support SPA. It should be the same like `publicPath` above.
-    historyApiFallback: {
-      index: "/",
-    },
-    noInfo: true,
-    stats: "errors-only",
-    overlay: {
-      errors: true,
-    },
-  },
   plugins: [
     new Dotenv({ path: "../.env", expand: true }),
     // Show compilation progress bar in console.
@@ -91,33 +82,7 @@ const mainConfig = {
     new HtmlWebpackPlugin({
       template: path.resolve(__dirname, "src/index.html"),
     }),
-    new CopyWebpackPlugin({
-      patterns: [
-        require.resolve("three/build/three.min.js"),
-        {
-          from: path.resolve(
-            require.resolve("@here/harp-map-theme"),
-            "..",
-            "resources"
-          ),
-          to: "resources/",
-          toType: "dir",
-        },
-      ],
-    }),
   ],
-  ...baseConfig,
 };
 
-const workerConfig = {
-  name: "Harp Decoder",
-  entry: path.resolve(__dirname, "src", "map-worker", "index.js"),
-  target: "webworker",
-  output: {
-    path: path.resolve(__dirname, "dist"),
-    filename: "decoder.bundle.js",
-  },
-  ...baseConfig,
-};
-
-module.exports = [mainConfig, workerConfig];
+module.exports = config;
