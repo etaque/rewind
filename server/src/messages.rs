@@ -1,59 +1,11 @@
 use chrono::serde::ts_milliseconds;
 use chrono::{DateTime, Utc};
-use postgis::ewkb::Point as PgPoint;
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
-
-#[derive(Clone, Debug, Deserialize, Serialize)]
-pub struct LngLat {
-    pub lng: f64,
-    pub lat: f64,
-}
-
-impl Into<PgPoint> for LngLat {
-    fn into(self) -> PgPoint {
-        PgPoint::new(self.lng, self.lat, Some(crate::models::SRID))
-    }
-}
-
-#[derive(Clone, Debug, Deserialize, Serialize)]
-pub struct WindPoint {
-    pub position: LngLat,
-    pub u: f64,
-    pub v: f64,
-}
-
-#[derive(Clone, Debug, Deserialize, Serialize)]
-pub struct Course {
-    pub key: String,
-    pub name: String,
-    #[serde(with = "ts_milliseconds")]
-    pub start_time: DateTime<Utc>,
-    pub start: LngLat,
-    pub finish: LngLat,
-    pub time_factor: i8,
-}
 
 #[derive(Clone, Debug, Deserialize, Serialize)]
 pub struct WindReport {
     pub id: Uuid,
     #[serde(with = "ts_milliseconds")]
     pub time: DateTime<Utc>,
-    pub wind: WindPoint,
-}
-
-#[derive(Clone, Debug, Deserialize, Serialize)]
-#[serde(tag = "tag")]
-pub enum ToServer {
-    GetWind {
-        #[serde(with = "ts_milliseconds")]
-        time: DateTime<Utc>,
-        position: LngLat,
-    },
-}
-
-#[derive(Clone, Debug, Deserialize, Serialize)]
-#[serde(tag = "tag")]
-pub enum FromServer {
-    SendWind { report: WindReport },
 }

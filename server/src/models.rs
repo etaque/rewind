@@ -1,3 +1,4 @@
+use crate::messages;
 use chrono::{DateTime, NaiveDate, Utc};
 use tokio_pg_mapper_derive::PostgresMapper;
 use uuid::Uuid;
@@ -15,6 +16,15 @@ pub struct WindReport {
     pub forecast: i16,
     pub target_time: DateTime<Utc>,
     pub creation_time: DateTime<Utc>,
+}
+
+impl Into<messages::WindReport> for WindReport {
+    fn into(self) -> messages::WindReport {
+        messages::WindReport {
+            id: self.id,
+            time: self.creation_time,
+        }
+    }
 }
 
 #[derive(Clone, Debug)]

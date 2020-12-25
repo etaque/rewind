@@ -24,13 +24,16 @@ pub async fn get<'a>(client: &db::Client<'a>, id: Uuid) -> anyhow::Result<WindRe
     Ok(wr)
 }
 
-pub async fn find_closest<'a>(
+pub async fn list_since<'a>(
     client: &db::Client<'a>,
     time: &DateTime<Utc>,
-) -> anyhow::Result<WindReport> {
+    limit: u32,
+) -> anyhow::Result<Vec<WindReport>> {
     let stmt = "SELECT * FROM wind_reports \
-                ORDER BY abs(extract(epoch from ($1 - target_time))) asc LIMIT 1";
-    let row = client.query_one(stmt, &[&time]).await?;
-    let wr = WindReport::from_row(row)?;
-    Ok(wr)
+                WHERE target_time >= $1 
+                ORDER BY target_time ASC
+                LIMIT $2";
+    let rows = client.query(stmt, &[&time, &limit]).await?;
+    let reports = super::from_rows(rows)?;
+    Ok(reports)
 }

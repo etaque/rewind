@@ -8,7 +8,6 @@ mod messages;
 mod models;
 mod repos;
 mod server;
-mod session;
 mod tools;
 
 #[tokio::main]
