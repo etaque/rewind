@@ -15,6 +15,8 @@ pub enum Command {
     Http {
         #[structopt(env = "REWIND_SERVER_ADDRESS")]
         address: std::net::SocketAddr,
+        #[structopt(env = "REWIND_CLIENT_URL")]
+        client_url: String,
     },
     Db(DbCommand),
     Grib(GribArgs),

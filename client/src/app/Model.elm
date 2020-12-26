@@ -2,9 +2,9 @@ module Model exposing (..)
 
 import Iso8601
 import Json.Decode as JD exposing (Decoder, float, int, string, succeed)
-import Json.Decode.Pipeline exposing (hardcoded, optional, required)
+import Json.Decode.Pipeline exposing (required)
 import Json.Encode as JE
-import Time exposing (Posix)
+import Time
 import UUID exposing (UUID)
 
 
@@ -26,34 +26,22 @@ encodeLngLat { lng, lat } =
     JE.object [ ( "lng", JE.float lng ), ( "lat", JE.float lat ) ]
 
 
-type alias WindPoint =
-    { position : LngLat
-    , u : Float
+type alias WindForce =
+    { u : Float
     , v : Float
     }
 
 
-windPointDecoder : Decoder WindPoint
-windPointDecoder =
-    succeed WindPoint
-        |> required "position" lngLatDecoder
+windForceDecoder : Decoder WindForce
+windForceDecoder =
+    succeed WindForce
         |> required "u" float
         |> required "v" float
-
-
-encodeWindPoint : WindPoint -> JE.Value
-encodeWindPoint { position, u, v } =
-    JE.object
-        [ ( "position", encodeLngLat position )
-        , ( "u", JE.float u )
-        , ( "v", JE.float v )
-        ]
 
 
 type alias WindReport =
     { id : UUID
     , time : Int
-    , wind : WindPoint
     }
 
 
@@ -62,15 +50,18 @@ windReportDecoder =
     succeed WindReport
         |> required "id" UUID.jsonDecoder
         |> required "time" int
-        |> required "wind" windPointDecoder
+
+
+windReportsDecoder : Decoder (List WindReport)
+windReportsDecoder =
+    JD.list windReportDecoder
 
 
 encodeWindReport : WindReport -> JE.Value
-encodeWindReport { id, time, wind } =
+encodeWindReport { id, time } =
     JE.object
         [ ( "id", UUID.toValue id )
         , ( "time", JE.int time )
-        , ( "wind", encodeWindPoint wind )
         ]
 
 
@@ -82,6 +73,18 @@ type alias Course =
     , finish : LngLat
     , timeFactor : Float
     }
+
+
+encodeCourse : Course -> JE.Value
+encodeCourse c =
+    JE.object
+        [ ( "key", JE.string c.key )
+        , ( "name", JE.string c.name )
+        , ( "startTime", JE.int c.startTime )
+        , ( "start", encodeLngLat c.start )
+        , ( "finish", encodeLngLat c.finish )
+        , ( "timeFactor", JE.float c.timeFactor )
+        ]
 
 
 vg20 : Course

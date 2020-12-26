@@ -13,7 +13,7 @@ use super::messages;
 use super::models::RasterRenderingMode;
 use super::repos;
 
-pub async fn run(address: std::net::SocketAddr, database_url: &str) {
+pub async fn run(address: std::net::SocketAddr, client_url: &str, database_url: &str) {
     let pool = db::pool(&database_url)
         .await
         .expect(format!("Failed to connect to DB: {}", &database_url).as_str());
@@ -38,7 +38,11 @@ pub async fn run(address: std::net::SocketAddr, database_url: &str) {
         .or(raster_wkb_route)
         .recover(rejection);
 
-    warp::serve(routes).run(address).await
+    let cors = warp::cors()
+        .allow_origin(client_url)
+        .allow_methods(vec!["GET"]);
+
+    warp::serve(routes.with(cors)).run(address).await
 }
 
 fn with_db(db_pool: db::Pool) -> impl Filter<Extract = (db::Pool,), Error = Infallible> + Clone {
@@ -72,7 +76,7 @@ pub async fn reports_since(since_ms: i64, pool: db::Pool) -> Result<impl Reply, 
 
     let since = Utc.timestamp_millis(since_ms);
 
-    let db_reports = repos::wind_reports::list_since(&client, &since, 100u32)
+    let db_reports = repos::wind_reports::list_since(&client, &since, 100i64)
         .await
         .map_err(|e| warp::reject::custom(Error(e.into())))?;
 

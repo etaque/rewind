@@ -31,7 +31,6 @@ mkShell {
     postgresql_11
     postgis
     osm2pgsql
-    eccodes
     martin
 
     # client

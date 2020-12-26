@@ -5,17 +5,17 @@ import Browser.Events
 import Html as H exposing (Html)
 import Html.Attributes as HA
 import Html.Events as HE
+import Http
 import Json.Decode as JD
 import Json.Encode as JE
-import Model as M
-import Ports as P
+import Map
+import Model exposing (..)
 import Svg as S
 import Svg.Attributes as SA
-import UUID
 
 
 type alias Flags =
-    {}
+    { serverUrl : String }
 
 
 main : Program Flags Model Msg
@@ -27,7 +27,7 @@ main =
         , subscriptions =
             \model ->
                 Sub.batch
-                    [ P.inputs Input
+                    [ Map.responses MapResponse
                     , case model.state of
                         Playing _ ->
                             Browser.Events.onAnimationFrameDelta Tick
@@ -46,6 +46,7 @@ type alias Model =
 
 type State
     = Idle
+    | Loading Course
     | Playing Session
 
 
@@ -53,9 +54,10 @@ type alias Session =
     { clock : Float
     , lastWindRefresh : Float
     , courseTime : Int
-    , position : M.LngLat
-    , course : M.Course
-    , wind : Maybe M.WindReport
+    , position : LngLat
+    , course : Course
+    , reports : List WindReport
+    , windForce : WindForce
     }
 
 
@@ -65,8 +67,9 @@ init flags =
 
 
 type Msg
-    = Start
-    | Input JE.Value
+    = LoadCourse Course
+    | ReportsResponse (Result Http.Error (List WindReport))
+    | MapResponse JE.Value
     | Tick Float
 
 
@@ -78,36 +81,41 @@ windRefreshInterval =
 update : Msg -> Model -> ( Model, Cmd Msg )
 update message model =
     case ( message, model.state ) of
-        ( Start, Idle ) ->
-            let
-                course =
-                    M.vg20
-
-                session =
-                    { clock = 0
-                    , lastWindRefresh = 0
-                    , courseTime = course.startTime
-                    , position = course.start
-                    , course = course
-                    , wind = Nothing
-                    }
-            in
-            ( { model | state = Playing session }
-            , Cmd.batch
-                [ P.send P.StartSession
-                , P.send (P.UpdateMap (P.MoveTo session.position))
-                ]
+        ( LoadCourse course, Idle ) ->
+            ( { model | state = Loading course }
+            , getReports model.flags.serverUrl course.startTime
             )
 
-        ( Input value, _ ) ->
-            case ( P.decodeInputValue value, model.state ) of
-                ( Ok (P.SendWind report), Playing session ) ->
-                    ( { model | state = Playing { session | wind = Just report } }
-                    , P.send (P.UpdateMap (P.SetWind report))
+        ( ReportsResponse result, Loading course ) ->
+            case result of
+                Ok (report :: nextReports) ->
+                    let
+                        session =
+                            { clock = 0
+                            , lastWindRefresh = 0
+                            , courseTime = course.startTime
+                            , position = course.start
+                            , course = course
+                            , reports = report :: nextReports
+                            , windForce = { u = 0, v = 0 }
+                            }
+                    in
+                    ( { model | state = Playing session }
+                    , Cmd.batch
+                        [ Map.send (Map.MoveTo course.start)
+                        , Map.send (Map.LoadReport report)
+                        ]
                     )
 
-                ( Ok P.Disconnected, Playing _ ) ->
+                _ ->
                     ( { model | state = Idle }, Cmd.none )
+
+        ( MapResponse value, _ ) ->
+            case ( Map.decodeResponseValue value, model.state ) of
+                ( Ok (Map.WindIs windForce), Playing session ) ->
+                    ( { model | state = Playing { session | windForce = windForce } }
+                    , Cmd.none
+                    )
 
                 ( Err e, _ ) ->
                     let
@@ -133,7 +141,7 @@ update message model =
             in
             if newClock - session.lastWindRefresh > windRefreshInterval then
                 ( { model | state = Playing { newSession | lastWindRefresh = newClock } }
-                , P.send (P.GetWind { time = newSession.courseTime, position = newSession.position })
+                , Map.send (Map.GetWindAt { time = newSession.courseTime, position = newSession.position })
                 )
 
             else
@@ -141,6 +149,14 @@ update message model =
 
         _ ->
             ( model, Cmd.none )
+
+
+getReports : String -> Int -> Cmd Msg
+getReports serverUrl since =
+    Http.get
+        { url = serverUrl ++ "/wind-reports/since/" ++ String.fromInt since
+        , expect = Http.expectJson ReportsResponse windReportsDecoder
+        }
 
 
 view : Model -> Html Msg
@@ -152,10 +168,13 @@ view model =
                 [ H.h1 [ HA.class "logo" ] [ H.text "Re:wind" ]
                 , H.button
                     [ HA.class "btn-start"
-                    , HE.onClick Start
+                    , HE.onClick (LoadCourse vg20)
                     ]
                     [ rewindIcon ]
                 ]
+
+        Loading _ ->
+            H.text ""
 
         Playing _ ->
             H.text ""

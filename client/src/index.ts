@@ -1,13 +1,29 @@
+import { startApp } from "./app";
+import { renderMap } from "./map";
+
 import "./styles.css";
 
-import { App } from "./App";
-import * as React from "react";
-import * as ReactDOM from "react-dom";
-
 const appNode = document.getElementById("app")!;
+const mapNode = document.getElementById("map")!;
 
-const wsAddress = process.env.REWIND_WS_URL!;
-const tileServerAddress = process.env.REWIND_TILE_URL!;
+const app = startApp(appNode, { serverUrl: process.env.REWIND_SERVER_URL! });
 
-const app = React.createElement(App, { wsAddress, tileServerAddress });
-ReactDOM.render(app, appNode);
+app.ports.requests.subscribe((request) => {
+  switch (request.tag) {
+    case "ShowMap":
+      renderMap(mapNode, request.course.start);
+      return;
+
+    case "GetWindAt":
+      // TODO
+      return;
+
+    case "MoveTo":
+      renderMap(mapNode, request.position);
+      return;
+
+    case "LoadReport":
+      // TODO
+      return;
+  }
+});

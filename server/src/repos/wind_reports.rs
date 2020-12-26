@@ -27,7 +27,7 @@ pub async fn get<'a>(client: &db::Client<'a>, id: Uuid) -> anyhow::Result<WindRe
 pub async fn list_since<'a>(
     client: &db::Client<'a>,
     time: &DateTime<Utc>,
-    limit: u32,
+    limit: i64,
 ) -> anyhow::Result<Vec<WindReport>> {
     let stmt = "SELECT * FROM wind_reports \
                 WHERE target_time >= $1 
