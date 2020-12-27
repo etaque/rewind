@@ -14,7 +14,7 @@ export type MapProps = {
   layers: any[];
 };
 
-export function Map(props: MapProps) {
+export function View(props: MapProps) {
   return (
     <DeckGL
       initialViewState={props.initialViewState}
@@ -31,6 +31,6 @@ export function renderMap(node: HTMLElement, { lng, lat }: LngLat) {
     initialViewState: { zoom: 4, longitude: lng, latitude: lat },
     layers: [],
   };
-  let map: React.ReactElement = React.createElement(Map, props);
+  let map: React.ReactElement = React.createElement(View, props);
   ReactDOM.render(map, node);
 }

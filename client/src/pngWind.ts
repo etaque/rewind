@@ -18,9 +18,9 @@ function toFloatingPixel({ lng, lat }: LngLat): Pixel {
   };
 }
 
-// From [0..255] to m/s
+// From [0..255] to +/-30 in m/s, inverse of ST_Reclass in server.
 function colorToSpeed(n: number): number {
-  return (n * windScale) / 255;
+  return (n * windScale * 2) / 255 - windScale;
 }
 
 function round({ x, y }: Pixel): Pixel {
