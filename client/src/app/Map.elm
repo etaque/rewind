@@ -22,7 +22,7 @@ decodeResponseValue =
 
 
 type Response
-    = WindIs WindForce
+    = WindIs WindSpeed
 
 
 responseDecoder : JD.Decoder Response
@@ -35,7 +35,7 @@ decodeResponse : String -> JD.Decoder Response
 decodeResponse tag =
     case tag of
         "WindIs" ->
-            JD.map WindIs (JD.field "windForce" windForceDecoder)
+            JD.map WindIs (JD.field "windSpeed" windSpeedDecoder)
 
         _ ->
             JD.fail ("Unknown Input tag: " ++ tag)

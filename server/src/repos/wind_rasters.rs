@@ -18,8 +18,18 @@ pub async fn create<'a>(client: &db::Client<'a>, id: &Uuid, path: &Path) -> anyh
     Ok(())
 }
 
+const BAND_STMT: &str = r#"
+    SELECT ST_AsPNG(ST_Reclass(rast, $2::int, '-30-30:0-255', '8BUI'), $2)
+    FROM wind_rasters
+    WHERE id=$1"#;
+
 const UV_STMT: &str = r#"
-    SELECT ST_AsPNG(ST_Reclass(rast, $2::int, '-30-30:0-255', '8BUI'), $2, 90)
+    SELECT ST_AsPNG(
+        ST_Reclass(
+            ST_Reclass(
+                ST_AddBand(rast, '8BUI'::text, 0::int),
+                1, '-30-30:0-255', '8BUI'),
+            2, '-30-30:0-255', '8BUI'))
     FROM wind_rasters
     WHERE id=$1"#;
 
@@ -28,14 +38,15 @@ const SPEED_STMT: &str = r#"
     FROM wind_rasters 
     WHERE id=$1"#;
 
-pub async fn raster<'a>(
+pub async fn as_png<'a>(
     client: &db::Client<'a>,
     id: &Uuid,
     mode: RasterRenderingMode,
 ) -> anyhow::Result<Vec<u8>> {
     let row = match mode {
-        RasterRenderingMode::U => client.query_one(UV_STMT, &[&id, &U_BAND]).await?,
-        RasterRenderingMode::V => client.query_one(UV_STMT, &[&id, &V_BAND]).await?,
+        RasterRenderingMode::U => client.query_one(BAND_STMT, &[&id, &U_BAND]).await?,
+        RasterRenderingMode::V => client.query_one(BAND_STMT, &[&id, &V_BAND]).await?,
+        RasterRenderingMode::UV => client.query_one(UV_STMT, &[&id]).await?,
         RasterRenderingMode::Speed => client.query_one(SPEED_STMT, &[&id]).await?,
     };
 
@@ -44,7 +55,7 @@ pub async fn raster<'a>(
 }
 
 // See https://github.com/postgis/postgis/blob/master/raster/doc/RFC2-WellKnownBinaryFormat
-pub async fn wkb<'a>(client: &db::Client<'a>, id: &Uuid) -> anyhow::Result<Vec<u8>> {
+pub async fn as_wkb<'a>(client: &db::Client<'a>, id: &Uuid) -> anyhow::Result<Vec<u8>> {
     let stmt = "SELECT ST_AsBinary(rast) FROM wind_rasters WHERE id=$1";
     let row = client.query_one(stmt, &[&id]).await?;
     let geojson = row.try_get(0)?;

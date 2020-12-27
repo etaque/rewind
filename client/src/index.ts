@@ -1,12 +1,19 @@
+// import { Raster } from "wkb-raster";
 import { startApp } from "./app";
 import { renderMap } from "./map";
+
+import * as wind from "./pngWind";
 
 import "./styles.css";
 
 const appNode = document.getElementById("app")!;
 const mapNode = document.getElementById("map")!;
 
-const app = startApp(appNode, { serverUrl: process.env.REWIND_SERVER_URL! });
+const serverUrl = process.env.REWIND_SERVER_URL!;
+
+const app = startApp(appNode, { serverUrl });
+
+let currentRaster: wind.WindRaster;
 
 app.ports.requests.subscribe((request) => {
   switch (request.tag) {
@@ -15,7 +22,12 @@ app.ports.requests.subscribe((request) => {
       return;
 
     case "GetWindAt":
-      // TODO
+      if (currentRaster) {
+        app.ports.responses.send({
+          tag: "WindIs",
+          windSpeed: wind.speedAt(currentRaster, request.position),
+        });
+      }
       return;
 
     case "MoveTo":
@@ -23,7 +35,9 @@ app.ports.requests.subscribe((request) => {
       return;
 
     case "LoadReport":
-      // TODO
+      wind.load(request.windReport.id).then((raster) => {
+        currentRaster = raster;
+      });
       return;
   }
 });

@@ -31,5 +31,6 @@ impl Into<messages::WindReport> for WindReport {
 pub enum RasterRenderingMode {
     U,
     V,
+    UV,
     Speed,
 }

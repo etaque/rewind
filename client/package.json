@@ -8,6 +8,7 @@
   },
   "dependencies": {
     "@danmarshall/deckgl-typings": "^4.4.0",
+    "@types/pngjs": "^3.4.2",
     "@types/react": "^17.0.0",
     "@types/react-dom": "^17.0.0",
     "@types/react-map-gl": "^5.2.9",
@@ -23,6 +24,7 @@
     "html-webpack-plugin": "^4.5.0",
     "mapbox-gl": "^1.13.0",
     "mini-css-extract-plugin": "^0.11.2",
+    "pngjs": "^6.0.0",
     "postcss": "^7.0.35",
     "postcss-import": "^12.0.1",
     "postcss-loader": "^3.0.0",
@@ -36,6 +38,7 @@
     "webpack": "^4.44.2",
     "webpack-cli": "^3.3.12",
     "webpack-dev-server": "^3.11.0",
-    "webpackbar": "^4.0.0"
+    "webpackbar": "^4.0.0",
+    "wkb-raster": "^1.1.0"
   }
 }

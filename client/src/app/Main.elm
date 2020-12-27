@@ -57,7 +57,7 @@ type alias Session =
     , position : LngLat
     , course : Course
     , reports : List WindReport
-    , windForce : WindForce
+    , windSpeed : WindSpeed
     }
 
 
@@ -97,7 +97,7 @@ update message model =
                             , position = course.start
                             , course = course
                             , reports = report :: nextReports
-                            , windForce = { u = 0, v = 0 }
+                            , windSpeed = { u = 0, v = 0 }
                             }
                     in
                     ( { model | state = Playing session }
@@ -112,8 +112,8 @@ update message model =
 
         ( MapResponse value, _ ) ->
             case ( Map.decodeResponseValue value, model.state ) of
-                ( Ok (Map.WindIs windForce), Playing session ) ->
-                    ( { model | state = Playing { session | windForce = windForce } }
+                ( Ok (Map.WindIs windSpeed), Playing session ) ->
+                    ( { model | state = Playing { session | windSpeed = windSpeed } }
                     , Cmd.none
                     )
 

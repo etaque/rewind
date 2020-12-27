@@ -16,7 +16,7 @@ export type Request =
 
 export type Response = {
   tag: "WindIs";
-  windForce: WindForce;
+  windSpeed: WindSpeed;
 };
 
 export type LngLat = {
@@ -24,7 +24,7 @@ export type LngLat = {
   lat: number;
 };
 
-export type WindForce = {
+export type WindSpeed = {
   u: number;
   v: number;
 };
@@ -42,3 +42,8 @@ export type Course = {
   finish: LngLat;
   timeFactor: number;
 };
+
+export interface GenericWindRaster<T> {
+  load(id: string): Promise<T>;
+  speedAt(raster: T, pos: LngLat): WindSpeed;
+}

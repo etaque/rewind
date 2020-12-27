@@ -18,6 +18,10 @@ pub async fn run(address: std::net::SocketAddr, client_url: &str, database_url: 
         .await
         .expect(format!("Failed to connect to DB: {}", &database_url).as_str());
 
+    let cors = warp::cors()
+        .allow_origin(client_url)
+        .allow_methods(vec!["GET"]);
+
     let health_route = path!("health").and(with_db(pool.clone())).and_then(health);
 
     let reports_since_route = path!("wind-reports" / "since" / i64)
@@ -36,13 +40,11 @@ pub async fn run(address: std::net::SocketAddr, client_url: &str, database_url: 
         .or(reports_since_route)
         .or(raster_png_route)
         .or(raster_wkb_route)
-        .recover(rejection);
+        .recover(rejection)
+        .with(cors)
+        .with(warp::compression::gzip());
 
-    let cors = warp::cors()
-        .allow_origin(client_url)
-        .allow_methods(vec!["GET"]);
-
-    warp::serve(routes.with(cors)).run(address).await
+    warp::serve(routes).run(address).await
 }
 
 fn with_db(db_pool: db::Pool) -> impl Filter<Extract = (db::Pool,), Error = Infallible> + Clone {
@@ -62,6 +64,7 @@ impl FromStr for RasterRenderingMode {
         match s {
             "u.png" => Ok(RasterRenderingMode::U),
             "v.png" => Ok(RasterRenderingMode::V),
+            "uv.png" => Ok(RasterRenderingMode::UV),
             "speed.png" => Ok(RasterRenderingMode::Speed),
             _ => Err(()),
         }
@@ -99,7 +102,7 @@ pub async fn raster_png(
         .await
         .map_err(|_| warp::reject::not_found())?;
 
-    let blob = repos::wind_rasters::raster(&client, &report.raster_id, mode)
+    let blob = repos::wind_rasters::as_png(&client, &report.raster_id, mode)
         .await
         .map_err(|e| warp::reject::custom(Error(e.into())))?;
 
@@ -119,7 +122,7 @@ pub async fn raster_wkb(report_id: Uuid, pool: db::Pool) -> Result<impl Reply, R
         .await
         .map_err(|_| warp::reject::not_found())?;
 
-    let blob = repos::wind_rasters::wkb(&client, &report.raster_id)
+    let blob = repos::wind_rasters::as_wkb(&client, &report.raster_id)
         .await
         .map_err(|e| warp::reject::custom(Error(e.into())))?;
 

@@ -26,15 +26,15 @@ encodeLngLat { lng, lat } =
     JE.object [ ( "lng", JE.float lng ), ( "lat", JE.float lat ) ]
 
 
-type alias WindForce =
+type alias WindSpeed =
     { u : Float
     , v : Float
     }
 
 
-windForceDecoder : Decoder WindForce
-windForceDecoder =
-    succeed WindForce
+windSpeedDecoder : Decoder WindSpeed
+windSpeedDecoder =
+    succeed WindSpeed
         |> required "u" float
         |> required "v" float
 
