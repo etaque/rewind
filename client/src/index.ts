@@ -1,6 +1,6 @@
 // import { Raster } from "wkb-raster";
 import { startApp } from "./app";
-import { renderMap } from "./map";
+import { MapView } from "./map";
 
 import * as wind from "./pngWind";
 
@@ -14,11 +14,12 @@ const serverUrl = process.env.REWIND_SERVER_URL!;
 const app = startApp(appNode, { serverUrl });
 
 let currentRaster: wind.WindRaster;
+let mapView: MapView;
 
 app.ports.requests.subscribe((request) => {
   switch (request.tag) {
     case "ShowMap":
-      renderMap(mapNode, request.course.start);
+      mapView = new MapView(mapNode, request.course);
       return;
 
     case "GetWindAt":
@@ -31,12 +32,17 @@ app.ports.requests.subscribe((request) => {
       return;
 
     case "MoveTo":
-      renderMap(mapNode, request.position);
+      if (mapView) {
+        mapView.updatePosition(request.position);
+      }
       return;
 
     case "LoadReport":
       wind.load(request.windReport.id).then((raster) => {
         currentRaster = raster;
+        if (mapView) {
+          mapView.updateWind(raster);
+        }
       });
       return;
   }

@@ -83,7 +83,10 @@ update message model =
     case ( message, model.state ) of
         ( LoadCourse course, Idle ) ->
             ( { model | state = Loading course }
-            , getReports model.flags.serverUrl course.startTime
+            , Cmd.batch
+                [ Map.send (Map.ShowMap course)
+                , getReports model.flags.serverUrl course.startTime
+                ]
             )
 
         ( ReportsResponse result, Loading course ) ->
@@ -101,10 +104,7 @@ update message model =
                             }
                     in
                     ( { model | state = Playing session }
-                    , Cmd.batch
-                        [ Map.send (Map.MoveTo course.start)
-                        , Map.send (Map.LoadReport report)
-                        ]
+                    , Map.send (Map.LoadReport report)
                     )
 
                 _ ->
