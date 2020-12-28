@@ -27,7 +27,9 @@ const UV_STMT: &str = r#"
     SELECT ST_AsPNG(
         ST_Reclass(
             ST_Reclass(
-                ST_AddBand(rast, '8BUI'::text, 0::int),
+                ST_AddBand(
+                    ST_Clip(rast, ST_MakeEnvelope(0, -80, 360, 80, $2)),
+                    '8BUI'::text, 0::int),
                 1, '-30-30:0-255', '8BUI'),
             2, '-30-30:0-255', '8BUI'))
     FROM wind_rasters
@@ -46,7 +48,7 @@ pub async fn as_png<'a>(
     let row = match mode {
         RasterRenderingMode::U => client.query_one(BAND_STMT, &[&id, &U_BAND]).await?,
         RasterRenderingMode::V => client.query_one(BAND_STMT, &[&id, &V_BAND]).await?,
-        RasterRenderingMode::UV => client.query_one(UV_STMT, &[&id]).await?,
+        RasterRenderingMode::UV => client.query_one(UV_STMT, &[&id, &SRID]).await?,
         RasterRenderingMode::Speed => client.query_one(SPEED_STMT, &[&id]).await?,
     };
 

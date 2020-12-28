@@ -3,9 +3,10 @@ import { LngLat, WindSpeed, GenericWindRaster } from "./models";
 
 const serverUrl = process.env.REWIND_SERVER_URL!;
 
-const width = 720;
+const pixelWidth = 720;
 const windScale = 30;
 const pixelSize = 0.5; // 1px == 0.5°
+const latAmplitude = 160;
 export const channels = 4;
 
 type Pixel = { x: number; y: number };
@@ -32,7 +33,7 @@ export async function load(reportId: string): Promise<WindRaster> {
 }
 
 export function speedAt(png: WindRaster, position: LngLat): WindSpeed {
-  const px = round(posToPixel(position));
+  const px = roundPixel(posToPixel(position));
   const idx = pixelToIndex(px);
   const u = colorToSpeed(png.data[idx]);
   const v = colorToSpeed(png.data[idx + 1]);
@@ -44,24 +45,26 @@ export function positionOfIndex(idx: number): LngLat {
 }
 
 function indexToPixel(idx: number): Pixel {
-  return { x: (idx / channels) % width, y: idx / channels / width };
+  return { x: (idx / channels) % pixelWidth, y: idx / channels / pixelWidth };
 }
 
 function pixelToIndex({ x, y }: Pixel): number {
-  return (width * y + x) * channels;
+  return (pixelWidth * y + x) * channels;
 }
 
 function posToPixel({ lng, lat }: LngLat): Pixel {
   return {
-    x: lng / pixelSize,
-    y: (lat + 90) / pixelSize,
+    x: (lng + 180) / pixelSize,
+    y: (lat + latAmplitude / 2) / pixelSize,
   };
 }
 
 function pixelToPos({ x, y }: Pixel): LngLat {
+  const lng = roundHalf(x * pixelSize - 180);
+  const lat = roundHalf(y * pixelSize - latAmplitude / 2);
   return {
-    lng: x * pixelSize,
-    lat: y * pixelSize - 90,
+    lng: lng > 180 ? lng - 360 : lng,
+    lat,
   };
 }
 
@@ -70,8 +73,12 @@ export function colorToSpeed(n: number): number {
   return (n * windScale * 2) / 255 - windScale;
 }
 
-function round({ x, y }: Pixel): Pixel {
+function roundPixel({ x, y }: Pixel): Pixel {
   return { x: Math.round(x), y: Math.round(y) };
+}
+
+function roundHalf(n: number): number {
+  return Math.round(n * 2) / 2;
 }
 
 export default { load, speedAt } as GenericWindRaster<PNG>;
