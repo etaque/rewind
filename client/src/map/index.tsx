@@ -2,18 +2,18 @@ import "mapbox-gl/dist/mapbox-gl.css";
 import { DeckGL } from "@deck.gl/react";
 import { GridLayer, Layer, ContourLayer, Position } from "deck.gl";
 import { StaticMap } from "react-map-gl";
+import { LayerProps } from "@deck.gl/core/lib/layer";
+import { ScreenGridLayer } from "deck.gl";
 import * as React from "react";
 import * as ReactDOM from "react-dom";
 
-import { Course, LngLat } from "../models";
+import { Course, GenericView, LngLat } from "../models";
 import * as wind from "../pngWind";
-import { LayerProps } from "@deck.gl/core/lib/layer";
-import { ScreenGridLayer } from "deck.gl";
 
 const MAP_STYLE =
   "https://basemaps.cartocdn.com/gl/voyager-nolabels-gl-style/style.json";
 
-export class MapView {
+export class MapView implements GenericView<wind.WindRaster> {
   readonly course: Course;
   readonly node: HTMLElement;
 
@@ -28,7 +28,7 @@ export class MapView {
     this.render();
   }
 
-  updateWind(raster: wind.WindRaster) {
+  updateWindUV(raster: wind.WindRaster) {
     this.raster = raster;
     const binData = {
       src: raster.data,
@@ -38,12 +38,14 @@ export class MapView {
     this.render();
   }
 
+  updateWindSpeed(raster: wind.WindRaster) {}
+
   updatePosition(pos: LngLat) {
     this.position = pos;
     this.render();
   }
 
-  render() {
+  async render() {
     const initialViewState = {
       zoom: 3,
       longitude: this.position.lng,

@@ -13,7 +13,7 @@ const mode = "development";
 const config = {
   entry: path.resolve(__dirname, "src", "index.ts"),
   output: {
-    path: path.resolve(__dirname, "dist"),
+    path: dist,
     filename: "index.[hash].js",
   },
   devServer: {
@@ -81,6 +81,11 @@ const config = {
     // Add scripts, css, ... to html template.
     new HtmlWebpackPlugin({
       template: path.resolve(__dirname, "src/index.html"),
+    }),
+    new CopyWebpackPlugin({
+      patterns: [
+        { from: "src/sphere/land-110m.json", to: path.resolve(dist, "sphere") }
+      ]
     }),
   ],
 };

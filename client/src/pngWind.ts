@@ -24,8 +24,13 @@ const parsePNG = (buf: ArrayBuffer, options: PackerOptions): Promise<PNG> =>
     })
   );
 
-export async function load(reportId: string): Promise<WindRaster> {
-  const data = await fetch(`${serverUrl}/wind-reports/${reportId}/uv.png`);
+export async function load(
+  reportId: string,
+  facet: string
+): Promise<WindRaster> {
+  const data = await fetch(
+    `${serverUrl}/wind-reports/${reportId}/${facet}.png`
+  );
   const blob = await data.blob();
 
   const buf = await blob.arrayBuffer();

@@ -36,7 +36,15 @@ const UV_STMT: &str = r#"
     WHERE id=$1"#;
 
 const SPEED_STMT: &str = r#"
-    SELECT ST_AsPNG(ST_Reclass(MapWindSpeed(rast), '0-30:0-255', '8BUI'), 1)
+    SELECT ST_AsPNG(
+        ST_ColorMap(
+            ST_Reclass(
+                MapWindSpeed(
+                    ST_Resize(
+                        ST_Transform( rast, 32663, 'Bilinear'), 
+                        1024, 512, 'Bilinear')),
+                '0-30:0-255', '8BUI'),
+        1, 'bluered'))
     FROM wind_rasters 
     WHERE id=$1"#;
 
