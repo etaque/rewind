@@ -1,13 +1,14 @@
 import * as d3 from "d3";
 import * as topojson from "topojson-client";
-import { GeoPermissibleObjects, GeoSphere } from "d3";
 import { Topology } from "topojson-specification";
+
 import { Course, LngLat, GenericView } from "../models";
 import * as wind from "../pngWind";
-import * as shaders from "./shaders";
-import { toRadians } from "../utils";
+import { WindParticles } from "./particles";
+import renderTexture from "./texture";
+import renderLand from "./land";
 
-const sphere: GeoSphere = { type: "Sphere" };
+const sphere: d3.GeoSphere = { type: "Sphere" };
 
 export class SphereView implements GenericView<wind.WindRaster> {
   readonly course: Course;
@@ -19,10 +20,13 @@ export class SphereView implements GenericView<wind.WindRaster> {
   uvRaster?: wind.WindRaster;
   speedRaster?: wind.WindRaster;
   position: LngLat;
+  projection: d3.GeoProjection;
 
-  sphereCanvas: HTMLCanvasElement;
-  windCanvas: HTMLCanvasElement;
-  land?: GeoPermissibleObjects;
+  landCanvas: HTMLCanvasElement;
+  windTextureCanvas: HTMLCanvasElement;
+  windParticlesCanvas: HTMLCanvasElement;
+  land?: d3.GeoPermissibleObjects;
+  particles: WindParticles;
 
   constructor(node: HTMLElement, course: Course) {
     this.course = course;
@@ -31,21 +35,36 @@ export class SphereView implements GenericView<wind.WindRaster> {
     this.width = document.body.clientWidth;
     this.height = document.body.clientHeight;
 
-    this.windCanvas = d3
+    this.projection = d3
+      .geoOrthographic()
+      .precision(0.1)
+      .fitSize([this.width, this.height], sphere);
+
+    this.windTextureCanvas = d3
       .select(this.node)
       .append("canvas")
-      .attr("class", "wind fixed opacity-80")
+      .attr("class", "wind-texture fixed opacity-80")
       .attr("width", this.width)
       .attr("height", this.height)
       .node()!;
 
-    this.sphereCanvas = d3
+    this.landCanvas = d3
       .select(this.node)
       .append("canvas")
-      .attr("class", "sphere fixed")
+      .attr("class", "land fixed")
       .attr("width", this.width)
       .attr("height", this.height)
       .node()!;
+
+    this.windParticlesCanvas = d3
+      .select(this.node)
+      .append("canvas")
+      .attr("class", "wind-particles fixed")
+      .attr("width", this.width)
+      .attr("height", this.height)
+      .node()!;
+
+    this.particles = new WindParticles();
   }
 
   updateWindUV(raster: wind.WindRaster) {
@@ -64,113 +83,31 @@ export class SphereView implements GenericView<wind.WindRaster> {
   }
 
   async render() {
-    const projection = d3
-      .geoOrthographic()
-      .precision(0.1)
-      .fitSize([this.width, this.height], sphere);
+    const pathGen = d3.geoPath(this.projection);
+    const [[x0], [x1]] = pathGen.bounds(sphere);
+    const [cx, cy] = pathGen.centroid(sphere);
+
+    let scene = {
+      projection: this.projection,
+      width: this.width,
+      height: this.height,
+      radius: (x1 - x0) / 2,
+      center: { x: cx, y: cy },
+    };
 
     if (this.speedRaster) {
-      renderWindSpeed(
-        this.windCanvas,
-        this.width,
-        this.height,
-        projection,
-        this.speedRaster
-      );
+      renderTexture(scene, this.windTextureCanvas, this.speedRaster);
+    }
+
+    if (this.uvRaster) {
+      this.particles.render(scene, this.windParticlesCanvas, this.uvRaster);
     }
 
     if (!this.land) {
-      const topo = (await fetchJson("/sphere/land-110m.json")) as Topology;
+      const res = await fetch("/sphere/land-110m.json");
+      const topo = (await res.json()) as Topology;
       this.land = topojson.feature(topo, topo.objects.land);
     }
-    renderLand(
-      this.sphereCanvas,
-      this.width,
-      this.height,
-      projection,
-      this.land
-    );
+    renderLand(scene, this.landCanvas, this.land);
   }
-}
-
-function renderLand(
-  canvas: HTMLCanvasElement,
-  width: number,
-  height: number,
-  projection: d3.GeoProjection,
-  land: GeoPermissibleObjects
-) {
-  const graticule = d3.geoGraticule10();
-  const context = canvas.getContext("2d")!;
-  const path = d3.geoPath(projection, context);
-  context.clearRect(0, 0, width, height);
-
-  context.strokeStyle = "rgba(255, 255, 255, 0.8)";
-  context.beginPath(), path(land), context.stroke();
-
-  context.strokeStyle = "rgba(221, 221, 221, 0.2)";
-  context.beginPath(), path(graticule), context.stroke();
-}
-
-function renderWindSpeed(
-  canvas: HTMLCanvasElement,
-  width: number,
-  height: number,
-  projection: d3.GeoProjection,
-  raster: wind.WindRaster
-) {
-  const gl = canvas.getContext("webgl", { alpha: true })!;
-
-  const vertexShader = shaders.createVertexShader(gl);
-  const fragmentShader = shaders.createFragmentShader(gl);
-  shaders.createVertexBuffer(gl);
-
-  const imageData = new ImageData(
-    new Uint8ClampedArray(raster.data),
-    raster.width,
-    raster.height
-  );
-  let texture = shaders.createTexture(gl, imageData);
-
-  const program = shaders.createProgram(gl, vertexShader, fragmentShader);
-
-  const aVertex = gl.getAttribLocation(program, "aVertex");
-  const uTranslate = gl.getUniformLocation(program, "uTranslate");
-  const uScale = gl.getUniformLocation(program, "uScale");
-  const uRotate = gl.getUniformLocation(program, "uRotate");
-
-  const init = () => {
-    gl.useProgram(program);
-    gl.enableVertexAttribArray(aVertex);
-    gl.vertexAttribPointer(aVertex, 2, gl.FLOAT, false, 0, 0);
-    gl.uniform2f(uTranslate, width / 2, height / 2);
-
-    gl.uniform1f(uScale, height / 2 - 1);
-
-    gl.viewport(0, 0, width, height);
-
-    gl.bindTexture(gl.TEXTURE_2D, texture);
-  };
-
-  const [lambda, phi] = projection.rotate().map((x) => toRadians(x));
-
-  redrawWindSpeed(gl, init, uRotate, [lambda, phi]);
-}
-
-function redrawWindSpeed(
-  gl: WebGLRenderingContext,
-  init: () => void,
-  uRotate: WebGLUniformLocation | null,
-  rotateAngle: [number, number]
-) {
-  const now = performance.now();
-  init();
-  gl.uniform2fv(uRotate, rotateAngle);
-  gl.drawArrays(gl.TRIANGLE_FAN, 0, 4);
-  console.log("redraw", Math.round((performance.now() - now) * 1000) + "ms");
-}
-
-async function fetchJson(path: string): Promise<any> {
-  const res = await fetch(path);
-  return res.json();
 }

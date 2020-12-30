@@ -1,5 +1,6 @@
 import { PackerOptions, PNG } from "pngjs";
-import { LngLat, WindSpeed, GenericWindRaster } from "./models";
+import { LngLat, WindSpeed, GenericWindRaster, Pixel } from "./models";
+import { reframeLongitude, roundHalf, roundPixel } from "./utils";
 
 const serverUrl = process.env.REWIND_SERVER_URL!;
 
@@ -8,8 +9,6 @@ const windScale = 30;
 const pixelSize = 0.5; // 1px == 0.5°
 const latAmplitude = 160;
 export const channels = 4;
-
-type Pixel = { x: number; y: number };
 
 export type WindRaster = PNG;
 
@@ -37,6 +36,7 @@ export async function load(
   return parsePNG(buf, { colorType: 2 });
 }
 
+// TODO bilinear interpolation
 export function speedAt(png: WindRaster, position: LngLat): WindSpeed {
   const px = roundPixel(posToPixel(position));
   const idx = pixelToIndex(px);
@@ -68,7 +68,7 @@ function pixelToPos({ x, y }: Pixel): LngLat {
   const lng = roundHalf(x * pixelSize - 180);
   const lat = roundHalf(y * pixelSize - latAmplitude / 2);
   return {
-    lng: lng > 180 ? lng - 360 : lng,
+    lng: reframeLongitude(lng),
     lat,
   };
 }
@@ -76,14 +76,6 @@ function pixelToPos({ x, y }: Pixel): LngLat {
 // From [0..255] to +/-30 in m/s, inverse of ST_Reclass in server.
 export function colorToSpeed(n: number): number {
   return (n * windScale * 2) / 255 - windScale;
-}
-
-function roundPixel({ x, y }: Pixel): Pixel {
-  return { x: Math.round(x), y: Math.round(y) };
-}
-
-function roundHalf(n: number): number {
-  return Math.round(n * 2) / 2;
 }
 
 export default { load, speedAt } as GenericWindRaster<PNG>;

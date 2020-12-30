@@ -54,3 +54,13 @@ export interface GenericView<T> {
   updatePosition(pos: LngLat): void;
   render(): Promise<void>;
 }
+
+export type Pixel = { x: number; y: number };
+
+export type Scene = {
+  projection: d3.GeoProjection;
+  width: number;
+  height: number;
+  radius: number;
+  center: Pixel;
+};
