@@ -1,5 +1,5 @@
 import { PackerOptions, PNG } from "pngjs";
-import { LngLat, WindSpeed, GenericWindRaster, Pixel } from "./models";
+import { LngLat, WindSpeed, Pixel } from "./models";
 import { reframeLongitude, roundHalf, roundPixel } from "./utils";
 
 const serverUrl = process.env.REWIND_SERVER_URL!;
@@ -77,5 +77,3 @@ function pixelToPos({ x, y }: Pixel): LngLat {
 export function colorToSpeed(n: number): number {
   return (n * windScale * 2) / 255 - windScale;
 }
-
-export default { load, speedAt } as GenericWindRaster<PNG>;

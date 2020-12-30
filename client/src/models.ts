@@ -43,18 +43,6 @@ export type Course = {
   timeFactor: number;
 };
 
-export interface GenericWindRaster<T> {
-  load(id: string): Promise<T>;
-  speedAt(raster: T, pos: LngLat): WindSpeed;
-}
-
-export interface GenericView<T> {
-  updateWindUV(raster: T): void;
-  updateWindSpeed(raster: T): void;
-  updatePosition(pos: LngLat): void;
-  render(): Promise<void>;
-}
-
 export type Pixel = { x: number; y: number };
 
 export type Scene = {

@@ -1,4 +1,4 @@
-import { LngLat, Pixel, WindSpeed } from "./models";
+import { Pixel } from "./models";
 
 export const toRadians = (d: number): number =>
   d < 0 ? (Math.abs(d) * Math.PI) / 180 : Math.PI + ((180 - d) * Math.PI) / 180;

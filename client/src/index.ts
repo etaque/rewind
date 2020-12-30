@@ -1,28 +1,23 @@
-// import { Raster } from "wkb-raster";
 import { startApp } from "./app";
-import { MapView } from "./map";
 import { SphereView } from "./sphere";
 
 import * as wind from "./pngWind";
 
 import "./styles.css";
-import { GenericView } from "./models";
 
 const appNode = document.getElementById("app")!;
 const sphereNode = document.getElementById("sphere")!;
-const mapNode = document.getElementById("map")!;
 
 const serverUrl = process.env.REWIND_SERVER_URL!;
 
 const app = startApp(appNode, { serverUrl });
 
 let currentRaster: wind.WindRaster;
-let view: GenericView<wind.WindRaster>;
+let view: SphereView;
 
 app.ports.requests.subscribe((request) => {
   switch (request.tag) {
     case "ShowMap":
-      // view = new MapView(mapNode, request.course);
       view = new SphereView(sphereNode, request.course);
       return;
 

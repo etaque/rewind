@@ -1,16 +1,20 @@
+/**
+ * Heavily inspired from https://observablehq.com/d/37bb549721dc28bf
+ **/
+
 import * as d3 from "d3";
 import * as topojson from "topojson-client";
 import { Topology } from "topojson-specification";
 
-import { Course, LngLat, GenericView } from "../models";
+import { Course, LngLat } from "../models";
 import * as wind from "../pngWind";
-import { WindParticles } from "./particles";
+import renderParticles from "./particles";
 import renderTexture from "./texture";
 import renderLand from "./land";
 
 const sphere: d3.GeoSphere = { type: "Sphere" };
 
-export class SphereView implements GenericView<wind.WindRaster> {
+export class SphereView {
   readonly course: Course;
   readonly node: HTMLElement;
 
@@ -23,10 +27,9 @@ export class SphereView implements GenericView<wind.WindRaster> {
   projection: d3.GeoProjection;
 
   landCanvas: HTMLCanvasElement;
-  windTextureCanvas: HTMLCanvasElement;
-  windParticlesCanvas: HTMLCanvasElement;
+  textureCanvas: HTMLCanvasElement;
+  particlesCanvas: HTMLCanvasElement;
   land?: d3.GeoPermissibleObjects;
-  particles: WindParticles;
 
   constructor(node: HTMLElement, course: Course) {
     this.course = course;
@@ -40,7 +43,7 @@ export class SphereView implements GenericView<wind.WindRaster> {
       .precision(0.1)
       .fitSize([this.width, this.height], sphere);
 
-    this.windTextureCanvas = d3
+    this.textureCanvas = d3
       .select(this.node)
       .append("canvas")
       .attr("class", "wind-texture fixed opacity-80")
@@ -56,15 +59,13 @@ export class SphereView implements GenericView<wind.WindRaster> {
       .attr("height", this.height)
       .node()!;
 
-    this.windParticlesCanvas = d3
+    this.particlesCanvas = d3
       .select(this.node)
       .append("canvas")
       .attr("class", "wind-particles fixed")
       .attr("width", this.width)
       .attr("height", this.height)
       .node()!;
-
-    this.particles = new WindParticles();
   }
 
   updateWindUV(raster: wind.WindRaster) {
@@ -96,18 +97,20 @@ export class SphereView implements GenericView<wind.WindRaster> {
     };
 
     if (this.speedRaster) {
-      renderTexture(scene, this.windTextureCanvas, this.speedRaster);
+      renderTexture(scene, this.textureCanvas, this.speedRaster);
     }
 
     if (this.uvRaster) {
-      this.particles.render(scene, this.windParticlesCanvas, this.uvRaster);
+      renderParticles(scene, this.particlesCanvas, this.uvRaster);
     }
 
-    if (!this.land) {
-      const res = await fetch("/sphere/land-110m.json");
-      const topo = (await res.json()) as Topology;
-      this.land = topojson.feature(topo, topo.objects.land);
-    }
+    this.land ??= await getLand();
     renderLand(scene, this.landCanvas, this.land);
   }
+}
+
+async function getLand(): Promise<d3.GeoPermissibleObjects> {
+  const res = await fetch("/sphere/land-110m.json");
+  const topo = (await res.json()) as Topology;
+  return topojson.feature(topo, topo.objects.land);
 }
