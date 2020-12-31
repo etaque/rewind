@@ -1,7 +1,7 @@
 import { startApp } from "./app";
 import { SphereView } from "./sphere";
 
-import * as wind from "./pngWind";
+import * as wind from "./wind";
 
 import "./styles.css";
 

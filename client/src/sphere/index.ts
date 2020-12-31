@@ -1,5 +1,5 @@
 /**
- * Heavily inspired from https://observablehq.com/d/37bb549721dc28bf
+ * Heavily inspired from https://observablehq.com/@oskarkocol/animated-wind-map
  **/
 
 import * as d3 from "d3";
@@ -7,7 +7,7 @@ import * as topojson from "topojson-client";
 import { Topology } from "topojson-specification";
 
 import { Course, LngLat } from "../models";
-import * as wind from "../pngWind";
+import * as wind from "../wind";
 import renderParticles from "./particles";
 import renderTexture from "./texture";
 import renderLand from "./land";

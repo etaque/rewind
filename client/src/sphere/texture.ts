@@ -1,4 +1,4 @@
-import * as wind from "../pngWind";
+import * as wind from "../wind";
 import * as shaders from "./shaders";
 import * as utils from "../utils";
 import { Scene } from "../models";

@@ -1,5 +1,5 @@
 import { LngLat, Pixel, Scene } from "../models";
-import * as wind from "../pngWind";
+import * as wind from "../wind";
 import * as utils from "../utils";
 
 const MAX_AGE = 1200; // 10..100

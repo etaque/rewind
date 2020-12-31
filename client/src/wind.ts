@@ -1,6 +1,6 @@
 import { PackerOptions, PNG } from "pngjs";
 import { LngLat, WindSpeed, Pixel } from "./models";
-import { reframeLongitude, roundHalf, roundPixel } from "./utils";
+import { reframeLongitude, roundHalf, bilinear } from "./utils";
 
 const serverUrl = process.env.REWIND_SERVER_URL!;
 
@@ -36,13 +36,13 @@ export async function load(
   return parsePNG(buf, { colorType: 2 });
 }
 
-// TODO bilinear interpolation
 export function speedAt(png: WindRaster, position: LngLat): WindSpeed {
-  const px = roundPixel(posToPixel(position));
-  const idx = pixelToIndex(px);
-  const u = colorToSpeed(png.data[idx]);
-  const v = colorToSpeed(png.data[idx + 1]);
-  return { u, v };
+  const vectorGetter = (offset: number) => (p: Pixel) =>
+    colorToSpeed(png.data[pixelToIndex(p) + offset]);
+  return {
+    u: bilinear(posToPixel(position), vectorGetter(0)),
+    v: bilinear(posToPixel(position), vectorGetter(1)),
+  };
 }
 
 export function positionOfIndex(idx: number): LngLat {

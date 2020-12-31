@@ -20,3 +20,32 @@ export const roundPixel = ({ x, y }: Pixel): Pixel => ({
 });
 
 export const roundHalf = (n: number): number => Math.round(n * 2) / 2;
+
+export const bilinear = ({ x, y }: Pixel, f: (p: Pixel) => number): number => {
+  const xf = Math.floor(x);
+  const xc = Math.ceil(x);
+
+  const yf = Math.floor(y);
+  const yc = Math.ceil(y);
+
+  const g1 = f({ x: xf, y: yf });
+  const g2 = f({ x: xc, y: yf });
+  const g3 = f({ x: xf, y: yc });
+  const g4 = f({ x: xc, y: yc });
+
+  let ia: number, ib: number;
+
+  if (xf == xc) {
+    ia = g1;
+    ib = g3;
+  } else {
+    ia = g1 * (xc - x) + g2 * (x - xf);
+    ib = g3 * (xc - x) + g4 * (x - xf);
+  }
+
+  if (yf == yc) {
+    return (ia + ib) / 2;
+  } else {
+    return ia * (yc - y) + ib * (y - yf);
+  }
+};
