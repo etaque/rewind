@@ -117,44 +117,50 @@ function moveParticle(
     p.visible = true;
   } else {
     if (p.visible) {
-      let { u, v } = wind.speedAt(raster, p.coord);
+      let windSpeed = wind.speedAt(raster, p.coord);
 
-      const lngDeltaDist = u * delta * TRAVEL_SPEED;
-      const latDeltaDist = v * delta * TRAVEL_SPEED;
+      if (windSpeed) {
+        let { u, v } = windSpeed;
 
-      const lngDeltaDeg = lngDeltaDist / utils.lngOneDegToM(p.coord.lat);
-      const latDeltaDeg = latDeltaDist / utils.latOneDegToM;
+        const lngDeltaDist = u * delta * TRAVEL_SPEED;
+        const latDeltaDist = v * delta * TRAVEL_SPEED;
 
-      p.coord = {
-        lng: utils.reframeLongitude(p.coord.lng + lngDeltaDeg),
-        lat: p.coord.lat + latDeltaDeg,
-      };
+        const lngDeltaDeg = lngDeltaDist / utils.lngOneDegToM(p.coord.lat);
+        const latDeltaDeg = latDeltaDist / utils.latOneDegToM;
 
-      if (p.coord.lat > 90 || p.coord.lat < -90) {
-        p.visible = false;
-      }
+        p.coord = {
+          lng: utils.reframeLongitude(p.coord.lng + lngDeltaDeg),
+          lat: p.coord.lat + latDeltaDeg,
+        };
 
-      const xy = scene.projection([p.coord.lng, p.coord.lat]);
-
-      if (xy) {
-        let [x, y] = xy;
-
-        const rx = x - scene.center.x;
-        const ry = y - scene.center.y;
-
-        if (
-          rx ** 2 + ry ** 2 >= scene.radius ** 2 ||
-          Math.abs(p.coord.lat) > 90 ||
-          Math.abs(p.coord.lng) > 180
-        ) {
+        if (p.coord.lat > 90 || p.coord.lat < -90) {
           p.visible = false;
         }
 
-        if (p.visible) {
-          context.moveTo(p.pix.x, p.pix.y);
-          context.lineTo(x, y);
-          p.pix = { x, y };
+        const xy = scene.projection([p.coord.lng, p.coord.lat]);
+
+        if (xy) {
+          let [x, y] = xy;
+
+          const rx = x - scene.center.x;
+          const ry = y - scene.center.y;
+
+          if (
+            rx ** 2 + ry ** 2 >= scene.radius ** 2 ||
+            Math.abs(p.coord.lat) > 90 ||
+            Math.abs(p.coord.lng) > 180
+          ) {
+            p.visible = false;
+          }
+
+          if (p.visible) {
+            context.moveTo(p.pix.x, p.pix.y);
+            context.lineTo(x, y);
+            p.pix = { x, y };
+          }
         }
+      } else {
+        p.visible = false;
       }
     }
   }

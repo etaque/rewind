@@ -1,4 +1,4 @@
-import { Pixel } from "./models";
+import { Pixel, WindSpeed } from "./models";
 
 export const toRadians = (d: number): number =>
   d < 0 ? (Math.abs(d) * Math.PI) / 180 : Math.PI + ((180 - d) * Math.PI) / 180;
@@ -18,6 +18,9 @@ export const roundPixel = ({ x, y }: Pixel): Pixel => ({
   x: Math.round(x),
   y: Math.round(y),
 });
+
+export const speed = ({ u, v }: WindSpeed): number =>
+  Math.sqrt(u ** 2 + v ** 2);
 
 export const roundHalf = (n: number): number => Math.round(n * 2) / 2;
 

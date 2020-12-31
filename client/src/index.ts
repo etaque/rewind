@@ -25,7 +25,10 @@ app.ports.requests.subscribe((request) => {
       if (currentRaster) {
         app.ports.responses.send({
           tag: "WindIs",
-          windSpeed: wind.speedAt(currentRaster, request.position),
+          windSpeed: wind.speedAt(currentRaster, request.position) ?? {
+            u: 0,
+            v: 0,
+          },
         });
       }
       return;

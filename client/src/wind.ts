@@ -36,13 +36,18 @@ export async function load(
   return parsePNG(buf, { colorType: 2 });
 }
 
-export function speedAt(png: WindRaster, position: LngLat): WindSpeed {
+export function speedAt(png: WindRaster, position: LngLat): WindSpeed | null {
   const vectorGetter = (offset: number) => (p: Pixel) =>
     colorToSpeed(png.data[pixelToIndex(p) + offset]);
-  return {
-    u: bilinear(posToPixel(position), vectorGetter(0)),
-    v: bilinear(posToPixel(position), vectorGetter(1)),
-  };
+  const pix = posToPixel(position);
+  if (pix) {
+    return {
+      u: bilinear(pix, vectorGetter(0)),
+      v: bilinear(pix, vectorGetter(1)),
+    };
+  } else {
+    return null;
+  }
 }
 
 export function positionOfIndex(idx: number): LngLat {
@@ -57,11 +62,15 @@ function pixelToIndex({ x, y }: Pixel): number {
   return (pixelWidth * y + x) * channels;
 }
 
-function posToPixel({ lng, lat }: LngLat): Pixel {
-  return {
-    x: (lng + 180) / pixelSize,
-    y: (lat + latAmplitude / 2) / pixelSize,
-  };
+function posToPixel({ lng, lat }: LngLat): Pixel | null {
+  if (lat < -latAmplitude || lat > latAmplitude || lng < -180 || lng > 180) {
+    return null;
+  } else {
+    return {
+      x: (lng + 180) / pixelSize,
+      y: (lat + latAmplitude / 2) / pixelSize,
+    };
+  }
 }
 
 function pixelToPos({ x, y }: Pixel): LngLat {

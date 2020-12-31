@@ -97,11 +97,11 @@ export class SphereView {
     };
 
     if (this.speedRaster) {
-      renderTexture(scene, this.textureCanvas, this.speedRaster);
     }
 
     if (this.uvRaster) {
       renderParticles(scene, this.particlesCanvas, this.uvRaster);
+      renderTexture(scene, this.textureCanvas, this.uvRaster);
     }
 
     this.land ??= await getLand();
