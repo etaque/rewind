@@ -4,14 +4,11 @@
 
 import * as versor from "./versor";
 import * as d3 from "d3";
-import * as topojson from "topojson-client";
-import { Topology } from "topojson-specification";
-
 import { Course, LngLat, Scene, Spherical } from "../models";
-import Wind from "../wind";
-import WindTexture from "./texture";
-import renderLand from "./land";
 import * as utils from "../utils";
+import Wind from "../wind";
+import Land from "./land";
+import WindTexture from "./texture";
 import WindParticles from "./particles";
 
 const sphere: d3.GeoSphere = { type: "Sphere" };
@@ -31,16 +28,15 @@ export class SphereView {
   projection: d3.GeoProjection;
   scene: Scene;
 
-  landCanvas: HTMLCanvasElement;
+  land: Land;
   particles: WindParticles;
   windTexture: WindTexture;
-  land?: d3.GeoPermissibleObjects;
 
   v0?: versor.Cartesian;
   q0?: versor.Versor;
   r0?: versor.Euler;
 
-  pauseAnimations = false;
+  moving = false;
 
   constructor(node: HTMLElement, course: Course) {
     this.course = course;
@@ -78,13 +74,15 @@ export class SphereView {
 
     this.windTexture = new WindTexture(textureCanvas);
 
-    this.landCanvas = d3
+    const landCanvas = d3
       .select(this.node)
       .append("canvas")
       .attr("class", "land fixed")
       .attr("width", this.width)
       .attr("height", this.height)
       .node()!;
+
+    this.land = new Land(landCanvas);
 
     const particlesCanvas = d3
       .select(this.node)
@@ -99,7 +97,7 @@ export class SphereView {
     const drag = d3
       .drag()
       .on("start", (e) => {
-        this.pauseAnimations = true;
+        this.moving = true;
         this.particles.hide();
 
         const coords = this.projection.invert
@@ -112,7 +110,7 @@ export class SphereView {
         this.q0 = versor.versor(this.r0);
       })
       .on("drag", (e) => {
-        this.pauseAnimations = true;
+        this.moving = true;
         this.particles.hide();
 
         const rotated = this.projection.rotate(this.r0!);
@@ -138,7 +136,7 @@ export class SphereView {
           this.projection.rotate()
         );
 
-        this.pauseAnimations = false;
+        this.moving = false;
         this.render();
       });
 
@@ -146,11 +144,11 @@ export class SphereView {
       .zoom()
       .scaleExtent([200, 1400])
       .on("start", () => {
-        this.pauseAnimations = true;
+        this.moving = true;
         this.particles.hide();
       })
       .on("zoom", (e: d3.D3ZoomEvent<HTMLElement, unknown>) => {
-        this.pauseAnimations = true;
+        this.moving = true;
         this.particles.hide();
 
         this.projection.scale(e.transform.k);
@@ -158,19 +156,14 @@ export class SphereView {
         this.render();
       })
       .on("end", () => {
-        this.pauseAnimations = false;
+        this.moving = false;
         this.render();
       });
 
-    const controlDiv = d3
-      .select(this.node)
-      .append("div")
-      .attr("class", "ctrl fixed")
-      .attr("width", this.width)
-      .attr("height", this.height)
-      // @ts-ignore
+    d3.select(this.node)
+      // @ts-expect-error
       .call(drag)
-      // @ts-ignore
+      // @ts-expect-error
       .call(zoom);
   }
 
@@ -184,20 +177,22 @@ export class SphereView {
     this.render();
   }
 
-  async render() {
+  render() {
+    const t = performance.now();
+    this.land.render(this.scene, this.moving).then(() => {
+      console.log("render:land", performance.now() - t);
+    });
+
     if (this.wind) {
       this.windTexture.render(this.scene, this.wind);
-      if (!this.pauseAnimations) {
+
+      const t2 = performance.now();
+      console.log("render:wind-texture", t2 - t);
+
+      if (!this.moving) {
         this.particles.show(this.scene, this.wind);
+        console.log("render:wind-particles", performance.now() - t2);
       }
     }
-
-    this.land ??= await getLand();
-    renderLand(this.scene, this.landCanvas, this.land);
   }
-}
-
-async function getLand(): Promise<d3.GeoPermissibleObjects> {
-  const topo = (await d3.json("/sphere/land-110m.json")) as Topology;
-  return topojson.feature(topo, topo.objects.land);
 }

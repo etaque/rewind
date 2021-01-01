@@ -84,8 +84,9 @@ const config = {
     }),
     new CopyWebpackPlugin({
       patterns: [
-        { from: "src/sphere/land-110m.json", to: path.resolve(dist, "sphere") }
-      ]
+        { from: "src/sphere/land-110m.json", to: path.resolve(dist, "sphere") },
+        { from: "src/sphere/land-50m.json", to: path.resolve(dist, "sphere") },
+      ],
     }),
   ],
 };
