@@ -10,7 +10,41 @@ const pixelSize = 0.5; // 1px == 0.5°
 const latAmplitude = 160;
 export const channels = 4;
 
-export type WindRaster = PNG;
+export default class Wind {
+  readonly id: string;
+  readonly raster: PNG;
+
+  constructor(reportId: string, raster: PNG) {
+    this.id = reportId;
+    this.raster = raster;
+  }
+
+  static async load(reportId: string, facet: string): Promise<Wind> {
+    const data = await fetch(
+      `${serverUrl}/wind-reports/${reportId}/${facet}.png`
+    );
+    const blob = await data.blob();
+
+    const buf = await blob.arrayBuffer();
+    const png = await parsePNG(buf, { colorType: 2 });
+
+    return new Wind(reportId, png);
+  }
+
+  speedAt(position: LngLat): WindSpeed | null {
+    const vectorGetter = (offset: number) => (p: Pixel) =>
+      colorToSpeed(this.raster.data[pixelToIndex(p) + offset]);
+    const pix = posToPixel(position);
+    if (pix) {
+      return {
+        u: bilinear(pix, vectorGetter(0)),
+        v: bilinear(pix, vectorGetter(1)),
+      };
+    } else {
+      return null;
+    }
+  }
+}
 
 const parsePNG = (buf: ArrayBuffer, options: PackerOptions): Promise<PNG> =>
   new Promise((resolve, reject) =>
@@ -22,33 +56,6 @@ const parsePNG = (buf: ArrayBuffer, options: PackerOptions): Promise<PNG> =>
       }
     })
   );
-
-export async function load(
-  reportId: string,
-  facet: string
-): Promise<WindRaster> {
-  const data = await fetch(
-    `${serverUrl}/wind-reports/${reportId}/${facet}.png`
-  );
-  const blob = await data.blob();
-
-  const buf = await blob.arrayBuffer();
-  return parsePNG(buf, { colorType: 2 });
-}
-
-export function speedAt(png: WindRaster, position: LngLat): WindSpeed | null {
-  const vectorGetter = (offset: number) => (p: Pixel) =>
-    colorToSpeed(png.data[pixelToIndex(p) + offset]);
-  const pix = posToPixel(position);
-  if (pix) {
-    return {
-      u: bilinear(pix, vectorGetter(0)),
-      v: bilinear(pix, vectorGetter(1)),
-    };
-  } else {
-    return null;
-  }
-}
 
 export function positionOfIndex(idx: number): LngLat {
   return pixelToPos(indexToPixel(idx));

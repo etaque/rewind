@@ -1,7 +1,7 @@
 import { startApp } from "./app";
 import { SphereView } from "./sphere";
 
-import * as wind from "./wind";
+import Wind from "./wind";
 
 import "./styles.css";
 
@@ -12,7 +12,7 @@ const serverUrl = process.env.REWIND_SERVER_URL!;
 
 const app = startApp(appNode, { serverUrl });
 
-let currentRaster: wind.WindRaster;
+let currentWind: Wind;
 let view: SphereView;
 
 app.ports.requests.subscribe((request) => {
@@ -22,10 +22,10 @@ app.ports.requests.subscribe((request) => {
       return;
 
     case "GetWindAt":
-      if (currentRaster) {
+      if (currentWind) {
         app.ports.responses.send({
           tag: "WindIs",
-          windSpeed: wind.speedAt(currentRaster, request.position) ?? {
+          windSpeed: currentWind.speedAt(request.position) ?? {
             u: 0,
             v: 0,
           },
@@ -40,15 +40,10 @@ app.ports.requests.subscribe((request) => {
       return;
 
     case "LoadReport":
-      wind.load(request.windReport.id, "uv").then((raster) => {
-        currentRaster = raster;
+      Wind.load(request.windReport.id, "uv").then((wind) => {
+        currentWind = wind;
         if (view) {
-          view.updateWindUV(raster);
-        }
-      });
-      wind.load(request.windReport.id, "speed").then((raster) => {
-        if (view) {
-          view.updateWindSpeed(raster);
+          view.updateWind(wind);
         }
       });
       return;

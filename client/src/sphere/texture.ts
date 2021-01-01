@@ -1,70 +1,63 @@
 import * as d3 from "d3";
-import * as wind from "../wind";
+import Wind from "../wind";
 import * as shaders from "./shaders";
 import * as utils from "../utils";
 import { Scene } from "../models";
 
-export default function render(
-  scene: Scene,
-  canvas: HTMLCanvasElement,
-  raster: wind.WindRaster
-) {
-  const gl = canvas.getContext("webgl", { alpha: true })!;
-  const { width, height, projection } = scene;
+export default class Texture {
+  readonly canvas: HTMLCanvasElement;
+  readonly gl: WebGLRenderingContext;
+  readonly init: (scene: Scene) => void;
 
-  const vertexShader = shaders.createVertexShader(gl);
-  const fragmentShader = shaders.createFragmentShader(gl);
-  shaders.createVertexBuffer(gl);
+  wind?: Wind;
+  texture?: WebGLTexture;
 
-  // const imageData = new ImageData(
-  //   new Uint8ClampedArray(raster.data),
-  //   raster.width,
-  //   raster.height
-  // );
-  const imageData = generateImage(raster);
-  let texture = shaders.createTexture(gl, imageData);
+  constructor(canvas: HTMLCanvasElement) {
+    this.canvas = canvas;
+    const gl = canvas.getContext("webgl", { alpha: true })!;
+    this.gl = gl;
 
-  const program = shaders.createProgram(gl, vertexShader, fragmentShader);
+    const vertexShader = shaders.createVertexShader(gl);
+    const fragmentShader = shaders.createFragmentShader(gl);
+    shaders.createVertexBuffer(gl);
 
-  const aVertex = gl.getAttribLocation(program, "aVertex");
-  const uTranslate = gl.getUniformLocation(program, "uTranslate");
-  const uScale = gl.getUniformLocation(program, "uScale");
-  const uRotate = gl.getUniformLocation(program, "uRotate");
+    const program = shaders.createProgram(gl, vertexShader, fragmentShader);
 
-  const init = () => {
-    gl.useProgram(program);
-    gl.enableVertexAttribArray(aVertex);
-    gl.vertexAttribPointer(aVertex, 2, gl.FLOAT, false, 0, 0);
-    gl.uniform2f(uTranslate, width / 2, height / 2);
+    const aVertex = gl.getAttribLocation(program, "aVertex");
+    const uTranslate = gl.getUniformLocation(program, "uTranslate");
+    const uScale = gl.getUniformLocation(program, "uScale");
+    const uRotate = gl.getUniformLocation(program, "uRotate");
 
-    gl.uniform1f(uScale, height / 2 - 1);
+    this.init = (scene: Scene) => {
+      const { width, height } = scene;
+      const [lambda, phi] = scene.projection
+        .rotate()
+        .map((x: number) => utils.toRadians(x));
 
-    gl.viewport(0, 0, width, height);
+      gl.useProgram(program);
+      gl.enableVertexAttribArray(aVertex);
+      gl.vertexAttribPointer(aVertex, 2, gl.FLOAT, false, 0, 0);
+      gl.uniform2f(uTranslate, width / 2, height / 2);
 
-    gl.bindTexture(gl.TEXTURE_2D, texture);
-  };
+      gl.uniform2fv(uRotate, [lambda, phi]);
+      gl.uniform1f(uScale, scene.radius);
 
-  const [lambda, phi] = projection
-    .rotate()
-    .map((x: number) => utils.toRadians(x));
+      gl.viewport(0, 0, width, height);
+    };
+  }
 
-  redrawWindSpeed(gl, init, uRotate, [lambda, phi]);
+  render(scene: Scene, wind: Wind) {
+    if (!this.texture || wind.id != this.wind?.id) {
+      const imageData = generateImage(wind);
+      this.texture = shaders.createTexture(this.gl, imageData);
+    }
+    this.init(scene);
+    this.gl.bindTexture(this.gl.TEXTURE_2D, this.texture);
+    this.gl.drawArrays(this.gl.TRIANGLE_FAN, 0, 4);
+  }
 }
 
-function redrawWindSpeed(
-  gl: WebGLRenderingContext,
-  init: () => void,
-  uRotate: WebGLUniformLocation | null,
-  rotateAngle: [number, number]
-) {
-  const now = performance.now();
-  init();
-  gl.uniform2fv(uRotate, rotateAngle);
-  gl.drawArrays(gl.TRIANGLE_FAN, 0, 4);
-  console.log("redraw", Math.round((performance.now() - now) * 1000) + "ms");
-}
-
-function generateImage(raster: wind.WindRaster): ImageData {
+function generateImage(wind: Wind): ImageData {
   const width = 4096 / 4;
   const height = 2048 / 4;
   const arraySize = 4 * width * height;
@@ -73,15 +66,16 @@ function generateImage(raster: wind.WindRaster): ImageData {
     .precision(0.1)
     .fitSize([width, height], d3.geoGraticule10());
 
+  if (!proj.invert) throw new Error("Invalid projection");
+
   let data = new Uint8ClampedArray(arraySize);
 
   let x = 0;
   let y = 0;
 
   for (let i = 0; i < arraySize; i = i + 4) {
-    // @ts-ignore
     const [lng, lat] = proj.invert([x, y])!;
-    const windSpeed = wind.speedAt(raster, { lng, lat });
+    const windSpeed = wind.speedAt({ lng, lat });
     if (windSpeed && !isNaN(windSpeed.u) && !isNaN(windSpeed.v)) {
       const speed = utils.speed(windSpeed);
       const color = windColorScale(speed).rgb();

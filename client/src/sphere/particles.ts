@@ -1,5 +1,5 @@
 import { LngLat, Pixel, Scene } from "../models";
-import * as wind from "../wind";
+import Wind from "../wind";
 import * as utils from "../utils";
 
 const MAX_AGE = 1200; // 10..100
@@ -17,47 +17,64 @@ type Particle = {
   visible: boolean;
 };
 
-export default function render(
-  scene: Scene,
-  canvas: HTMLCanvasElement,
-  raster: wind.WindRaster
-) {
-  const context = canvas.getContext("2d")!;
-  let particles = generateParticles(scene);
+export default class Particles {
+  canvas: HTMLCanvasElement;
+  particles: Particle[];
 
-  let previous: number;
+  rafId?: number;
+  paused = false;
 
-  const tick = (timestamp: number) => {
-    if (previous) {
-      const delta = timestamp - previous;
+  constructor(scene: Scene, canvas: HTMLCanvasElement) {
+    this.canvas = canvas;
+    this.particles = generateParticles(scene);
+  }
 
-      if (delta >= 1000 / FPS) {
-        context.beginPath();
-        context.strokeStyle = "rgba(210,210,210,0.7)";
+  show(scene: Scene, wind: Wind) {
+    this.paused = false;
 
-        particles.forEach((p) =>
-          moveParticle(p, delta, context, scene, raster)
-        );
+    const context = this.canvas.getContext("2d")!;
+    let previous: number;
 
-        context.stroke();
-        context.globalAlpha = ALPHA_DECAY;
-        context.globalCompositeOperation = "copy";
-        context.drawImage(context.canvas, 0, 0);
-        context.globalAlpha = 1.0;
-        context.globalCompositeOperation = "source-over";
+    const tick = (timestamp: number) => {
+      if (this.paused) return;
 
+      if (previous) {
+        const delta = timestamp - previous;
+
+        if (delta >= 1000 / FPS) {
+          context.beginPath();
+          context.strokeStyle = "rgba(210,210,210,0.7)";
+
+          this.particles.forEach((p) =>
+            moveParticle(p, delta, context, scene, wind)
+          );
+
+          context.stroke();
+          context.globalAlpha = ALPHA_DECAY;
+          context.globalCompositeOperation = "copy";
+          context.drawImage(context.canvas, 0, 0);
+          context.globalAlpha = 1.0;
+          context.globalCompositeOperation = "source-over";
+
+          previous = timestamp;
+        }
+      } else {
         previous = timestamp;
       }
-    } else {
-      previous = timestamp;
-    }
-    requestAnimationFrame(tick);
-  };
-  requestAnimationFrame(tick);
+      requestAnimationFrame(tick);
+    };
+    this.rafId = requestAnimationFrame(tick);
+  }
+
+  hide() {
+    this.paused = true;
+    if (this.rafId) cancelAnimationFrame(this.rafId);
+    const context = this.canvas.getContext("2d")!;
+    context.clearRect(0, 0, this.canvas.width, this.canvas.height);
+  }
 }
 
 function generateParticles(scene: Scene) {
-  // Create n particles on an almost uniform grid
   const radius = scene.radius - 1;
   const { width, height } = scene;
   let particles = [];
@@ -79,8 +96,9 @@ function generateParticles(scene: Scene) {
       };
     }
 
-    // @ts-ignore
-    pos = scene.projection.invert([pix0.x, pix0.y]);
+    pos = scene.projection.invert
+      ? scene.projection.invert([pix0.x, pix0.y])
+      : null;
 
     if (pos) {
       coord0 = { lng: pos[0], lat: pos[1] };
@@ -107,7 +125,7 @@ function moveParticle(
   delta: number,
   context: CanvasRenderingContext2D,
   scene: Scene,
-  raster: wind.WindRaster
+  wind: Wind
 ) {
   p.age += delta;
   if (p.age > MAX_AGE) {
@@ -117,7 +135,7 @@ function moveParticle(
     p.visible = true;
   } else {
     if (p.visible) {
-      let windSpeed = wind.speedAt(raster, p.coord);
+      let windSpeed = wind.speedAt(p.coord);
 
       if (windSpeed) {
         let { u, v } = windSpeed;

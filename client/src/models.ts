@@ -45,6 +45,9 @@ export type Course = {
 
 export type Pixel = { x: number; y: number };
 
+/* lambda, phi, gamma */
+export type Spherical = [number, number, number];
+
 export type Scene = {
   projection: d3.GeoProjection;
   width: number;
