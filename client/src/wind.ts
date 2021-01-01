@@ -1,6 +1,6 @@
 import { PackerOptions, PNG } from "pngjs";
 import { LngLat, WindSpeed, Pixel } from "./models";
-import { bilinear } from "./utils";
+import * as utils from "./utils";
 
 const serverUrl = process.env.REWIND_SERVER_URL!;
 
@@ -37,8 +37,8 @@ export default class Wind {
       colorToSpeed(this.raster.data[pixelToIndex(p) + offset]);
     if (floatingPix) {
       return {
-        u: bilinear(floatingPix, vectorGetter(0)),
-        v: bilinear(floatingPix, vectorGetter(1)),
+        u: utils.bilinear(floatingPix, vectorGetter(0)),
+        v: utils.bilinear(floatingPix, vectorGetter(1)),
       };
     } else {
       return null;
@@ -66,7 +66,7 @@ function posToPixel({ lng, lat }: LngLat): Pixel | null {
     return null;
   } else {
     return {
-      x: (lng + 180) / pixelSize,
+      x: utils.toGribLongitude(lng) / pixelSize,
       y: (lat + latAmplitude / 2) / pixelSize,
     };
   }
