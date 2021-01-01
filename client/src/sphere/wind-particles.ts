@@ -1,4 +1,5 @@
-import { LngLat, Pixel, Scene } from "../models";
+import { LngLat, Pixel } from "../models";
+import { Scene } from "./scene";
 import Wind from "../wind";
 import * as utils from "../utils";
 
@@ -19,18 +20,18 @@ type Particle = {
 
 export default class Particles {
   canvas: HTMLCanvasElement;
-  particles: Particle[];
+  particles: Particle[] = [];
 
   rafId?: number;
   paused = false;
 
   constructor(scene: Scene, canvas: HTMLCanvasElement) {
     this.canvas = canvas;
-    this.particles = generateParticles(scene);
   }
 
   show(scene: Scene, wind: Wind) {
     this.paused = false;
+    this.particles = generateParticles(scene);
 
     const context = this.canvas.getContext("2d")!;
     let previous: number;
@@ -75,7 +76,7 @@ export default class Particles {
 }
 
 function generateParticles(scene: Scene) {
-  const radius = scene.radius - 1;
+  const radius = scene.sphereRadius - 1;
   const { width, height } = scene;
   let particles = [];
   let pix0: Pixel, coord0: LngLat, pos: [number, number] | null;
@@ -160,11 +161,11 @@ function moveParticle(
         if (xy) {
           let [x, y] = xy;
 
-          const rx = x - scene.center.x;
-          const ry = y - scene.center.y;
+          const rx = x - scene.sphereCenter.x;
+          const ry = y - scene.sphereCenter.y;
 
           if (
-            rx ** 2 + ry ** 2 >= scene.radius ** 2 ||
+            rx ** 2 + ry ** 2 >= scene.sphereRadius ** 2 ||
             Math.abs(p.coord.lat) > 90 ||
             Math.abs(p.coord.lng) > 180
           ) {

@@ -4,14 +4,13 @@
 
 import * as versor from "./versor";
 import * as d3 from "d3";
-import { Course, LngLat, Scene, Spherical } from "../models";
+import { Course, LngLat, Spherical } from "../models";
+import { Scene, sphere, sphereCenter, sphereRadius } from "./scene";
 import * as utils from "../utils";
 import Wind from "../wind";
 import Land from "./land";
 import WindTexture from "./wind-texture";
 import WindParticles from "./wind-particles";
-
-const sphere: d3.GeoSphere = { type: "Sphere" };
 
 export class SphereView {
   readonly course: Course;
@@ -26,7 +25,6 @@ export class SphereView {
   position: LngLat;
 
   projection: d3.GeoProjection;
-  scene: Scene;
 
   land: Land;
   particles: WindParticles;
@@ -52,18 +50,6 @@ export class SphereView {
 
     this.currentRotation = utils.sphericalToRadians(this.projection.rotate());
 
-    const pathGen = d3.geoPath(this.projection);
-    const [[x0], [x1]] = pathGen.bounds(sphere);
-    const [cx, cy] = pathGen.centroid(sphere);
-
-    this.scene = {
-      projection: this.projection,
-      width: this.width,
-      height: this.height,
-      radius: (x1 - x0) / 2,
-      center: { x: cx, y: cy },
-    };
-
     const textureCanvas = d3
       .select(this.node)
       .append("canvas")
@@ -73,6 +59,16 @@ export class SphereView {
       .node()!;
 
     this.windTexture = new WindTexture(textureCanvas);
+
+    const particlesCanvas = d3
+      .select(this.node)
+      .append("canvas")
+      .attr("class", "wind-particles fixed")
+      .attr("width", this.width)
+      .attr("height", this.height)
+      .node()!;
+
+    this.particles = new WindParticles(this.scene(), particlesCanvas);
 
     const landCanvas = d3
       .select(this.node)
@@ -84,19 +80,10 @@ export class SphereView {
 
     this.land = new Land(landCanvas);
 
-    const particlesCanvas = d3
-      .select(this.node)
-      .append("canvas")
-      .attr("class", "wind-particles fixed")
-      .attr("width", this.width)
-      .attr("height", this.height)
-      .node()!;
-
-    this.particles = new WindParticles(this.scene, particlesCanvas);
-
     const drag = d3
       .drag()
       .on("start", (e) => {
+        console.debug("drag:start");
         this.moving = true;
         this.particles.hide();
 
@@ -108,8 +95,11 @@ export class SphereView {
         this.v0 = versor.cartesian(coords);
         this.r0 = this.projection.rotate();
         this.q0 = versor.versor(this.r0);
+
+        this.render();
       })
       .on("drag", (e) => {
+        console.debug("drag");
         this.moving = true;
         this.particles.hide();
 
@@ -132,6 +122,7 @@ export class SphereView {
         this.render();
       })
       .on("end", () => {
+        console.debug("drag:end");
         this.currentRotation = utils.sphericalToRadians(
           this.projection.rotate()
         );
@@ -144,18 +135,22 @@ export class SphereView {
       .zoom()
       .scaleExtent([200, 1400])
       .on("start", () => {
+        console.debug("zoom:start");
         this.moving = true;
         this.particles.hide();
       })
       .on("zoom", (e: d3.D3ZoomEvent<HTMLElement, unknown>) => {
+        console.debug("zoom");
         this.moving = true;
         this.particles.hide();
 
+        console.debug("e.transform.k", e.transform.k);
         this.projection.scale(e.transform.k);
 
         this.render();
       })
       .on("end", () => {
+        console.debug("zoom:end");
         this.moving = false;
         this.render();
       });
@@ -165,6 +160,16 @@ export class SphereView {
       .call(drag)
       // @ts-expect-error
       .call(zoom);
+  }
+
+  scene(): Scene {
+    return {
+      projection: this.projection,
+      width: this.width,
+      height: this.height,
+      sphereRadius: sphereRadius(this.projection),
+      sphereCenter: sphereCenter(this.projection),
+    };
   }
 
   updateWind(wind: Wind) {
@@ -179,18 +184,18 @@ export class SphereView {
 
   render() {
     const t = performance.now();
-    this.land.render(this.scene, this.moving).then(() => {
+    this.land.render(this.scene(), this.moving).then(() => {
       console.log("render:land", performance.now() - t);
     });
 
     if (this.wind) {
-      this.windTexture.render(this.scene, this.wind);
+      this.windTexture.render(this.scene(), this.wind);
 
       const t2 = performance.now();
       console.log("render:wind-texture", t2 - t);
 
       if (!this.moving) {
-        this.particles.show(this.scene, this.wind);
+        this.particles.show(this.scene(), this.wind);
         console.log("render:wind-particles", performance.now() - t2);
       }
     }

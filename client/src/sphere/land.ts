@@ -1,10 +1,10 @@
 import * as topojson from "topojson-client";
 import * as d3 from "d3";
 import { Topology } from "topojson-specification";
-import { Scene } from "../models";
+import { Scene } from "./scene";
 
 const LOW_RES_PATH = "/sphere/land-110m.json";
-const HIGH_RES_PATH = "/sphere/land-50.json";
+const HIGH_RES_PATH = "/sphere/land-50m.json";
 
 export default class Land {
   canvas: HTMLCanvasElement;
