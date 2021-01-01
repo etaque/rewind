@@ -8,8 +8,8 @@ import { Course, LngLat, Scene, Spherical } from "../models";
 import * as utils from "../utils";
 import Wind from "../wind";
 import Land from "./land";
-import WindTexture from "./texture";
-import WindParticles from "./particles";
+import WindTexture from "./wind-texture";
+import WindParticles from "./wind-particles";
 
 const sphere: d3.GeoSphere = { type: "Sphere" };
 

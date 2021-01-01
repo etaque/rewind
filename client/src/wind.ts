@@ -1,6 +1,6 @@
 import { PackerOptions, PNG } from "pngjs";
 import { LngLat, WindSpeed, Pixel } from "./models";
-import { reframeLongitude, roundHalf, bilinear } from "./utils";
+import { bilinear } from "./utils";
 
 const serverUrl = process.env.REWIND_SERVER_URL!;
 
@@ -32,13 +32,13 @@ export default class Wind {
   }
 
   speedAt(position: LngLat): WindSpeed | null {
+    const floatingPix = posToPixel(position);
     const vectorGetter = (offset: number) => (p: Pixel) =>
       colorToSpeed(this.raster.data[pixelToIndex(p) + offset]);
-    const pix = posToPixel(position);
-    if (pix) {
+    if (floatingPix) {
       return {
-        u: bilinear(pix, vectorGetter(0)),
-        v: bilinear(pix, vectorGetter(1)),
+        u: bilinear(floatingPix, vectorGetter(0)),
+        v: bilinear(floatingPix, vectorGetter(1)),
       };
     } else {
       return null;
@@ -57,14 +57,6 @@ const parsePNG = (buf: ArrayBuffer, options: PackerOptions): Promise<PNG> =>
     })
   );
 
-export function positionOfIndex(idx: number): LngLat {
-  return pixelToPos(indexToPixel(idx));
-}
-
-function indexToPixel(idx: number): Pixel {
-  return { x: (idx / channels) % pixelWidth, y: idx / channels / pixelWidth };
-}
-
 function pixelToIndex({ x, y }: Pixel): number {
   return (pixelWidth * y + x) * channels;
 }
@@ -80,16 +72,7 @@ function posToPixel({ lng, lat }: LngLat): Pixel | null {
   }
 }
 
-function pixelToPos({ x, y }: Pixel): LngLat {
-  const lng = roundHalf(x * pixelSize - 180);
-  const lat = roundHalf(y * pixelSize - latAmplitude / 2);
-  return {
-    lng: reframeLongitude(lng),
-    lat,
-  };
-}
-
 // From [0..255] to +/-30 in m/s, inverse of ST_Reclass in server.
-export function colorToSpeed(n: number): number {
+function colorToSpeed(n: number): number {
   return (n * windScale * 2) / 255 - windScale;
 }
