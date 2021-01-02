@@ -25,7 +25,7 @@ export default class Particles {
   rafId?: number;
   paused = false;
 
-  constructor(scene: Scene, canvas: HTMLCanvasElement) {
+  constructor(canvas: HTMLCanvasElement) {
     this.canvas = canvas;
   }
 

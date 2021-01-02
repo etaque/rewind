@@ -1,4 +1,4 @@
-import { Pixel, Spherical, WindSpeed } from "./models";
+import { Pixel, Spherical, WindSpeed, LngLat } from "./models";
 
 export const toRadians = (d: number): number =>
   d < 0 ? (Math.abs(d) * Math.PI) / 180 : Math.PI + ((180 - d) * Math.PI) / 180;
@@ -11,8 +11,6 @@ export const sphericalToRadians = ([l, p, g]: Spherical): Spherical => [
 
 export const reframeLongitude = (lng: number): number =>
   lng > 180 ? lng - 360 : lng < -180 ? lng + 360 : lng;
-
-export const toGribLongitude = (lng: number): number => (lng + 360) % 360;
 
 export const clamp = (x: number, low: number, high: number): number =>
   Math.max(low, Math.min(x, high));

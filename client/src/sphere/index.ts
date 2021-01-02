@@ -5,8 +5,7 @@
 import * as versor from "./versor";
 import * as d3 from "d3";
 import { Course, LngLat, Spherical } from "../models";
-import { Scene, sphere, sphereCenter, sphereRadius } from "./scene";
-import * as utils from "../utils";
+import { sphere, sphereCenter, sphereRadius } from "./scene";
 import Wind from "../wind";
 import Land from "./land";
 import WindTexture from "./wind-texture";
@@ -18,8 +17,6 @@ export class SphereView {
 
   width: number;
   height: number;
-
-  currentRotation: Spherical;
 
   wind?: Wind;
   position: LngLat;
@@ -48,8 +45,6 @@ export class SphereView {
       .precision(0.1)
       .fitSize([this.width, this.height], sphere);
 
-    this.currentRotation = utils.sphericalToRadians(this.projection.rotate());
-
     const textureCanvas = d3
       .select(this.node)
       .append("canvas")
@@ -68,7 +63,7 @@ export class SphereView {
       .attr("height", this.height)
       .node()!;
 
-    this.particles = new WindParticles(this.scene(), particlesCanvas);
+    this.particles = new WindParticles(particlesCanvas);
 
     const landCanvas = d3
       .select(this.node)
@@ -80,15 +75,17 @@ export class SphereView {
 
     this.land = new Land(landCanvas);
 
-    const drag = d3
-      .drag()
-      .on("start", (e) => {
-        console.debug("drag:start");
+    const initialScale = this.projection.scale();
+
+    const zoom = d3
+      .zoom()
+      .scaleExtent([0.8, 8])
+      .on("start", (e: d3.D3ZoomEvent<HTMLElement, unknown>) => {
         this.moving = true;
         this.particles.hide();
 
         const coords = this.projection.invert
-          ? this.projection.invert([e.x, e.y])
+          ? this.projection.invert(d3.pointer(e))
           : null;
         if (!coords) return;
 
@@ -98,78 +95,34 @@ export class SphereView {
 
         this.render();
       })
-      .on("drag", (e) => {
-        console.debug("drag");
+      .on("zoom", (e: d3.D3ZoomEvent<HTMLElement, unknown>) => {
         this.moving = true;
         this.particles.hide();
 
+        this.projection.scale(initialScale * e.transform.k);
+
         const rotated = this.projection.rotate(this.r0!);
-        const coords = rotated.invert ? rotated.invert([e.x, e.y]) : null;
+        const coords = rotated.invert ? rotated.invert(d3.pointer(e)) : null;
         if (!coords) return;
 
         const v1 = versor.cartesian(coords);
         let q1 = versor.multiply(this.q0!, versor.delta(this.v0!, v1));
 
         const [lambda, phi] = versor.rotation(q1);
+        // North always up: ignore gamma
         const shiftVector: Spherical = [lambda, phi, 0];
 
         this.projection.rotate(shiftVector);
 
-        this.currentRotation = utils.sphericalToRadians(
-          this.projection.rotate()
-        );
-
         this.render();
       })
       .on("end", () => {
-        console.debug("drag:end");
-        this.currentRotation = utils.sphericalToRadians(
-          this.projection.rotate()
-        );
-
         this.moving = false;
         this.render();
       });
 
-    const zoom = d3
-      .zoom()
-      .scaleExtent([200, 1400])
-      .on("start", () => {
-        console.debug("zoom:start");
-        this.moving = true;
-        this.particles.hide();
-      })
-      .on("zoom", (e: d3.D3ZoomEvent<HTMLElement, unknown>) => {
-        console.debug("zoom");
-        this.moving = true;
-        this.particles.hide();
-
-        console.debug("e.transform.k", e.transform.k);
-        this.projection.scale(e.transform.k);
-
-        this.render();
-      })
-      .on("end", () => {
-        console.debug("zoom:end");
-        this.moving = false;
-        this.render();
-      });
-
-    d3.select(this.node)
-      // @ts-expect-error
-      .call(drag)
-      // @ts-expect-error
-      .call(zoom);
-  }
-
-  scene(): Scene {
-    return {
-      projection: this.projection,
-      width: this.width,
-      height: this.height,
-      sphereRadius: sphereRadius(this.projection),
-      sphereCenter: sphereCenter(this.projection),
-    };
+    // @ts-ignore
+    d3.select(this.node).call(zoom);
   }
 
   updateWind(wind: Wind) {
@@ -184,19 +137,28 @@ export class SphereView {
 
   render() {
     const t = performance.now();
-    this.land.render(this.scene(), this.moving).then(() => {
-      console.log("render:land", performance.now() - t);
+
+    const scene = {
+      projection: this.projection,
+      width: this.width,
+      height: this.height,
+      sphereRadius: sphereRadius(this.projection),
+      sphereCenter: sphereCenter(this.projection),
+    };
+
+    this.land.render(scene, this.moving).then(() => {
+      console.debug("render:land", performance.now() - t);
     });
 
     if (this.wind) {
-      this.windTexture.render(this.scene(), this.wind);
+      this.windTexture.render(scene, this.wind);
 
       const t2 = performance.now();
-      console.log("render:wind-texture", t2 - t);
+      console.debug("render:wind-texture", t2 - t);
 
       if (!this.moving) {
-        this.particles.show(this.scene(), this.wind);
-        console.log("render:wind-particles", performance.now() - t2);
+        this.particles.show(scene, this.wind);
+        console.debug("render:wind-particles", performance.now() - t2);
       }
     }
   }
