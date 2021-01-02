@@ -26,9 +26,11 @@ export default class Land {
     context.clearRect(0, 0, scene.width, scene.height);
 
     context.strokeStyle = "rgba(255, 255, 255, 0.8)";
+    context.fillStyle = "rgba(0, 0, 0, 0.1)";
     context.beginPath();
     path(land);
     context.stroke();
+    context.fill();
 
     context.strokeStyle = "rgba(221, 221, 221, 0.2)";
     context.beginPath();

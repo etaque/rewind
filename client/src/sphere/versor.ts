@@ -37,7 +37,7 @@ export const versor = function (e: Euler): Versor {
 };
 
 // Returns Cartesian coordinates [x, y, z] given spherical coordinates [λ, φ].
-export const cartesian = function (e: [number, number]): Cartesian {
+export const cartesian = function (e: Spherical): Cartesian {
   var l = e[0] * radians,
     p = e[1] * radians,
     cp = cos(p);

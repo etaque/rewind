@@ -43,7 +43,9 @@ export class SphereView {
     this.projection = d3
       .geoOrthographic()
       .precision(0.1)
-      .fitSize([this.width, this.height], sphere);
+      .rotate([-course.start.lng, -course.start.lat])
+      .fitSize([this.width, this.height], sphere)
+      .scale(500);
 
     const textureCanvas = d3
       .select(this.node)
