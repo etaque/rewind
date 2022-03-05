@@ -1,5 +1,7 @@
 # Rewind
 
+Game exploration: offshore sail races, against real wind conditions, but accelerated: riding from depression to depression, around the world, in a few minutes. 
+
 ## Development
 
 All dependencies are declared in `shell.nix`. Either enter `nix-shell` ([or use direnv](https://github.com/nix-community/nix-direnv) or install them by hand.
