@@ -1,41 +1,40 @@
-import { PackerOptions, PNG } from "pngjs";
 import { LngLat, WindSpeed, Pixel } from "./models";
 import * as utils from "./utils";
 
-const serverUrl = process.env.REWIND_SERVER_URL!;
+const serverUrl = import.meta.env.REWIND_SERVER_URL;
 
 const pixelWidth = 720;
 const windScale = 30;
 const pixelSize = 0.5; // 1px == 0.5°
 const latAmplitude = 180;
-export const channels = 4;
+const channels = 4; // RGBA
+
+type RasterData = {
+  data: Uint8ClampedArray;
+  width: number;
+  height: number;
+};
 
 export default class Wind {
   readonly id: string;
-  readonly raster: PNG;
+  readonly raster: RasterData;
 
-  constructor(reportId: string, raster: PNG) {
+  constructor(reportId: string, raster: RasterData) {
     this.id = reportId;
     this.raster = raster;
   }
 
   static async load(reportId: string, facet: string): Promise<Wind> {
-    const data = await fetch(
-      `${serverUrl}/wind-reports/${reportId}/${facet}.png`
-    );
-    const blob = await data.blob();
-
-    const buf = await blob.arrayBuffer();
-    const png = await parsePNG(buf, { colorType: 2 });
-
-    return new Wind(reportId, png);
+    const url = `${serverUrl}/wind-reports/${reportId}/${facet}.png`;
+    const raster = await loadImageData(url);
+    return new Wind(reportId, raster);
   }
 
   speedAt(position: LngLat): WindSpeed | null {
     const floatingPix = posToPixel(position);
     const vectorGetter = (offset: number) => (p: Pixel) =>
       colorToSpeed(
-        this.raster.data[pixelToIndex(reframePixel(p, pixelWidth)) + offset]
+        this.raster.data[pixelToIndex(reframePixel(p, pixelWidth)) + offset],
       );
     if (floatingPix) {
       return {
@@ -48,16 +47,27 @@ export default class Wind {
   }
 }
 
-const parsePNG = (buf: ArrayBuffer, options: PackerOptions): Promise<PNG> =>
-  new Promise((resolve, reject) =>
-    new PNG(options).parse(Buffer.from(buf), (error, data) => {
-      if (error) {
-        reject(error);
-      } else {
-        resolve(data);
-      }
-    })
-  );
+async function loadImageData(url: string): Promise<RasterData> {
+  return new Promise((resolve, reject) => {
+    const img = new Image();
+    img.crossOrigin = "anonymous";
+    img.onload = () => {
+      const canvas = document.createElement("canvas");
+      canvas.width = img.width;
+      canvas.height = img.height;
+      const ctx = canvas.getContext("2d")!;
+      ctx.drawImage(img, 0, 0);
+      const imageData = ctx.getImageData(0, 0, img.width, img.height);
+      resolve({
+        data: imageData.data,
+        width: img.width,
+        height: img.height,
+      });
+    };
+    img.onerror = () => reject(new Error(`Failed to load image: ${url}`));
+    img.src = url;
+  });
+}
 
 const pixelToIndex = ({ x, y }: Pixel): number =>
   (pixelWidth * y + x) * channels;
