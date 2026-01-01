@@ -1,19 +1,37 @@
-version: '3.1'
-
 services:
-  postgis:
-    image: kartoza/postgis:13.0
-    ports: 
+  db:
+    image: postgis/postgis:16-3.4
+    ports:
       - "25432:5432"
-    restart: always
+    restart: unless-stopped
     volumes:
       - ./config/setup-db.sql:/docker-entrypoint-initdb.d/setup-db.sql
-      - db-data:/var/lib/data
+      - db-data:/var/lib/postgresql/data
     environment:
-      POSTGRES_PASS: rewind
-      POSTGRES_DBNAME: rewind
+      POSTGRES_PASSWORD: rewind
+      POSTGRES_DB: rewind
       POSTGRES_USER: rewind
-      POSTGRES_MULTIPLE_EXTENSIONS: postgis,hstore,postgis_topology,postgis_raster,pgrouting
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U rewind -d rewind"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  server:
+    build:
+      context: ./server
+      dockerfile: Dockerfile
+    ports:
+      - "3001:3001"
+    restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      REWIND_DATABASE_URL: postgresql://rewind:rewind@db:5432/rewind
+      REWIND_SERVER_ADDRESS: 0.0.0.0:3001
+      REWIND_CLIENT_URL: http://localhost:3000
+      RUST_LOG: info
+
 volumes:
   db-data:
-    name: "postgis-data"

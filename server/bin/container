@@ -1,41 +1,69 @@
 #!/usr/bin/env bash
 set -e
 
-cd $(dirname "$0")/..
+cd $(dirname "$0")/../..
 
-if [ "$1" == "init" ]; then
-  echo "Initializing container..."
+case "$1" in
+  up)
+    echo "Starting containers..."
+    docker compose up -d
+    echo "Waiting for database to be ready..."
+    docker compose exec db pg_isready -U rewind -d rewind
+    echo "Running migrations..."
+    docker compose exec server rewind db migrate
+    echo "Containers are ready."
+    ;;
 
-  sudo nixos-container create rewind --config-file container.nix || true
-  sudo nixos-container start rewind
-  sudo nixos-container run rewind -- \
-    su -c "psql -d rewind -c '\
-      create extension if not exists postgis;\
-      create extension if not exists hstore;\
-      create extension if not exists postgis_raster;\
-      '" postgres
+  down)
+    echo "Stopping containers..."
+    docker compose down
+    ;;
 
-elif [ "$1" == "ensure" ]; then
-  if [ $(nixos-container status rewind || true) != "up" ]; then
-    bin/container init
-  else
-    echo "Container is up."
-  fi
+  logs)
+    docker compose logs -f "${@:2}"
+    ;;
 
-elif [ "$1" == "update" ]; then
-  echo "Updating container..."
+  migrate)
+    echo "Running migrations..."
+    docker compose exec server rewind db migrate
+    ;;
 
-  sudo nixos-container update rewind --config-file container.nix
-  sudo nixos-container restart rewind
+  reset)
+    echo "Resetting database..."
+    docker compose exec server rewind db reset
+    ;;
 
-elif [ "$1" == "destroy" ]; then
-  echo "Destroying container..."
+  build)
+    echo "Building server image..."
+    docker compose build server
+    ;;
 
-  sudo nixos-container stop rewind
-  sudo nixos-container destroy rewind
+  shell)
+    docker compose exec server /bin/bash
+    ;;
 
-else
-  echo "Usage: $0 init|ensure|update|destroy"
-  exit 1
+  psql)
+    docker compose exec db psql -U rewind -d rewind
+    ;;
 
-fi
+  destroy)
+    echo "Destroying containers and volumes..."
+    docker compose down -v
+    ;;
+
+  *)
+    echo "Usage: $0 {up|down|logs|migrate|reset|build|shell|psql|destroy}"
+    echo ""
+    echo "Commands:"
+    echo "  up       Start all containers and run migrations"
+    echo "  down     Stop all containers"
+    echo "  logs     Follow container logs (optionally specify service)"
+    echo "  migrate  Run database migrations"
+    echo "  reset    Reset database tables"
+    echo "  build    Rebuild server image"
+    echo "  shell    Open shell in server container"
+    echo "  psql     Open PostgreSQL shell"
+    echo "  destroy  Stop containers and remove volumes"
+    exit 1
+    ;;
+esac
