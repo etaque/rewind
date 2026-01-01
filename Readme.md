@@ -6,26 +6,31 @@ Game exploration: offshore sail races, against real wind conditions, but acceler
 
 Create a `.env` at root from `sample.env`.
 
-### Docker (recommended)
+### Prerequisites
 
-Start everything with Docker Compose:
+Install cargo-watch for auto-reload:
+
+```bash
+cargo install cargo-watch
+```
+
+### Start Services
+
+Start database and tile server:
 
 ```bash
 ./server/bin/container up
 ```
 
-This starts PostgreSQL/PostGIS and the Rust server, and runs database migrations.
-
-Other commands:
+Run migrations and start the server:
 
 ```bash
-./server/bin/container logs     # Follow logs
-./server/bin/container psql     # PostgreSQL shell
-./server/bin/container down     # Stop containers
-./server/bin/container destroy  # Remove containers and volumes
+cd server
+cargo run -- db migrate
+./bin/dev-server
 ```
 
-### Client
+Start the client:
 
 ```bash
 cd client
@@ -33,44 +38,21 @@ npm install
 npm run dev
 ```
 
-The client runs on http://localhost:3000.
+**Ports:**
+- Client: http://localhost:3000
+- Server: http://localhost:3001
+- Martin (tile server): http://localhost:3002
+- PostgreSQL: localhost:25432
 
-### Manual Setup
-
-If you prefer running services manually:
-
-#### Database
-
-Requirements:
-- PostgreSQL 16+ with PostGIS 3.4+
-- Extensions: `postgis`, `hstore`, `postgis_raster`
-- GDAL drivers enabled
-
-Start database only:
+### Container Commands
 
 ```bash
-docker compose up -d db
-```
-
-Run migrations:
-
-```bash
-cd server
-cargo run -- db migrate
-```
-
-#### Server
-
-```bash
-cd server
-cargo run -- http
-```
-
-Or with auto-reload:
-
-```bash
-cd server
-./bin/dev-server
+./server/bin/container up       # Start db and martin
+./server/bin/container down     # Stop containers
+./server/bin/container logs     # Follow logs
+./server/bin/container psql     # PostgreSQL shell
+./server/bin/container migrate  # Run migrations
+./server/bin/container destroy  # Remove containers and volumes
 ```
 
 ## Tech Stack
@@ -86,6 +68,7 @@ cd server
 - Rust with Tokio async runtime
 - Warp web framework
 - PostgreSQL + PostGIS for wind raster data
+- Martin for vector tiles
 
 ## Scripts
 

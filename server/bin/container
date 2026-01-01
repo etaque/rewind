@@ -6,12 +6,14 @@ cd $(dirname "$0")/../..
 case "$1" in
   up)
     echo "Starting containers..."
-    docker compose up -d
+    docker compose up -d db martin
     echo "Waiting for database to be ready..."
+    sleep 2
     docker compose exec db pg_isready -U rewind -d rewind
-    echo "Running migrations..."
-    docker compose exec server rewind db migrate
     echo "Containers are ready."
+    echo ""
+    echo "Run migrations with: cd server && cargo run -- db migrate"
+    echo "Start server with:   cd server && ./bin/dev-server"
     ;;
 
   down)
@@ -25,21 +27,12 @@ case "$1" in
 
   migrate)
     echo "Running migrations..."
-    docker compose exec server rewind db migrate
+    cd server && cargo run -- db migrate
     ;;
 
   reset)
     echo "Resetting database..."
-    docker compose exec server rewind db reset
-    ;;
-
-  build)
-    echo "Building server image..."
-    docker compose build server
-    ;;
-
-  shell)
-    docker compose exec server /bin/bash
+    cd server && cargo run -- db reset
     ;;
 
   psql)
@@ -52,16 +45,14 @@ case "$1" in
     ;;
 
   *)
-    echo "Usage: $0 {up|down|logs|migrate|reset|build|shell|psql|destroy}"
+    echo "Usage: $0 {up|down|logs|migrate|reset|psql|destroy}"
     echo ""
     echo "Commands:"
-    echo "  up       Start all containers and run migrations"
+    echo "  up       Start database and martin containers"
     echo "  down     Stop all containers"
     echo "  logs     Follow container logs (optionally specify service)"
     echo "  migrate  Run database migrations"
     echo "  reset    Reset database tables"
-    echo "  build    Rebuild server image"
-    echo "  shell    Open shell in server container"
     echo "  psql     Open PostgreSQL shell"
     echo "  destroy  Stop containers and remove volumes"
     exit 1

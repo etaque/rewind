@@ -55,7 +55,7 @@ pub async fn health(pool: db::Pool) -> Result<impl Reply, Rejection> {
     db::health(&pool)
         .await
         .map_err(|e| warp::reject::custom(Error(e)))
-        .map(|_| StatusCode::OK)
+        .map(|_| warp::reply::with_status("ok", StatusCode::OK))
 }
 
 impl FromStr for RasterRenderingMode {

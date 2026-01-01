@@ -1,6 +1,6 @@
 services:
   db:
-    image: postgis/postgis:16-3.4
+    image: imresamu/postgis:16-3.5-alpine
     ports:
       - "25432:5432"
     restart: unless-stopped
@@ -32,6 +32,17 @@ services:
       REWIND_SERVER_ADDRESS: 0.0.0.0:3001
       REWIND_CLIENT_URL: http://localhost:3000
       RUST_LOG: info
+
+  martin:
+    image: ghcr.io/maplibre/martin:v0.15.0
+    ports:
+      - "3002:3000"
+    restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      DATABASE_URL: postgresql://rewind:rewind@db:5432/rewind
 
 volumes:
   db-data:
