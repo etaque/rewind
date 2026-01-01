@@ -44,6 +44,8 @@
 
             # Database tools
             postgresql_16
+            postgresql16Packages.postgis
+            osm2pgsql
           ];
           # ++ lib.optionals stdenv.isDarwin [
           #   darwin.apple_sdk.frameworks.Security
