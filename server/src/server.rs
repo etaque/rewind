@@ -1,4 +1,4 @@
-use chrono::{TimeZone, Utc};
+use chrono::{DateTime, Utc};
 use serde::Serialize;
 use std::convert::Infallible;
 use std::str::FromStr;
@@ -77,7 +77,7 @@ pub async fn reports_since(since_ms: i64, pool: db::Pool) -> Result<impl Reply, 
         .await
         .map_err(|e| warp::reject::custom(Error(e.into())))?;
 
-    let since = Utc.timestamp_millis(since_ms);
+    let since = DateTime::from_timestamp_millis(since_ms).unwrap_or_else(|| Utc::now());
 
     let db_reports = repos::wind_reports::list_since(&client, &since, 100i64)
         .await

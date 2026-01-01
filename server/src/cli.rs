@@ -1,43 +1,49 @@
 use chrono::NaiveDate;
-use structopt::StructOpt;
+use clap::{Parser, Subcommand};
 
-#[derive(Debug, StructOpt)]
-#[structopt(about = "Rewind CLI.")]
+#[derive(Debug, Parser)]
+#[command(about = "Rewind CLI.")]
 pub struct Cli {
-    #[structopt(env = "REWIND_DATABASE_URL", short, long)]
+    #[arg(env = "REWIND_DATABASE_URL", short, long)]
     pub database_url: String,
-    #[structopt(subcommand)]
+    #[command(subcommand)]
     pub cmd: Command,
 }
 
-#[derive(Debug, StructOpt)]
+#[derive(Debug, Subcommand)]
 pub enum Command {
     Http {
-        #[structopt(env = "REWIND_SERVER_ADDRESS")]
+        #[arg(env = "REWIND_SERVER_ADDRESS")]
         address: std::net::SocketAddr,
-        #[structopt(env = "REWIND_CLIENT_URL")]
+        #[arg(env = "REWIND_CLIENT_URL")]
         client_url: String,
     },
     Db(DbCommand),
     Grib(GribArgs),
 }
 
-#[derive(Debug, StructOpt)]
-pub enum DbCommand {
+#[derive(Debug, Parser)]
+pub struct DbCommand {
+    #[command(subcommand)]
+    pub cmd: DbSubCommand,
+}
+
+#[derive(Debug, Subcommand)]
+pub enum DbSubCommand {
     Reset,
     Migrate,
 }
 
-#[derive(Debug, StructOpt)]
+#[derive(Debug, Parser)]
 pub struct GribArgs {
-    #[structopt(long)]
+    #[arg(long)]
     pub url: String,
-    #[structopt(long)]
+    #[arg(long)]
     pub day: NaiveDate,
-    #[structopt(long)]
+    #[arg(long)]
     pub hour: i16,
-    #[structopt(long)]
+    #[arg(long)]
     pub forecast: i16,
-    #[structopt(long)]
+    #[arg(long)]
     pub silent: bool,
 }

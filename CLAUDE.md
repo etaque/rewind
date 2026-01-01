@@ -8,52 +8,50 @@ Rewind is a sailing game simulation that replays offshore races (like Vendée Gl
 
 ## Architecture
 
-**Client** (`client/`): Elm + TypeScript hybrid
-- Elm app (`src/app/`) handles UI state, game loop, and HTTP requests to server
+**Client** (`client/`): React + TypeScript
+- React app (`src/app/`) with `useReducer` for state management (Idle/Loading/Playing states)
 - TypeScript (`src/sphere/`) renders a 3D globe with D3.js projections, WebGL wind particles, and land masses from TopoJSON
-- Communication between Elm and TypeScript via ports (`requests`/`responses`)
-- Webpack bundles everything; TailwindCSS for styling
+- Vite for bundling; Tailwind CSS for styling
 
 **Server** (`server/`): Rust with Tokio async runtime
 - Warp HTTP server with WebSocket support
-- PostgreSQL + PostGIS for storing wind raster data
+- PostgreSQL 16 + PostGIS 3.4 for storing wind raster data
 - GRIB file parser for importing meteorological data
-- Tile server for serving map tiles
 
 ## Development Commands
 
-### Prerequisites
-Dependencies managed via Nix (`shell.nix`). Use `nix-shell` or direnv. Create `.env` from `sample.env`.
-
-### Database
+### Docker (recommended)
 ```bash
-docker-compose up -d                    # Start PostgreSQL/PostGIS
-cd server && cargo run -- db migrate    # Run migrations
-cd server && cargo run -- db reset      # Reset database
-```
-
-### Server
-```bash
-cd server && ./bin/dev-server           # Main server (uses cargo watch)
-cd server && ./bin/tile-server          # Tile server
+./server/bin/container up       # Start db + server, run migrations
+./server/bin/container down     # Stop containers
+./server/bin/container logs     # Follow logs
+./server/bin/container psql     # PostgreSQL shell
+./server/bin/container destroy  # Remove containers and volumes
 ```
 
 ### Client
 ```bash
 cd client && npm install
-cd client && ./bin/dev-server           # Webpack dev server (npm start)
-cd client && npm run build              # Production build
+cd client && npm run dev        # Vite dev server (port 3000)
+cd client && npm run build      # Production build
+```
+
+### Server (manual)
+```bash
+cd server && cargo run -- http              # Start server
+cd server && cargo run -- db migrate        # Run migrations
+cd server && ./bin/dev-server               # With cargo-watch auto-reload
 ```
 
 ### Data Import
 ```bash
-./server/scripts/vlm-vg20.sh            # Import Vendée Globe 2020 GRIB files
+./server/scripts/vlm-vg20.sh    # Import Vendée Globe 2020 GRIB files
 ```
 
 ## Key Data Flow
 
-1. Client loads, user clicks start → Elm requests wind reports from server
+1. Client loads, user clicks start → React fetches wind reports from server
 2. Server returns wind report metadata from PostGIS
-3. TypeScript loads wind UV data, renders as animated particles on globe
-4. Game loop ticks via `Browser.Events.onAnimationFrameDelta`, queries wind at boat position
-5. Wind speed returned to Elm via ports for gameplay calculations
+3. Client loads wind UV data as PNG, renders as animated particles on globe
+4. Game loop ticks via `requestAnimationFrame`, queries wind at boat position
+5. Wind speed used for gameplay calculations

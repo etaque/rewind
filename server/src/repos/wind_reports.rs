@@ -1,11 +1,9 @@
 use chrono::{DateTime, Utc};
+use uuid::Uuid;
 
 use crate::db;
 use crate::models::WindReport;
-use tokio_pg_mapper::FromTokioPostgresRow;
-use uuid::Uuid;
 
-// TODO derive that
 pub async fn create<'a>(client: &db::Client<'a>, report: &WindReport) -> anyhow::Result<()> {
     client
         .execute(
@@ -20,7 +18,7 @@ pub async fn create<'a>(client: &db::Client<'a>, report: &WindReport) -> anyhow:
 pub async fn get<'a>(client: &db::Client<'a>, id: Uuid) -> anyhow::Result<WindReport> {
     let stmt = "SELECT * FROM wind_reports WHERE id = $1";
     let row = client.query_one(stmt, &[&id]).await?;
-    let wr = WindReport::from_row(row)?;
+    let wr = WindReport::try_from(&row)?;
     Ok(wr)
 }
 
@@ -30,7 +28,7 @@ pub async fn list_since<'a>(
     limit: i64,
 ) -> anyhow::Result<Vec<WindReport>> {
     let stmt = "SELECT * FROM wind_reports \
-                WHERE target_time >= $1 
+                WHERE target_time >= $1
                 ORDER BY target_time ASC
                 LIMIT $2";
     let rows = client.query(stmt, &[&time, &limit]).await?;

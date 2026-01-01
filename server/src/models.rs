@@ -1,12 +1,11 @@
 use crate::messages;
 use chrono::{DateTime, NaiveDate, Utc};
-use tokio_pg_mapper_derive::PostgresMapper;
+use tokio_postgres::Row;
 use uuid::Uuid;
 
 pub const SRID: i32 = 4326; // WGS 84, used by GRIB and GPS
 
-#[derive(Clone, Debug, PostgresMapper)]
-#[pg_mapper(table = "wind_reports")]
+#[derive(Clone, Debug)]
 pub struct WindReport {
     pub id: Uuid,
     pub raster_id: Uuid,
@@ -18,11 +17,28 @@ pub struct WindReport {
     pub creation_time: DateTime<Utc>,
 }
 
-impl Into<messages::WindReport> for WindReport {
-    fn into(self) -> messages::WindReport {
+impl TryFrom<&Row> for WindReport {
+    type Error = tokio_postgres::Error;
+
+    fn try_from(row: &Row) -> Result<Self, Self::Error> {
+        Ok(WindReport {
+            id: row.try_get("id")?,
+            raster_id: row.try_get("raster_id")?,
+            url: row.try_get("url")?,
+            day: row.try_get("day")?,
+            hour: row.try_get("hour")?,
+            forecast: row.try_get("forecast")?,
+            target_time: row.try_get("target_time")?,
+            creation_time: row.try_get("creation_time")?,
+        })
+    }
+}
+
+impl From<WindReport> for messages::WindReport {
+    fn from(report: WindReport) -> messages::WindReport {
         messages::WindReport {
-            id: self.id,
-            time: self.creation_time,
+            id: report.id,
+            time: report.creation_time,
         }
     }
 }

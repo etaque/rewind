@@ -1,6 +1,5 @@
+use clap::Parser;
 use cli::{Cli, Command};
-use dotenv::dotenv;
-use structopt::StructOpt;
 
 mod cli;
 mod db;
@@ -12,21 +11,21 @@ mod tools;
 
 #[tokio::main]
 async fn main() {
-    dotenv().ok();
+    dotenvy::dotenv().ok();
     env_logger::init();
 
-    let args = Cli::from_args();
+    let args = Cli::parse();
 
     match args.cmd {
         Command::Http {
             address,
             client_url,
         } => server::run(address, &client_url, &args.database_url).await,
-        Command::Db(db_cmd) => match db_cmd {
-            cli::DbCommand::Migrate => {
+        Command::Db(db_cmd) => match db_cmd.cmd {
+            cli::DbSubCommand::Migrate => {
                 db::migrate(&args.database_url).await.unwrap();
             }
-            cli::DbCommand::Reset => {
+            cli::DbSubCommand::Reset => {
                 db::reset(&args.database_url).await.unwrap();
             }
         },
