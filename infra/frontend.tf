@@ -1,25 +1,73 @@
-
 resource "aws_s3_bucket" "frontend_assets" {
   bucket = local.frontend_domain
-  acl    = "public-read"
-
-  versioning {
-    enabled = true
-  }
-
-  website {
-    index_document = "index.html"
-    error_document = "index.html"
-  }
 
   tags = {
     ManagedBy = "terraform"
-    Changed   = formatdate("YYYY-MM-DD hh:mm ZZZ", timestamp())
+  }
+}
+
+resource "aws_s3_bucket_versioning" "frontend_assets" {
+  bucket = aws_s3_bucket.frontend_assets.id
+
+  versioning_configuration {
+    status = "Enabled"
+  }
+}
+
+resource "aws_s3_bucket_website_configuration" "frontend_assets" {
+  bucket = aws_s3_bucket.frontend_assets.id
+
+  index_document {
+    suffix = "index.html"
   }
 
-  lifecycle {
-    ignore_changes = [tags]
+  error_document {
+    key = "index.html"
   }
+}
+
+resource "aws_s3_bucket_public_access_block" "frontend_assets" {
+  bucket = aws_s3_bucket.frontend_assets.id
+
+  block_public_acls       = false
+  block_public_policy     = false
+  ignore_public_acls      = false
+  restrict_public_buckets = false
+}
+
+resource "aws_s3_bucket_policy" "frontend_assets" {
+  bucket = aws_s3_bucket.frontend_assets.id
+
+  depends_on = [aws_s3_bucket_public_access_block.frontend_assets]
+
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Effect = "Allow"
+        Principal = {
+          AWS = aws_iam_user.frontend_uploader.arn
+        }
+        Action = [
+          "s3:DeleteObject",
+          "s3:GetBucketLocation",
+          "s3:GetObject",
+          "s3:ListBucket",
+          "s3:PutObject"
+        ]
+        Resource = [
+          aws_s3_bucket.frontend_assets.arn,
+          "${aws_s3_bucket.frontend_assets.arn}/*"
+        ]
+      },
+      {
+        Effect    = "Allow"
+        Principal = "*"
+        Action    = ["s3:GetObject"]
+        Resource  = ["${aws_s3_bucket.frontend_assets.arn}/*"]
+      }
+    ]
+  })
 }
 
 resource "aws_cloudfront_distribution" "frontend_cdn" {
@@ -29,13 +77,13 @@ resource "aws_cloudfront_distribution" "frontend_cdn" {
 
   origin {
     origin_id   = "origin-bucket-${aws_s3_bucket.frontend_assets.id}"
-    domain_name = aws_s3_bucket.frontend_assets.website_endpoint
+    domain_name = aws_s3_bucket_website_configuration.frontend_assets.website_endpoint
 
     custom_origin_config {
       origin_protocol_policy = "http-only"
       http_port              = 80
       https_port             = 443
-      origin_ssl_protocols   = ["TLSv1.2", "TLSv1.1", "TLSv1"]
+      origin_ssl_protocols   = ["TLSv1.2"]
     }
   }
 
@@ -45,11 +93,11 @@ resource "aws_cloudfront_distribution" "frontend_cdn" {
     allowed_methods  = ["GET", "HEAD", "OPTIONS"]
     cached_methods   = ["GET", "HEAD", "OPTIONS"]
     target_origin_id = "origin-bucket-${aws_s3_bucket.frontend_assets.id}"
-    min_ttl          = "0"
-    default_ttl      = "300"
-    max_ttl          = "1200"
+    min_ttl          = 0
+    default_ttl      = 300
+    max_ttl          = 1200
 
-    viewer_protocol_policy = "redirect-to-https" # Redirects any HTTP request to HTTPS
+    viewer_protocol_policy = "redirect-to-https"
     compress               = true
 
     forwarded_values {
@@ -67,8 +115,9 @@ resource "aws_cloudfront_distribution" "frontend_cdn" {
   }
 
   viewer_certificate {
-    acm_certificate_arn = data.aws_acm_certificate.ssl.arn
-    ssl_support_method  = "sni-only"
+    acm_certificate_arn      = data.aws_acm_certificate.ssl.arn
+    ssl_support_method       = "sni-only"
+    minimum_protocol_version = "TLSv1.2_2021"
   }
 
   custom_error_response {
@@ -80,14 +129,6 @@ resource "aws_cloudfront_distribution" "frontend_cdn" {
 
   tags = {
     ManagedBy = "terraform"
-    Changed   = formatdate("YYYY-MM-DD hh:mm ZZZ", timestamp())
-  }
-
-  lifecycle {
-    ignore_changes = [
-      tags,
-      viewer_certificate,
-    ]
   }
 }
 
@@ -103,45 +144,6 @@ resource "aws_route53_record" "cdn_record" {
   }
 }
 
-resource "aws_s3_bucket_policy" "frontend_assets" {
-  bucket = aws_s3_bucket.frontend_assets.id
-
-  policy = <<EOF
-{
-  "Version": "2012-10-17",
-  "Statement": [
-    {
-      "Effect": "Allow",
-      "Principal": {
-        "AWS": "${aws_iam_user.frontend_uploader.arn}"
-      },
-      "Action": [ 
-        "s3:DeleteObject",
-        "s3:GetBucketLocation",
-        "s3:GetObject",
-        "s3:ListBucket",
-        "s3:PutObject"
-      ],
-      "Resource": [
-        "${aws_s3_bucket.frontend_assets.arn}",
-        "${aws_s3_bucket.frontend_assets.arn}/*"
-      ]
-    },
-    {
-      "Effect": "Allow",
-      "Principal": "*",
-      "Action": [
-          "s3:GetObject"
-      ],
-      "Resource": [
-          "${aws_s3_bucket.frontend_assets.arn}/*"
-      ]
-    }
-  ]
-}
-EOF
-}
-
 resource "aws_iam_user" "frontend_uploader" {
   name = "rewind-frontend-uploader"
 }
@@ -151,6 +153,6 @@ resource "aws_iam_access_key" "frontend_uploader" {
 }
 
 output "frontend_uploader_secret" {
-  value = aws_iam_access_key.frontend_uploader.secret
+  value     = aws_iam_access_key.frontend_uploader.secret
+  sensitive = true
 }
-
