@@ -33,12 +33,17 @@ export default function App() {
     }
 
     // Fetch wind reports
-    fetch(`${serverUrl}/wind-reports/since/${course.startTime}`)
+    const url = `${serverUrl}/wind-reports/since/${course.startTime}`;
+    console.log("Fetching wind reports from:", url);
+
+    fetch(url)
       .then((res) => res.json())
       .then((reports: WindReport[]) => {
+        console.log("Received reports:", reports);
         dispatch({ type: "REPORTS_LOADED", reports });
       })
-      .catch(() => {
+      .catch((err) => {
+        console.error("Failed to fetch reports:", err);
         dispatch({ type: "REPORTS_ERROR" });
       });
   }, [state.tag === "Loading" ? state.course.key : null]);

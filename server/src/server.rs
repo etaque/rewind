@@ -18,9 +18,7 @@ pub async fn run(address: std::net::SocketAddr, client_url: &str, database_url: 
         .await
         .expect(format!("Failed to connect to DB: {}", &database_url).as_str());
 
-    let cors = warp::cors()
-        .allow_origin(client_url)
-        .allow_methods(vec!["GET"]);
+    let cors = warp::cors().allow_any_origin().allow_methods(vec!["GET"]);
 
     let health_route = path!("health").and(with_db(pool.clone())).and_then(health);
 

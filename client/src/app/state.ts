@@ -32,7 +32,7 @@ export function appReducer(state: AppState, action: AppAction): AppState {
 
     case "REPORTS_LOADED":
       if (state.tag !== "Loading") return state;
-      if (action.reports.length === 0) return { tag: "Idle" };
+      // Allow playing even with no wind reports (globe will show, no wind animation)
       return {
         tag: "Playing",
         session: {
