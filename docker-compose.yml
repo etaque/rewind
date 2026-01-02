@@ -1,6 +1,6 @@
 services:
   db:
-    image: imresamu/postgis:16-3.5-alpine
+    image: imresamu/postgis:16-3.5
     ports:
       - "25432:5432"
     restart: unless-stopped
@@ -11,6 +11,7 @@ services:
       POSTGRES_PASSWORD: rewind
       POSTGRES_DB: rewind
       POSTGRES_USER: rewind
+      POSTGIS_GDAL_ENABLED_DRIVERS: ENABLE_ALL
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U rewind -d rewind"]
       interval: 5s
