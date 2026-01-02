@@ -151,6 +151,7 @@ export default function App() {
             heading={state.session.heading}
             courseTime={state.session.courseTime}
             windSpeed={state.session.windSpeed}
+            boatSpeed={state.session.boatSpeed}
           />
         )}
       </div>

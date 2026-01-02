@@ -155,7 +155,6 @@ export class SphereView {
     };
 
     this.land.render(scene, this.moving).then(() => {
-      console.debug("render:land", performance.now() - t);
       // Draw boat on top of land
       this.boat.render(scene, this.position, this.heading);
     });
@@ -163,12 +162,8 @@ export class SphereView {
     if (this.wind) {
       this.windTexture.render(scene, this.wind);
 
-      const t2 = performance.now();
-      console.debug("render:wind-texture", t2 - t);
-
       if (!this.moving) {
         this.particles.show(scene, this.wind);
-        console.debug("render:wind-particles", performance.now() - t2);
       }
     }
   }

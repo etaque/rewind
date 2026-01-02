@@ -125,3 +125,49 @@ cd server && ./bin/dev-server               # With cargo-watch auto-reload
 3. Client loads wind UV data as PNG, renders as animated particles on globe
 4. Game loop ticks via `requestAnimationFrame`, queries wind at boat position
 5. Wind speed used for gameplay calculations
+
+## Speed Polars
+
+A **polar diagram** shows a sailboat's potential speed for different combinations of wind speed (TWS) and wind angle (TWA). It's essential for calculating realistic boat movement.
+
+### Key Concepts
+
+- **TWS** (True Wind Speed): Wind speed in knots
+- **TWA** (True Wind Angle): Angle between boat heading and wind direction (0° = into wind, 180° = downwind)
+- **BSP** (Boat Speed): Resulting boat speed in knots, looked up from the polar
+- **VMG** (Velocity Made Good): Speed component toward destination (useful for upwind/downwind optimization)
+
+### Polar Data Format
+
+Standard CSV/POL format:
+```
+TWA\TWS,6,8,10,12,14,16,20,25,30,35
+0,0,0,0,0,0,0,0,0,0,0
+30,4.5,5.2,5.8,6.1,6.3,6.5,6.7,6.8,6.9,6.9
+45,5.8,6.5,7.2,7.6,7.9,8.1,8.4,8.6,8.7,8.8
+60,6.2,7.1,7.9,8.5,9.0,9.4,9.9,10.3,10.5,10.6
+90,6.5,7.8,9.0,10.2,11.5,12.8,15.0,17.5,19.0,20.0
+120,6.3,7.9,9.8,12.0,14.5,17.0,21.0,24.0,26.0,27.0
+150,5.8,7.2,9.0,11.0,13.5,16.0,19.5,22.5,24.0,25.0
+180,4.5,5.8,7.5,9.5,12.0,14.5,17.5,20.0,21.0,21.0
+```
+
+- Row 1: TWS values (wind speeds in knots)
+- Column 1: TWA values (wind angles in degrees)
+- Cells: Boat speed (BSP) in knots
+
+### IMOCA 60 Characteristics
+
+Vendée Globe boats (IMOCA 60) are high-performance foiling monohulls:
+- Can exceed wind speed, especially on broad reaches (90-130° TWA)
+- Peak speeds ~27 knots at 130° TWA in 35 knots of wind
+- Upwind (30° TWA): ~5-7 knots regardless of wind strength
+- Dead downwind (180°) is slower than broad reaching - boats gybe downwind
+
+### Usage in Simulation
+
+To calculate boat speed:
+1. Get TWS from wind data at boat position
+2. Calculate TWA from boat heading and wind direction
+3. Look up BSP from polar table (interpolate between values)
+4. Move boat: `distance = BSP * timeDelta`

@@ -30,7 +30,6 @@ export default class Texture {
 
     this.init = (scene: Scene) => {
       const t = performance.now();
-      console.debug("texture-init:start");
       const { width, height } = scene;
       const [lambda, phi] = scene.projection
         .rotate()
@@ -45,21 +44,14 @@ export default class Texture {
       gl.uniform1f(uScale, sphereRadius(scene.projection));
 
       gl.viewport(0, 0, width, height);
-      console.debug("texture-init:stop", Math.round(performance.now() - t));
     };
   }
 
   render(scene: Scene, wind: Wind) {
     if (!this.texture || wind.id != this.wind?.id) {
-      const t = performance.now();
-      console.debug("texture-generate-image:start", wind.id, this.wind?.id);
       this.wind = wind;
       const imageData = generateImage(wind);
       this.texture = shaders.createTexture(this.gl, imageData);
-      console.debug(
-        "texture-generate-image:stop",
-        Math.round(performance.now() - t)
-      );
     }
     this.init(scene);
     this.gl.bindTexture(this.gl.TEXTURE_2D, this.texture);

@@ -5,6 +5,7 @@ type Props = {
   heading: number;
   courseTime: number;
   windSpeed: WindSpeed;
+  boatSpeed: number;
 };
 
 function formatCoord(value: number, pos: string, neg: string): string {
@@ -49,6 +50,7 @@ export default function Hud({
   heading,
   courseTime,
   windSpeed,
+  boatSpeed,
 }: Props) {
   const lat = formatCoord(position.lat, "N", "S");
   const lng = formatCoord(position.lng, "E", "W");
@@ -56,6 +58,10 @@ export default function Hud({
   return (
     <div className="absolute top-4 right-4 bg-black/60 text-white px-4 py-3 rounded-lg font-mono text-sm">
       <div className="flex flex-col gap-1">
+        <div>
+          <span className="text-gray-400">UTC </span>
+          <span>{formatCourseTime(courseTime)}</span>
+        </div>
         <div>
           <span className="text-gray-400">POS </span>
           <span>
@@ -65,10 +71,8 @@ export default function Hud({
         <div>
           <span className="text-gray-400">HDG </span>
           <span>{formatHeading(heading)}</span>
-        </div>
-        <div>
-          <span className="text-gray-400">UTC </span>
-          <span>{formatCourseTime(courseTime)}</span>
+          <span className="text-gray-400 ml-2">BSP </span>
+          <span>{boatSpeed.toFixed(1)}kts</span>
         </div>
         <div>
           <span className="text-gray-400">TWD </span>
