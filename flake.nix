@@ -39,6 +39,12 @@
             rustToolchain
             cargo-watch
 
+            # grib-rs
+            # cmake
+            # pkgconf
+            # proj
+            # sqlite
+
             # Node.js
             nodejs_22
 

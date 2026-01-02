@@ -3,11 +3,11 @@ use cli::{Cli, Command};
 
 mod cli;
 mod db;
+mod grib_store;
 mod messages;
 mod models;
 mod repos;
 mod server;
-mod tools;
 
 #[tokio::main]
 async fn main() {
@@ -29,8 +29,8 @@ async fn main() {
                 db::reset(&args.database_url).await.unwrap();
             }
         },
-        Command::Grib(grib_args) => {
-            tools::grib::exec(&args.database_url, grib_args)
+        Command::ImportGribRange(range_args) => {
+            grib_store::import_grib_range(&args.database_url, range_args)
                 .await
                 .unwrap();
         }

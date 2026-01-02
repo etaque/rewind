@@ -1,6 +1,3 @@
-use std::fs::File;
-use std::io::prelude::*;
-use std::path::Path;
 use uuid::Uuid;
 
 use crate::db;
@@ -9,10 +6,7 @@ use crate::models::{RasterRenderingMode, SRID};
 pub const U_BAND: i32 = 1;
 pub const V_BAND: i32 = 2;
 
-pub async fn create<'a>(client: &db::Client<'a>, id: &Uuid, path: &Path) -> anyhow::Result<()> {
-    let mut f = File::open(path)?;
-    let mut buffer = Vec::new();
-    f.read_to_end(&mut buffer)?;
+pub async fn create<'a>(client: &db::Client<'a>, id: &Uuid, buffer: Vec<u8>) -> anyhow::Result<()> {
     let stmt = "INSERT INTO wind_rasters(id, rast) SELECT $1, ST_FromGDALRaster(($2)::bytea, $3)";
     client.execute(stmt, &[&id, &buffer, &SRID]).await?;
     Ok(())
@@ -39,11 +33,11 @@ const SPEED_STMT: &str = r#"
             ST_Reclass(
                 MapWindSpeed(
                     ST_Resize(
-                        ST_Transform( rast, 32663, 'Bilinear'), 
+                        ST_Transform( rast, 32663, 'Bilinear'),
                         1024, 512, 'Bilinear')),
                 '0-30:0-255', '8BUI'),
         1, 'bluered'))
-    FROM wind_rasters 
+    FROM wind_rasters
     WHERE id=$1"#;
 
 pub async fn as_png<'a>(

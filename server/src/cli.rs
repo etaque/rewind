@@ -19,7 +19,7 @@ pub enum Command {
         client_url: String,
     },
     Db(DbCommand),
-    Grib(GribArgs),
+    ImportGribRange(GribRangeArgs),
 }
 
 #[derive(Debug, Parser)]
@@ -35,15 +35,14 @@ pub enum DbSubCommand {
 }
 
 #[derive(Debug, Parser)]
-pub struct GribArgs {
+pub struct GribRangeArgs {
+    /// Base URL for GRIB files (e.g., https://grib.v-l-m.org/archives)
+    #[arg(long, default_value = "https://grib.v-l-m.org/archives")]
+    pub base_url: String,
+    /// Start date (inclusive)
     #[arg(long)]
-    pub url: String,
+    pub from: NaiveDate,
+    /// End date (inclusive)
     #[arg(long)]
-    pub day: NaiveDate,
-    #[arg(long)]
-    pub hour: i16,
-    #[arg(long)]
-    pub forecast: i16,
-    #[arg(long)]
-    pub silent: bool,
+    pub to: NaiveDate,
 }
