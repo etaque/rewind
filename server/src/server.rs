@@ -13,7 +13,7 @@ use super::messages;
 use super::models::RasterRenderingMode;
 use super::repos;
 
-pub async fn run(address: std::net::SocketAddr, client_url: &str, database_url: &str) {
+pub async fn run(address: std::net::SocketAddr, _client_url: &str, database_url: &str) {
     let pool = db::pool(&database_url)
         .await
         .expect(format!("Failed to connect to DB: {}", &database_url).as_str());
@@ -53,7 +53,7 @@ pub async fn health(pool: db::Pool) -> Result<impl Reply, Rejection> {
     db::health(&pool)
         .await
         .map_err(|e| warp::reject::custom(Error(e)))
-        .map(|_| warp::reply::with_status("ok", StatusCode::OK))
+        .map(|h| warp::reply::with_status(h, StatusCode::OK))
 }
 
 impl FromStr for RasterRenderingMode {
@@ -143,16 +143,32 @@ struct ErrorMessage {
     message: String,
 }
 
-// TODO properly handle 404
 pub async fn rejection(err: warp::Rejection) -> Result<impl Reply, Infallible> {
-    let code = StatusCode::INTERNAL_SERVER_ERROR;
-    let message = "Internal server error.";
-
-    log::error!("Error: {:?}", err);
+    let (code, message) = if err.is_not_found() {
+        (StatusCode::NOT_FOUND, "Not found".to_string())
+    } else if let Some(e) = err.find::<warp::reject::MethodNotAllowed>() {
+        (StatusCode::METHOD_NOT_ALLOWED, e.to_string())
+    } else if let Some(e) = err.find::<warp::reject::InvalidQuery>() {
+        (StatusCode::BAD_REQUEST, e.to_string())
+    } else if let Some(e) = err.find::<warp::reject::MissingHeader>() {
+        (StatusCode::BAD_REQUEST, e.to_string())
+    } else if let Some(Error(e)) = err.find::<Error>() {
+        log::error!("Internal error: {:?}", e);
+        (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            "Internal server error".to_string(),
+        )
+    } else {
+        log::error!("Unhandled rejection: {:?}", err);
+        (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            "Internal server error".to_string(),
+        )
+    };
 
     let json = warp::reply::json(&ErrorMessage {
         code: code.as_u16(),
-        message: message.into(),
+        message,
     });
 
     Ok(warp::reply::with_status(json, code))
