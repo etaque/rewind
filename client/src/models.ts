@@ -39,6 +39,7 @@ export type Course = {
   name: string;
   startTime: number;
   start: LngLat;
+  startHeading: number;
   finish: LngLat;
   timeFactor: number;
 };

@@ -10,6 +10,7 @@ export type Session = {
   lastWindRefresh: number;
   courseTime: number;
   position: LngLat;
+  heading: number;
   course: Course;
   reports: WindReport[];
   windSpeed: WindSpeed;
@@ -25,6 +26,9 @@ export type AppAction =
 export const initialState: AppState = { tag: "Idle" };
 
 export function appReducer(state: AppState, action: AppAction): AppState {
+  if (action.type !== "TICK") {
+    console.log("Action:", action);
+  }
   switch (action.type) {
     case "LOAD_COURSE":
       if (state.tag !== "Idle") return state;
@@ -40,6 +44,7 @@ export function appReducer(state: AppState, action: AppAction): AppState {
           lastWindRefresh: 0,
           courseTime: state.course.startTime,
           position: state.course.start,
+          heading: state.course.startHeading,
           course: state.course,
           reports: action.reports,
           windSpeed: { u: 0, v: 0 },

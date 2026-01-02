@@ -8,6 +8,7 @@ import { Course, LngLat, Spherical } from "../models";
 import { sphere, sphereCenter, sphereRadius } from "./scene";
 import Wind from "../wind";
 import Land from "./land";
+import Boat from "./boat";
 import WindTexture from "./wind-texture";
 import WindParticles from "./wind-particles";
 
@@ -20,10 +21,12 @@ export class SphereView {
 
   wind?: Wind;
   position: LngLat;
+  heading: number;
 
   projection: d3.GeoProjection;
 
   land: Land;
+  boat: Boat;
   particles: WindParticles;
   windTexture: WindTexture;
 
@@ -37,6 +40,7 @@ export class SphereView {
     this.course = course;
     this.node = node;
     this.position = course.start;
+    this.heading = course.startHeading;
     this.width = document.body.clientWidth;
     this.height = document.body.clientHeight;
 
@@ -76,6 +80,7 @@ export class SphereView {
       .node()!;
 
     this.land = new Land(landCanvas);
+    this.boat = new Boat(landCanvas);
 
     const initialScale = this.projection.scale();
 
@@ -132,8 +137,9 @@ export class SphereView {
     this.render();
   }
 
-  updatePosition(pos: LngLat) {
+  updatePosition(pos: LngLat, heading: number) {
     this.position = pos;
+    this.heading = heading;
     this.render();
   }
 
@@ -150,6 +156,8 @@ export class SphereView {
 
     this.land.render(scene, this.moving).then(() => {
       console.debug("render:land", performance.now() - t);
+      // Draw boat on top of land
+      this.boat.render(scene, this.position, this.heading);
     });
 
     if (this.wind) {

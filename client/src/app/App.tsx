@@ -5,6 +5,7 @@ import Wind from "../wind";
 import { Course, WindReport } from "../models";
 import { vg20 } from "./courses";
 import StartScreen from "./StartScreen";
+import Hud from "./Hud";
 
 const serverUrl = import.meta.env.REWIND_SERVER_URL;
 const WIND_REFRESH_INTERVAL = 1000;
@@ -112,6 +113,12 @@ export default function App() {
           <div className="pointer-events-auto">
             <StartScreen onStart={() => handleLoadCourse(vg20)} />
           </div>
+        )}
+        {state.tag === "Playing" && (
+          <Hud
+            position={state.session.position}
+            heading={state.session.heading}
+          />
         )}
       </div>
     </>
