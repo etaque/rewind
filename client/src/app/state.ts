@@ -1,5 +1,6 @@
 import { Course, LngLat, WindSpeed, WindReport } from "../models";
 import { getBoatSpeed, calculateTWA } from "./polar";
+import { isPointOnLand } from "./land";
 
 export type AppState =
   | { tag: "Idle" }
@@ -112,6 +113,19 @@ export function appReducer(state: AppState, action: AppAction): AppState {
         lat: session.position.lat + latDelta,
         lng: session.position.lng + lngDelta,
       };
+
+      // Check land collision - don't move if new position is on land
+      if (isPointOnLand(newPosition.lng, newPosition.lat)) {
+        return {
+          ...state,
+          session: {
+            ...session,
+            clock: newClock,
+            courseTime: newCourseTime,
+            boatSpeed: 0,
+          },
+        };
+      }
 
       return {
         ...state,

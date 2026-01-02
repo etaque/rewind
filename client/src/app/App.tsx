@@ -6,6 +6,7 @@ import { Course, WindReport } from "../models";
 import { vg20 } from "./courses";
 import StartScreen from "./StartScreen";
 import Hud from "./Hud";
+import { initLandData } from "./land";
 
 const serverUrl = import.meta.env.REWIND_SERVER_URL;
 const WIND_REFRESH_INTERVAL = 1000;
@@ -33,6 +34,9 @@ export default function App() {
     if (sphereNodeRef.current && !sphereViewRef.current) {
       sphereViewRef.current = new SphereView(sphereNodeRef.current, course);
     }
+
+    // Initialize land collision data
+    initLandData();
 
     // Fetch wind reports
     const url = `${serverUrl}/wind-reports/since/${course.startTime}`;

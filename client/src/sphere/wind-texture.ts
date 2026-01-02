@@ -29,7 +29,6 @@ export default class Texture {
     const uRotate = gl.getUniformLocation(program, "uRotate");
 
     this.init = (scene: Scene) => {
-      const t = performance.now();
       const { width, height } = scene;
       const [lambda, phi] = scene.projection
         .rotate()

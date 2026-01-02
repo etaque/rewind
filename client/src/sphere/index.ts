@@ -144,8 +144,6 @@ export class SphereView {
   }
 
   render() {
-    const t = performance.now();
-
     const scene = {
       projection: this.projection,
       width: this.width,
