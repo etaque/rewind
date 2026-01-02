@@ -149,6 +149,7 @@ export default function App() {
           <Hud
             position={state.session.position}
             heading={state.session.heading}
+            courseTime={state.session.courseTime}
           />
         )}
       </div>

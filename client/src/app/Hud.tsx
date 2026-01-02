@@ -3,6 +3,7 @@ import { LngLat } from "../models";
 type Props = {
   position: LngLat;
   heading: number;
+  courseTime: number;
 };
 
 function formatCoord(value: number, pos: string, neg: string): string {
@@ -18,7 +19,17 @@ function formatHeading(degrees: number): string {
   return `${normalized.toFixed(0)}°`;
 }
 
-export default function Hud({ position, heading }: Props) {
+function formatCourseTime(timestamp: number): string {
+  const date = new Date(timestamp);
+  const year = date.getUTCFullYear();
+  const month = String(date.getUTCMonth() + 1).padStart(2, "0");
+  const day = String(date.getUTCDate()).padStart(2, "0");
+  const hours = String(date.getUTCHours()).padStart(2, "0");
+  const minutes = String(date.getUTCMinutes()).padStart(2, "0");
+  return `${year}-${month}-${day} ${hours}:${minutes}Z`;
+}
+
+export default function Hud({ position, heading, courseTime }: Props) {
   const lat = formatCoord(position.lat, "N", "S");
   const lng = formatCoord(position.lng, "E", "W");
 
@@ -34,6 +45,10 @@ export default function Hud({ position, heading }: Props) {
         <div>
           <span className="text-gray-400">HDG </span>
           <span>{formatHeading(heading)}</span>
+        </div>
+        <div>
+          <span className="text-gray-400">UTC </span>
+          <span>{formatCourseTime(courseTime)}</span>
         </div>
       </div>
     </div>
