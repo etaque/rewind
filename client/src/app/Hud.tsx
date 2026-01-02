@@ -1,9 +1,10 @@
-import { LngLat } from "../models";
+import { LngLat, WindSpeed } from "../models";
 
 type Props = {
   position: LngLat;
   heading: number;
   courseTime: number;
+  windSpeed: WindSpeed;
 };
 
 function formatCoord(value: number, pos: string, neg: string): string {
@@ -29,7 +30,26 @@ function formatCourseTime(timestamp: number): string {
   return `${year}-${month}-${day} ${hours}:${minutes}Z`;
 }
 
-export default function Hud({ position, heading, courseTime }: Props) {
+function formatWindSpeed(windSpeed: WindSpeed): string {
+  const speed = Math.sqrt(windSpeed.u ** 2 + windSpeed.v ** 2);
+  const knots = speed * 1.944; // m/s to knots
+  return `${knots.toFixed(1)}kts`;
+}
+
+function formatWindDirection(windSpeed: WindSpeed): string {
+  // Wind direction is where wind comes FROM (meteorological convention)
+  // u = east component, v = north component
+  const radians = Math.atan2(-windSpeed.u, -windSpeed.v);
+  const degrees = ((radians * 180) / Math.PI + 360) % 360;
+  return `${degrees.toFixed(0)}°`;
+}
+
+export default function Hud({
+  position,
+  heading,
+  courseTime,
+  windSpeed,
+}: Props) {
   const lat = formatCoord(position.lat, "N", "S");
   const lng = formatCoord(position.lng, "E", "W");
 
@@ -49,6 +69,12 @@ export default function Hud({ position, heading, courseTime }: Props) {
         <div>
           <span className="text-gray-400">UTC </span>
           <span>{formatCourseTime(courseTime)}</span>
+        </div>
+        <div>
+          <span className="text-gray-400">TWD </span>
+          <span>{formatWindDirection(windSpeed)}</span>
+          <span className="text-gray-400 ml-2">TWS </span>
+          <span>{formatWindSpeed(windSpeed)}</span>
         </div>
       </div>
     </div>

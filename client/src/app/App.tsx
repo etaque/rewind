@@ -150,6 +150,7 @@ export default function App() {
             position={state.session.position}
             heading={state.session.heading}
             courseTime={state.session.courseTime}
+            windSpeed={state.session.windSpeed}
           />
         )}
       </div>
