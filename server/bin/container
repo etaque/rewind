@@ -36,7 +36,7 @@ case "$1" in
     ;;
 
   psql)
-    docker compose exec db psql -U rewind -d rewind
+    pgcli postgres://rewind:rewind@127.0.0.1:25432/rewind
     ;;
 
   destroy)
