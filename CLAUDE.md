@@ -74,6 +74,39 @@ User clicks Play → fetch /wind-reports/since/{time} → REPORTS_LOADED
 
 Wind PNG format: 720×360 pixels (0.5° resolution), RGBA encodes u/v as `(n/255 * 60) - 30` m/s
 
+#### Wind Particles System
+
+The particle system (`src/sphere/wind-particles.ts`) visualizes wind flow with ~4,500 animated particles that follow wind vectors.
+
+**Constants:**
+| Constant | Value | Description |
+|----------|-------|-------------|
+| `MAX_AGE` | 1200 | Particle lifetime (ms) before respawning |
+| `PARTICLES_COUNT` | 4500 | Number of particles |
+| `ALPHA_DECAY` | 0.95 | Opacity multiplier per frame (creates trails) |
+| `TRAVEL_SPEED` | 45 | Movement multiplier for wind vectors |
+| `FPS` | 30 | Target frame rate |
+
+**Particle Structure:**
+- `pix0`, `coord0`: Initial screen pixel and geo coordinate (respawn point)
+- `pix`, `coord`: Current screen pixel and geo coordinate
+- `age`: Time since last respawn
+- `visible`: Whether particle is on the visible hemisphere
+
+**Animation Loop:**
+1. Query wind speed at particle's geo position via `wind.speedAt(coord)`
+2. Convert wind u/v components (m/s) to degree offsets
+3. Update geo coordinate, project back to screen coordinates
+4. Draw line segment from previous to current position
+5. Apply trail effect by copying canvas at 95% opacity
+
+**Important Limitation:**
+Particles store initial positions (`pix0`, `coord0`) at creation time using the current projection. When the projection rotates:
+- `pix0` becomes invalid (maps to different screen position)
+- Particles respawn at wrong locations
+- Visual becomes chaotic until all particles cycle through
+
+
 #### Key Dependencies
 
 - **React 18** - UI with hooks (useReducer, useRef, useEffect, useCallback)
