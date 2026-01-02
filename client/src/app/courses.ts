@@ -7,5 +7,5 @@ export const vg20: Course = {
   start: { lng: -1.788456535301071, lat: 46.470243284275966 },
   startHeading: 270,
   finish: { lng: -1.788456535301071, lat: 46.470243284275966 },
-  timeFactor: 2000,
+  timeFactor: 10000,
 };
