@@ -9,6 +9,7 @@ import Hud from "./Hud";
 
 const serverUrl = import.meta.env.REWIND_SERVER_URL;
 const WIND_REFRESH_INTERVAL = 1000;
+const TURN_DELTA = 2;
 
 export default function App() {
   const [state, dispatch] = useReducer(appReducer, initialState);
@@ -63,6 +64,36 @@ export default function App() {
       }
     });
   }, [state.tag === "Playing"]);
+
+  // Keyboard controls when Playing
+  useEffect(() => {
+    if (state.tag !== "Playing") return;
+
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === "ArrowLeft") {
+        dispatch({ type: "TURN", delta: -TURN_DELTA });
+      } else if (e.key === "ArrowRight") {
+        dispatch({ type: "TURN", delta: TURN_DELTA });
+      }
+    };
+
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [state.tag]);
+
+  // Sync position and heading to SphereView
+  useEffect(() => {
+    if (state.tag !== "Playing") return;
+    if (!sphereViewRef.current) return;
+
+    sphereViewRef.current.updatePosition(
+      state.session.position,
+      state.session.heading,
+    );
+  }, [
+    state.tag === "Playing" ? state.session.position : null,
+    state.tag === "Playing" ? state.session.heading : null,
+  ]);
 
   // Animation loop when Playing
   useEffect(() => {

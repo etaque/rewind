@@ -24,12 +24,17 @@ export default class Particles {
 
   rafId?: number;
   paused = false;
+  running = false;
 
   constructor(canvas: HTMLCanvasElement) {
     this.canvas = canvas;
   }
 
   show(scene: Scene, wind: Wind) {
+    // Don't restart if already running
+    if (this.running) return;
+
+    this.running = true;
     this.paused = false;
     this.particles = generateParticles(scene);
 
@@ -47,7 +52,7 @@ export default class Particles {
           context.strokeStyle = "rgba(210,210,210,0.7)";
 
           this.particles.forEach((p) =>
-            moveParticle(p, delta, context, scene, wind)
+            moveParticle(p, delta, context, scene, wind),
           );
 
           context.stroke();
@@ -69,6 +74,7 @@ export default class Particles {
 
   hide() {
     this.paused = true;
+    this.running = false;
     if (this.rafId) cancelAnimationFrame(this.rafId);
     const context = this.canvas.getContext("2d")!;
     context.clearRect(0, 0, this.canvas.width, this.canvas.height);
@@ -126,7 +132,7 @@ function moveParticle(
   delta: number,
   context: CanvasRenderingContext2D,
   scene: Scene,
-  wind: Wind
+  wind: Wind,
 ) {
   p.age += delta;
   if (p.age > MAX_AGE) {

@@ -21,7 +21,8 @@ export type AppAction =
   | { type: "REPORTS_LOADED"; reports: WindReport[] }
   | { type: "REPORTS_ERROR" }
   | { type: "WIND_UPDATED"; windSpeed: WindSpeed }
-  | { type: "TICK"; delta: number };
+  | { type: "TICK"; delta: number }
+  | { type: "TURN"; delta: number };
 
 export const initialState: AppState = { tag: "Idle" };
 
@@ -73,6 +74,16 @@ export function appReducer(state: AppState, action: AppAction): AppState {
           ...state.session,
           clock: newClock,
           courseTime: newCourseTime,
+        },
+      };
+
+    case "TURN":
+      if (state.tag !== "Playing") return state;
+      return {
+        ...state,
+        session: {
+          ...state.session,
+          heading: (state.session.heading + action.delta + 360) % 360,
         },
       };
 
