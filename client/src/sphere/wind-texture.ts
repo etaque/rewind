@@ -1,5 +1,5 @@
 import * as d3 from "d3";
-import Wind from "../wind";
+import WindRaster from "../wind-raster";
 import * as shaders from "./shaders";
 import * as utils from "../utils";
 import { Scene, sphereRadius } from "./scene";
@@ -9,7 +9,7 @@ export default class Texture {
   readonly gl: WebGLRenderingContext;
   readonly init: (scene: Scene) => void;
 
-  wind?: Wind;
+  wind?: WindRaster;
   texture?: WebGLTexture;
 
   constructor(canvas: HTMLCanvasElement) {
@@ -46,7 +46,7 @@ export default class Texture {
     };
   }
 
-  render(scene: Scene, wind: Wind) {
+  render(scene: Scene, wind: WindRaster) {
     if (!this.texture || wind.id != this.wind?.id) {
       this.wind = wind;
       const imageData = generateImage(wind);
@@ -58,7 +58,7 @@ export default class Texture {
   }
 }
 
-function generateImage(wind: Wind): ImageData {
+function generateImage(wind: WindRaster): ImageData {
   const width = 4096 / 4;
   const height = 2048 / 4;
   const arraySize = 4 * width * height;
