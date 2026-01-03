@@ -10,6 +10,7 @@ export type TickResult = {
   position: LngLat;
   heading: number;
   targetHeading: number | null;
+  lockedTWA: number | null;
 };
 
 // Turn rate in degrees per second during a tack
@@ -23,6 +24,7 @@ export function tick(session: Session, delta: number): TickResult {
   // Handle progressive turning during tack
   let heading = session.heading;
   let targetHeading = session.targetHeading;
+  let lockedTWA = session.lockedTWA;
 
   if (targetHeading !== null) {
     const deltaSeconds = delta / 1000;
@@ -38,6 +40,10 @@ export function tick(session: Session, delta: number): TickResult {
       // Reached target
       heading = targetHeading;
       targetHeading = null;
+      // Flip TWA lock to opposite side when tack completes
+      if (lockedTWA !== null) {
+        lockedTWA = -lockedTWA;
+      }
     } else {
       // Turn toward target
       heading = (heading + Math.sign(diff) * maxTurn + 360) % 360;
@@ -50,10 +56,10 @@ export function tick(session: Session, delta: number): TickResult {
     360;
   const windDirNorm = windDir % 360;
 
-  // Apply TWA lock: adjust heading to maintain locked TWA
-  if (session.lockedTWA !== null && targetHeading === null) {
+  // Apply TWA lock: adjust heading to maintain locked TWA (only when not tacking)
+  if (lockedTWA !== null && targetHeading === null) {
     // Heading = windDir - lockedTWA (signed TWA)
-    heading = (windDirNorm - session.lockedTWA + 360) % 360;
+    heading = (windDirNorm - lockedTWA + 360) % 360;
   }
 
   // Calculate TWS in knots (wind is in m/s, convert to knots)
@@ -96,6 +102,7 @@ export function tick(session: Session, delta: number): TickResult {
       position: session.position,
       heading,
       targetHeading,
+      lockedTWA,
     };
   }
 
@@ -106,5 +113,6 @@ export function tick(session: Session, delta: number): TickResult {
     position: newPosition,
     heading,
     targetHeading,
+    lockedTWA,
   };
 }
