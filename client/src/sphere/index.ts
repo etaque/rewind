@@ -9,6 +9,7 @@ import { sphere, sphereCenter, sphereRadius } from "./scene";
 import Wind from "../wind";
 import Land from "./land";
 import Boat from "./boat";
+import Wake from "./wake";
 import WindTexture from "./wind-texture";
 import WindParticles from "./wind-particles";
 
@@ -27,6 +28,7 @@ export class SphereView {
 
   land: Land;
   boat: Boat;
+  wake: Wake;
   particles: WindParticles;
   windTexture: WindTexture;
 
@@ -80,6 +82,7 @@ export class SphereView {
       .node()!;
 
     this.land = new Land(landCanvas);
+    this.wake = new Wake(landCanvas);
     this.boat = new Boat(landCanvas);
 
     const initialScale = this.projection.scale();
@@ -137,9 +140,10 @@ export class SphereView {
     this.render();
   }
 
-  updatePosition(pos: LngLat, heading: number) {
+  updatePosition(pos: LngLat, heading: number, boatSpeed: number = 0) {
     this.position = pos;
     this.heading = heading;
+    this.wake.addPoint(pos, boatSpeed);
     this.render();
   }
 
@@ -153,7 +157,8 @@ export class SphereView {
     };
 
     this.land.render(scene, this.moving).then(() => {
-      // Draw boat on top of land
+      // Draw wake and boat on top of land
+      this.wake.render(scene);
       this.boat.render(scene, this.position, this.heading);
     });
 

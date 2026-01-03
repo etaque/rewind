@@ -112,6 +112,7 @@ export default function App() {
     sphereViewRef.current.updatePosition(
       state.session.position,
       state.session.heading,
+      state.session.boatSpeed,
     );
   }, [
     state.tag === "Playing" ? state.session.position : null,
