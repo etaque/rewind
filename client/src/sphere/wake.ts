@@ -4,7 +4,7 @@ import { LngLat } from "../models";
 import { Scene } from "./scene";
 
 // Maximum number of wake points to keep
-const MAX_WAKE_POINTS = 1000;
+const MAX_WAKE_POINTS = 10000;
 // Minimum distance between wake points in km
 const MIN_DISTANCE_KM = 2;
 // Max boat speed for color scaling (knots)
