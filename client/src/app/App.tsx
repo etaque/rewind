@@ -7,6 +7,7 @@ import { vg20 } from "./courses";
 import StartScreen from "./StartScreen";
 import StartRaceButton from "./StartRaceButton";
 import Hud from "./Hud";
+import CursorWind from "./CursorWind";
 import { initLandData } from "./land";
 
 const serverUrl = import.meta.env.REWIND_SERVER_URL;
@@ -183,6 +184,7 @@ export default function App() {
           />
         )}
       </div>
+      <CursorWind sphereView={sphereViewRef.current} />
     </>
   );
 }

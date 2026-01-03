@@ -4,7 +4,7 @@
 
 import * as versor from "./versor";
 import * as d3 from "d3";
-import { Course, LngLat, Spherical } from "../models";
+import { Course, LngLat, Spherical, WindSpeed } from "../models";
 import { sphere, sphereCenter, sphereRadius } from "./scene";
 import Wind from "../wind";
 import Land from "./land";
@@ -138,6 +138,20 @@ export class SphereView {
   updateWind(wind: Wind) {
     this.wind = wind;
     this.render();
+  }
+
+  /**
+   * Get wind speed at screen coordinates.
+   * Returns null if position is outside the globe or no wind data is loaded.
+   */
+  getWindAtScreen(x: number, y: number): WindSpeed | null {
+    if (!this.wind || !this.projection.invert) return null;
+
+    const coords = this.projection.invert([x, y]);
+    if (!coords) return null;
+
+    const [lng, lat] = coords;
+    return this.wind.speedAt({ lng, lat });
   }
 
   updatePosition(pos: LngLat, heading: number, boatSpeed: number = 0) {
