@@ -14,7 +14,7 @@ export type TickResult = {
 };
 
 // Turn rate in degrees per second during a tack
-const TACK_TURN_RATE = 30;
+const TACK_TURN_RATE = 90;
 
 export function tick(session: Session, delta: number): TickResult {
   const newClock = session.clock + delta;

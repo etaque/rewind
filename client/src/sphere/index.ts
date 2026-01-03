@@ -6,7 +6,7 @@ import * as versor from "./versor";
 import * as d3 from "d3";
 import { Course, LngLat, Spherical, WindSpeed } from "../models";
 import { sphere, sphereCenter, sphereRadius } from "./scene";
-import Wind from "../wind";
+import WindRaster from "../wind-raster";
 import Land from "./land";
 import Boat from "./boat";
 import Wake from "./wake";
@@ -20,7 +20,7 @@ export class SphereView {
   width: number;
   height: number;
 
-  wind?: Wind;
+  wind?: WindRaster;
   position: LngLat;
   heading: number;
 
@@ -135,7 +135,7 @@ export class SphereView {
     d3.select(this.node).call(zoom);
   }
 
-  updateWind(wind: Wind) {
+  updateWind(wind: WindRaster) {
     this.wind = wind;
     this.render();
   }

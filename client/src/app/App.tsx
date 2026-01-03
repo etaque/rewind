@@ -1,7 +1,7 @@
 import { useReducer, useEffect, useRef, useCallback } from "react";
 import { appReducer, initialState } from "./state";
 import { SphereView } from "../sphere";
-import Wind from "../wind";
+import WindRaster from "../wind-raster";
 import { Course, WindReport } from "../models";
 import { vg20 } from "./courses";
 import StartScreen from "./StartScreen";
@@ -18,7 +18,7 @@ export default function App() {
   const [state, dispatch] = useReducer(appReducer, initialState);
 
   const sphereViewRef = useRef<SphereView | null>(null);
-  const windRef = useRef<Wind | null>(null);
+  const windRasterRef = useRef<WindRaster | null>(null);
   const lastWindRefreshRef = useRef<number>(0);
   const sphereNodeRef = useRef<HTMLDivElement>(null);
   const positionRef = useRef(
@@ -66,8 +66,8 @@ export default function App() {
 
     const firstReport = state.session.reports[0];
 
-    Wind.load(firstReport.id, "uv").then((wind) => {
-      windRef.current = wind;
+    WindRaster.load(report.id, "uv").then((wind) => {
+      windRasterRef.current = wind;
       if (sphereViewRef.current) {
         sphereViewRef.current.updateWind(wind);
       }
@@ -142,8 +142,10 @@ export default function App() {
         ) {
           lastWindRefreshRef.current = accumulatedClock;
 
-          if (windRef.current && positionRef.current) {
-            const windSpeed = windRef.current.speedAt(positionRef.current) ?? {
+          if (windRasterRef.current && positionRef.current) {
+            const windSpeed = windRasterRef.current.speedAt(
+              positionRef.current,
+            ) ?? {
               u: 0,
               v: 0,
             };

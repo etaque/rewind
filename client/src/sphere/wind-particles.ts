@@ -1,6 +1,6 @@
 import { LngLat, Pixel } from "../models";
 import { Scene } from "./scene";
-import Wind from "../wind";
+import WindRaster from "../wind-raster";
 import * as utils from "../utils";
 
 const MAX_AGE = 1200; // 10..100
@@ -30,7 +30,7 @@ export default class Particles {
     this.canvas = canvas;
   }
 
-  show(scene: Scene, wind: Wind) {
+  show(scene: Scene, wind: WindRaster) {
     // Don't restart if already running
     if (this.running) return;
 
@@ -132,7 +132,7 @@ function moveParticle(
   delta: number,
   context: CanvasRenderingContext2D,
   scene: Scene,
-  wind: Wind,
+  wind: WindRaster,
 ) {
   p.age += delta;
   if (p.age > MAX_AGE) {

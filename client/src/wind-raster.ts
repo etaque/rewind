@@ -15,7 +15,7 @@ type RasterData = {
   height: number;
 };
 
-export default class Wind {
+export default class WindRaster {
   readonly id: string;
   readonly raster: RasterData;
 
@@ -24,10 +24,10 @@ export default class Wind {
     this.raster = raster;
   }
 
-  static async load(reportId: string, facet: string): Promise<Wind> {
+  static async load(reportId: string, facet: string): Promise<WindRaster> {
     const url = `${serverUrl}/wind-reports/${reportId}/${facet}.png`;
     const raster = await loadImageData(url);
-    return new Wind(reportId, raster);
+    return new WindRaster(reportId, raster);
   }
 
   speedAt(position: LngLat): WindSpeed | null {
