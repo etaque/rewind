@@ -5,6 +5,7 @@ import Wind from "../wind";
 import { Course, WindReport } from "../models";
 import { vg20 } from "./courses";
 import StartScreen from "./StartScreen";
+import StartRaceButton from "./StartRaceButton";
 import Hud from "./Hud";
 import { initLandData } from "./land";
 
@@ -54,10 +55,10 @@ export default function App() {
       });
   }, [state.tag === "Loading" ? state.course.key : null]);
 
-  // Load first wind report when Playing starts
+  // Load first wind report after reports are loaded
   useEffect(() => {
-    if (state.tag !== "Playing") return;
-    if (state.session.reports.length === 0) return;
+    if (state.tag !== "Loading") return;
+    if (!state.session || state.session.reports.length === 0) return;
 
     const firstReport = state.session.reports[0];
 
@@ -66,8 +67,13 @@ export default function App() {
       if (sphereViewRef.current) {
         sphereViewRef.current.updateWind(wind);
       }
+      dispatch({ type: "WIND_LOADED" });
     });
-  }, [state.tag === "Playing"]);
+  }, [state.tag === "Loading" && state.session ? state.session.reports : null]);
+
+  const handleStartRace = useCallback(() => {
+    dispatch({ type: "START_RACE" });
+  }, []);
 
   // Keyboard controls when Playing
   useEffect(() => {
@@ -147,6 +153,11 @@ export default function App() {
         {state.tag === "Idle" && (
           <div className="pointer-events-auto">
             <StartScreen onStart={() => handleLoadCourse(vg20)} />
+          </div>
+        )}
+        {state.tag === "Ready" && (
+          <div className="pointer-events-auto">
+            <StartRaceButton onStart={handleStartRace} />
           </div>
         )}
         {state.tag === "Playing" && (
