@@ -1,12 +1,8 @@
-import { LngLat, WindSpeed } from "../models";
+import { WindSpeed } from "../models";
+import { Session } from "./state";
 
 type Props = {
-  position: LngLat;
-  heading: number;
-  courseTime: number;
-  windSpeed: WindSpeed;
-  boatSpeed: number;
-  lockedTWA: number | null;
+  session: Session;
 };
 
 function formatCoord(value: number, pos: string, neg: string): string {
@@ -55,24 +51,23 @@ function calculateTWA(heading: number, windSpeed: WindSpeed): number {
   return Math.abs(twa);
 }
 
-export default function Hud({
-  position,
-  heading,
-  courseTime,
-  windSpeed,
-  boatSpeed,
-  lockedTWA,
-}: Props) {
-  const lat = formatCoord(position.lat, "N", "S");
-  const lng = formatCoord(position.lng, "E", "W");
+export default function Hud({ session }: Props) {
+  const lat = formatCoord(session.position.lat, "N", "S");
+  const lng = formatCoord(session.position.lng, "E", "W");
 
   return (
     <div className="absolute top-4 right-4 bg-black/60 text-white px-4 py-3 rounded-lg font-mono text-sm">
       <div className="flex flex-col gap-1">
         <div>
           <span className="text-gray-400">UTC </span>
-          <span>{formatCourseTime(courseTime)}</span>
+          <span>{formatCourseTime(session.courseTime)}</span>
         </div>
+        {session.currentReport && (
+          <div>
+            <span className="text-gray-400">REP </span>
+            <span>{formatCourseTime(session.currentReport.time)}</span>
+          </div>
+        )}
         <div>
           <span className="text-gray-400">POS </span>
           <span>
@@ -81,18 +76,20 @@ export default function Hud({
         </div>
         <div>
           <span className="text-gray-400">HDG </span>
-          <span>{formatHeading(heading)}</span>
+          <span>{formatHeading(session.heading)}</span>
           <span className="text-gray-400 ml-2">BSP </span>
-          <span>{boatSpeed.toFixed(1)}kts</span>
+          <span>{session.boatSpeed.toFixed(1)}kts</span>
         </div>
         <div>
           <span className="text-gray-400">TWD </span>
-          <span>{formatWindDirection(windSpeed)}</span>
+          <span>{formatWindDirection(session.windSpeed)}</span>
           <span className="text-gray-400 ml-2">TWS </span>
-          <span>{formatWindSpeed(windSpeed)}</span>
+          <span>{formatWindSpeed(session.windSpeed)}</span>
           <span className="text-gray-400 ml-2">TWA </span>
-          <span>{calculateTWA(heading, windSpeed).toFixed(0)}°</span>
-          {lockedTWA !== null && (
+          <span>
+            {calculateTWA(session.heading, session.windSpeed).toFixed(0)}°
+          </span>
+          {session.lockedTWA !== null && (
             <span className="ml-1 text-green-400">[LOCK]</span>
           )}
         </div>

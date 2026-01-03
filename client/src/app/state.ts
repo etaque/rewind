@@ -2,12 +2,11 @@ import { Course, LngLat, WindSpeed, WindReport } from "../models";
 import { tick } from "./tick";
 import { calculateTackTarget } from "./tack";
 import { toggleTWALock } from "./twa-lock";
-
-type LoadingWithSession = { tag: "Loading"; course: Course; session?: Session };
+import { refreshWindReport } from "./wind-report";
 
 export type AppState =
   | { tag: "Idle" }
-  | LoadingWithSession
+  | { tag: "Loading"; course: Course }
   | { tag: "Ready"; session: Session }
   | { tag: "Playing"; session: Session };
 
@@ -21,7 +20,8 @@ export type Session = {
   lockedTWA: number | null; // when set, maintain this TWA as wind changes
   boatSpeed: number; // in knots
   course: Course;
-  reports: WindReport[];
+  currentReport: WindReport | null;
+  nextReports: WindReport[];
   windSpeed: WindSpeed;
 };
 
@@ -29,9 +29,8 @@ export type AppAction =
   | { type: "LOAD_COURSE"; course: Course }
   | { type: "REPORTS_LOADED"; reports: WindReport[] }
   | { type: "REPORTS_ERROR" }
-  | { type: "WIND_LOADED" }
   | { type: "START_RACE" }
-  | { type: "WIND_UPDATED"; windSpeed: WindSpeed }
+  | { type: "LOCAL_WIND_UPDATED"; windSpeed: WindSpeed }
   | { type: "TICK"; delta: number }
   | { type: "TURN"; delta: number }
   | { type: "TACK" }
@@ -40,9 +39,6 @@ export type AppAction =
 export const initialState: AppState = { tag: "Idle" };
 
 export function appReducer(state: AppState, action: AppAction): AppState {
-  if (action.type !== "TICK") {
-    console.log("Action:", action);
-  }
   switch (action.type) {
     case "LOAD_COURSE":
       if (state.tag !== "Idle") return state;
@@ -50,10 +46,13 @@ export function appReducer(state: AppState, action: AppAction): AppState {
 
     case "REPORTS_LOADED":
       if (state.tag !== "Loading") return state;
-      // Transition to Loading with session data, wait for wind to load
+      const [currentReport, nextReports] = refreshWindReport(
+        state.course.startTime,
+        null,
+        action.reports,
+      );
       return {
-        tag: "Loading",
-        course: state.course,
+        tag: "Ready",
         session: {
           clock: 0,
           lastWindRefresh: 0,
@@ -64,18 +63,10 @@ export function appReducer(state: AppState, action: AppAction): AppState {
           lockedTWA: null,
           boatSpeed: 0,
           course: state.course,
-          reports: action.reports,
+          currentReport,
+          nextReports,
           windSpeed: { u: 0, v: 0 },
         },
-      } as LoadingWithSession;
-
-    case "WIND_LOADED":
-      if (state.tag !== "Loading") return state;
-      const loadingState = state as LoadingWithSession;
-      if (!loadingState.session) return state;
-      return {
-        tag: "Ready",
-        session: loadingState.session,
       };
 
     case "START_RACE":
@@ -88,7 +79,7 @@ export function appReducer(state: AppState, action: AppAction): AppState {
     case "REPORTS_ERROR":
       return { tag: "Idle" };
 
-    case "WIND_UPDATED":
+    case "LOCAL_WIND_UPDATED":
       if (state.tag !== "Playing") return state;
       return {
         ...state,

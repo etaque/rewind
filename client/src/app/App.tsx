@@ -11,7 +11,7 @@ import CursorWind from "./CursorWind";
 import { initLandData } from "./land";
 
 const serverUrl = import.meta.env.REWIND_SERVER_URL;
-const WIND_REFRESH_INTERVAL = 1000;
+const WIND_REFRESH_INTERVAL = 100;
 const TURN_DELTA = 2;
 
 export default function App() {
@@ -44,7 +44,8 @@ export default function App() {
     initLandData();
 
     // Fetch wind reports
-    const url = `${serverUrl}/wind-reports/since/${course.startTime}`;
+    const since = course.startTime - 1000 * 60 * 60 * 24;
+    const url = `${serverUrl}/wind-reports/since/${since}`;
     console.log("Fetching wind reports from:", url);
 
     fetch(url)
@@ -61,19 +62,23 @@ export default function App() {
 
   // Load first wind report after reports are loaded
   useEffect(() => {
-    if (state.tag !== "Loading") return;
-    if (!state.session || state.session.reports.length === 0) return;
+    if (state.tag !== "Playing" && state.tag !== "Ready") return;
+    if (!state.session.currentReport) return;
 
-    const firstReport = state.session.reports[0];
-
-    WindRaster.load(report.id, "uv").then((wind) => {
+    console.log("Loading wind report:", state.session.currentReport);
+    WindRaster.load(state.session.currentReport.id).then((wind) => {
+      console.log("Wind report loaded.");
       windRasterRef.current = wind;
       if (sphereViewRef.current) {
         sphereViewRef.current.updateWind(wind);
+        console.log("Sphere view updated.");
       }
-      dispatch({ type: "WIND_LOADED" });
     });
-  }, [state.tag === "Loading" && state.session ? state.session.reports : null]);
+  }, [
+    state.tag === "Playing" || state.tag == "Ready"
+      ? state.session.currentReport
+      : null,
+  ]);
 
   const handleStartRace = useCallback(() => {
     dispatch({ type: "START_RACE" });
@@ -149,7 +154,7 @@ export default function App() {
               u: 0,
               v: 0,
             };
-            dispatch({ type: "WIND_UPDATED", windSpeed });
+            dispatch({ type: "LOCAL_WIND_UPDATED", windSpeed });
           }
         }
       }
@@ -175,15 +180,8 @@ export default function App() {
             <StartRaceButton onStart={handleStartRace} />
           </div>
         )}
-        {state.tag === "Playing" && (
-          <Hud
-            position={state.session.position}
-            heading={state.session.heading}
-            courseTime={state.session.courseTime}
-            windSpeed={state.session.windSpeed}
-            boatSpeed={state.session.boatSpeed}
-            lockedTWA={state.session.lockedTWA}
-          />
+        {(state.tag === "Ready" || state.tag === "Playing") && (
+          <Hud session={state.session} />
         )}
       </div>
       <CursorWind sphereView={sphereViewRef.current} />

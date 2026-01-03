@@ -38,7 +38,7 @@ impl From<WindReport> for messages::WindReport {
     fn from(report: WindReport) -> messages::WindReport {
         messages::WindReport {
             id: report.id,
-            time: report.creation_time,
+            time: report.target_time,
         }
     }
 }

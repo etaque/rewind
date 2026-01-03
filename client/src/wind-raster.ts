@@ -24,8 +24,8 @@ export default class WindRaster {
     this.raster = raster;
   }
 
-  static async load(reportId: string, facet: string): Promise<WindRaster> {
-    const url = `${serverUrl}/wind-reports/${reportId}/${facet}.png`;
+  static async load(reportId: string): Promise<WindRaster> {
+    const url = `${serverUrl}/wind-reports/${reportId}/uv.png`;
     const raster = await loadImageData(url);
     return new WindRaster(reportId, raster);
   }
