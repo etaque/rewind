@@ -25,12 +25,16 @@ export default class Particles {
   rafId?: number;
   paused = false;
   running = false;
+  wind?: WindRaster;
 
   constructor(canvas: HTMLCanvasElement) {
     this.canvas = canvas;
   }
 
   show(scene: Scene, wind: WindRaster) {
+    // Update wind reference (used by the animation loop)
+    this.wind = wind;
+
     // Don't restart if already running
     if (this.running) return;
 
@@ -42,7 +46,7 @@ export default class Particles {
     let previous: number;
 
     const tick = (timestamp: number) => {
-      if (this.paused) return;
+      if (this.paused || !this.wind) return;
 
       if (previous) {
         const delta = timestamp - previous;
@@ -52,7 +56,7 @@ export default class Particles {
           context.strokeStyle = "rgba(210,210,210,0.7)";
 
           this.particles.forEach((p) =>
-            moveParticle(p, delta, context, scene, wind),
+            moveParticle(p, delta, context, scene, this.wind!),
           );
 
           context.stroke();
