@@ -123,14 +123,14 @@ export function appReducer(state: AppState, action: AppAction): AppState {
         (Math.atan2(-windSpeed.u, -windSpeed.v) * 180) / Math.PI + 360;
       const windDirNorm = windDir % 360;
 
-      // Calculate angle from wind to current heading
-      let angleFromWind = heading - windDirNorm;
+      // Calculate signed TWA (positive = wind from starboard, negative = wind from port)
+      let signedTWA = windDirNorm - heading;
       // Normalize to -180 to 180
-      while (angleFromWind > 180) angleFromWind -= 360;
-      while (angleFromWind < -180) angleFromWind += 360;
+      while (signedTWA > 180) signedTWA -= 360;
+      while (signedTWA < -180) signedTWA += 360;
 
-      // Mirror across the wind direction
-      const targetHeading = (windDirNorm - angleFromWind + 360) % 360;
+      // Target heading has the same TWA magnitude but opposite sign
+      const targetHeading = (windDirNorm + signedTWA + 360) % 360;
 
       return {
         ...state,
