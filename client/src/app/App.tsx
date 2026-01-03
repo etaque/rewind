@@ -58,7 +58,7 @@ export default function App() {
       });
   }, [state.tag === "Loading" ? state.course.key : null]);
 
-  // Load first wind report after reports are loaded
+  // Load current wind report if changed
   useEffect(() => {
     if (state.tag !== "Playing" && state.tag !== "Ready") return;
     if (!state.session.currentReport) return;

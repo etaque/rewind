@@ -136,6 +136,7 @@ export class SphereView {
   }
 
   updateWind(wind: WindRaster) {
+    console.log("Updating wind");
     this.wind = wind;
     this.render();
   }

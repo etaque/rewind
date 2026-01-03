@@ -1,5 +1,7 @@
 import { LngLat, WindSpeed, Pixel } from "./models";
 import * as utils from "./utils";
+import type { WorkerResponse } from "./wind-raster.worker";
+import WindRasterWorker from "./wind-raster.worker?worker";
 
 const serverUrl = import.meta.env.REWIND_SERVER_URL;
 
@@ -47,25 +49,18 @@ export default class WindRaster {
   }
 }
 
-async function loadImageData(url: string): Promise<RasterData> {
+function loadImageData(url: string): Promise<RasterData> {
   return new Promise((resolve, reject) => {
-    const img = new Image();
-    img.crossOrigin = "anonymous";
-    img.onload = () => {
-      const canvas = document.createElement("canvas");
-      canvas.width = img.width;
-      canvas.height = img.height;
-      const ctx = canvas.getContext("2d")!;
-      ctx.drawImage(img, 0, 0);
-      const imageData = ctx.getImageData(0, 0, img.width, img.height);
-      resolve({
-        data: imageData.data,
-        width: img.width,
-        height: img.height,
-      });
+    const worker = new WindRasterWorker();
+    worker.onmessage = (e: MessageEvent<WorkerResponse>) => {
+      resolve(e.data);
+      worker.terminate();
     };
-    img.onerror = () => reject(new Error(`Failed to load image: ${url}`));
-    img.src = url;
+    worker.onerror = (e) => {
+      reject(new Error(`Worker error: ${e.message}`));
+      worker.terminate();
+    };
+    worker.postMessage({ url });
   });
 }
 
