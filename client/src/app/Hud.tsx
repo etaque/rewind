@@ -45,6 +45,15 @@ function formatWindDirection(windSpeed: WindSpeed): string {
   return `${degrees.toFixed(0)}°`;
 }
 
+function calculateTWA(heading: number, windSpeed: WindSpeed): number {
+  const radians = Math.atan2(-windSpeed.u, -windSpeed.v);
+  const windDirection = ((radians * 180) / Math.PI + 360) % 360;
+  let twa = windDirection - heading;
+  while (twa > 180) twa -= 360;
+  while (twa < -180) twa += 360;
+  return Math.abs(twa);
+}
+
 export default function Hud({
   position,
   heading,
@@ -79,6 +88,8 @@ export default function Hud({
           <span>{formatWindDirection(windSpeed)}</span>
           <span className="text-gray-400 ml-2">TWS </span>
           <span>{formatWindSpeed(windSpeed)}</span>
+          <span className="text-gray-400 ml-2">TWA </span>
+          <span>{calculateTWA(heading, windSpeed).toFixed(0)}°</span>
         </div>
       </div>
     </div>

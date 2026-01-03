@@ -20,6 +20,9 @@ export default function App() {
   const windRef = useRef<Wind | null>(null);
   const lastWindRefreshRef = useRef<number>(0);
   const sphereNodeRef = useRef<HTMLDivElement>(null);
+  const positionRef = useRef(
+    state.tag === "Playing" ? state.session.position : null,
+  );
 
   const handleLoadCourse = useCallback((course: Course) => {
     dispatch({ type: "LOAD_COURSE", course });
@@ -97,6 +100,10 @@ export default function App() {
   // Sync position and heading to SphereView
   useEffect(() => {
     if (state.tag !== "Playing") return;
+
+    // Keep positionRef current for the animation loop
+    positionRef.current = state.session.position;
+
     if (!sphereViewRef.current) return;
 
     sphereViewRef.current.updatePosition(
@@ -130,10 +137,8 @@ export default function App() {
         ) {
           lastWindRefreshRef.current = accumulatedClock;
 
-          if (windRef.current) {
-            const windSpeed = windRef.current.speedAt(
-              state.session.position,
-            ) ?? {
+          if (windRef.current && positionRef.current) {
+            const windSpeed = windRef.current.speedAt(positionRef.current) ?? {
               u: 0,
               v: 0,
             };
