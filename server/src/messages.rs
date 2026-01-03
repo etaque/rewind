@@ -8,4 +8,6 @@ pub struct WindReport {
     pub id: Uuid,
     #[serde(with = "ts_milliseconds")]
     pub time: DateTime<Utc>,
+    pub day: String,
+    pub hour: u32,
 }

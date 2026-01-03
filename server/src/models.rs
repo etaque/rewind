@@ -39,6 +39,8 @@ impl From<WindReport> for messages::WindReport {
         messages::WindReport {
             id: report.id,
             time: report.target_time,
+            day: report.day.to_string(),
+            hour: report.hour as u32,
         }
     }
 }

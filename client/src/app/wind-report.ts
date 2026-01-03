@@ -13,10 +13,10 @@ export function refreshWindReport(
     return [currentReport, nextReports];
   }
 
-  const i = nextReports.findIndex((r) => r.time <= courseTime);
-  if (i === -1) {
-    return [currentReport, nextReports];
+  const i = nextReports.findIndex((r) => r.time > courseTime);
+  if (i > 0) {
+    return [nextReports[i - 1], nextReports.slice(i)];
   }
 
-  return [nextReports[i], nextReports.slice(i + 1)];
+  return [currentReport, nextReports];
 }

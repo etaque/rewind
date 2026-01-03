@@ -46,12 +46,10 @@ export default function App() {
     // Fetch wind reports
     const since = course.startTime - 1000 * 60 * 60 * 24;
     const url = `${serverUrl}/wind-reports/since/${since}`;
-    console.log("Fetching wind reports from:", url);
 
     fetch(url)
       .then((res) => res.json())
       .then((reports: WindReport[]) => {
-        console.log("Received reports:", reports);
         dispatch({ type: "REPORTS_LOADED", reports });
       })
       .catch((err) => {
@@ -65,13 +63,10 @@ export default function App() {
     if (state.tag !== "Playing" && state.tag !== "Ready") return;
     if (!state.session.currentReport) return;
 
-    console.log("Loading wind report:", state.session.currentReport);
     WindRaster.load(state.session.currentReport.id).then((wind) => {
-      console.log("Wind report loaded.");
       windRasterRef.current = wind;
       if (sphereViewRef.current) {
         sphereViewRef.current.updateWind(wind);
-        console.log("Sphere view updated.");
       }
     });
   }, [
