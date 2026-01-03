@@ -87,6 +87,9 @@ export default function App() {
         dispatch({ type: "TURN", delta: -TURN_DELTA });
       } else if (e.key === "ArrowRight") {
         dispatch({ type: "TURN", delta: TURN_DELTA });
+      } else if (e.key === "ArrowUp") {
+        e.preventDefault();
+        dispatch({ type: "TOGGLE_TWA_LOCK" });
       } else if (e.key === " ") {
         e.preventDefault();
         dispatch({ type: "TACK" });
@@ -175,6 +178,7 @@ export default function App() {
             courseTime={state.session.courseTime}
             windSpeed={state.session.windSpeed}
             boatSpeed={state.session.boatSpeed}
+            lockedTWA={state.session.lockedTWA}
           />
         )}
       </div>

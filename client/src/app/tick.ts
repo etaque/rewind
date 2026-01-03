@@ -50,6 +50,12 @@ export function tick(session: Session, delta: number): TickResult {
     360;
   const windDirNorm = windDir % 360;
 
+  // Apply TWA lock: adjust heading to maintain locked TWA
+  if (session.lockedTWA !== null && targetHeading === null) {
+    // Heading = windDir - lockedTWA (signed TWA)
+    heading = (windDirNorm - session.lockedTWA + 360) % 360;
+  }
+
   // Calculate TWS in knots (wind is in m/s, convert to knots)
   const twsMs = Math.sqrt(session.windSpeed.u ** 2 + session.windSpeed.v ** 2);
   const tws = twsMs * 1.944;

@@ -16,6 +16,7 @@ export type Session = {
   position: LngLat;
   heading: number;
   targetHeading: number | null; // for progressive tacking
+  lockedTWA: number | null; // when set, maintain this TWA as wind changes
   boatSpeed: number; // in knots
   course: Course;
   reports: WindReport[];
@@ -31,7 +32,8 @@ export type AppAction =
   | { type: "WIND_UPDATED"; windSpeed: WindSpeed }
   | { type: "TICK"; delta: number }
   | { type: "TURN"; delta: number }
-  | { type: "TACK" };
+  | { type: "TACK" }
+  | { type: "TOGGLE_TWA_LOCK" };
 
 export const initialState: AppState = { tag: "Idle" };
 
@@ -57,6 +59,7 @@ export function appReducer(state: AppState, action: AppAction): AppState {
           position: state.course.start,
           heading: state.course.startHeading,
           targetHeading: null,
+          lockedTWA: null,
           boatSpeed: 0,
           course: state.course,
           reports: action.reports,
@@ -109,6 +112,7 @@ export function appReducer(state: AppState, action: AppAction): AppState {
           ...state.session,
           heading: (state.session.heading + action.delta + 360) % 360,
           targetHeading: null, // cancel any ongoing tack
+          lockedTWA: null, // cancel TWA lock
         },
       };
 
@@ -139,6 +143,34 @@ export function appReducer(state: AppState, action: AppAction): AppState {
           targetHeading,
         },
       };
+
+    case "TOGGLE_TWA_LOCK":
+      if (state.tag !== "Playing") return state;
+      if (state.session.lockedTWA !== null) {
+        // Unlock
+        return {
+          ...state,
+          session: {
+            ...state.session,
+            lockedTWA: null,
+          },
+        };
+      } else {
+        // Lock to current TWA (signed, to preserve tack side)
+        const { windSpeed: ws, heading: hdg } = state.session;
+        const wd = (Math.atan2(-ws.u, -ws.v) * 180) / Math.PI + 360;
+        const wdNorm = wd % 360;
+        let twa = wdNorm - hdg;
+        while (twa > 180) twa -= 360;
+        while (twa < -180) twa += 360;
+        return {
+          ...state,
+          session: {
+            ...state.session,
+            lockedTWA: twa,
+          },
+        };
+      }
 
     default:
       return state;

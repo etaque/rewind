@@ -6,6 +6,7 @@ type Props = {
   courseTime: number;
   windSpeed: WindSpeed;
   boatSpeed: number;
+  lockedTWA: number | null;
 };
 
 function formatCoord(value: number, pos: string, neg: string): string {
@@ -60,6 +61,7 @@ export default function Hud({
   courseTime,
   windSpeed,
   boatSpeed,
+  lockedTWA,
 }: Props) {
   const lat = formatCoord(position.lat, "N", "S");
   const lng = formatCoord(position.lng, "E", "W");
@@ -90,6 +92,9 @@ export default function Hud({
           <span>{formatWindSpeed(windSpeed)}</span>
           <span className="text-gray-400 ml-2">TWA </span>
           <span>{calculateTWA(heading, windSpeed).toFixed(0)}°</span>
+          {lockedTWA !== null && (
+            <span className="ml-1 text-green-400">[LOCK]</span>
+          )}
         </div>
       </div>
     </div>
