@@ -1,5 +1,7 @@
 import { Course, LngLat, WindSpeed, WindReport } from "../models";
 import { tick } from "./tick";
+import { calculateTackTarget } from "./tack";
+import { toggleTWALock } from "./twa-lock";
 
 type LoadingWithSession = { tag: "Loading"; course: Course; session?: Session };
 
@@ -118,24 +120,8 @@ export function appReducer(state: AppState, action: AppAction): AppState {
 
     case "TACK":
       if (state.tag !== "Playing") return state;
-      // Don't start a new tack if one is already in progress
-      if (state.session.targetHeading !== null) return state;
-
-      const { windSpeed, heading } = state.session;
-      // Calculate wind direction (where wind comes FROM)
-      const windDir =
-        (Math.atan2(-windSpeed.u, -windSpeed.v) * 180) / Math.PI + 360;
-      const windDirNorm = windDir % 360;
-
-      // Calculate signed TWA (positive = wind from starboard, negative = wind from port)
-      let signedTWA = windDirNorm - heading;
-      // Normalize to -180 to 180
-      while (signedTWA > 180) signedTWA -= 360;
-      while (signedTWA < -180) signedTWA += 360;
-
-      // Target heading has the same TWA magnitude but opposite sign
-      const targetHeading = (windDirNorm + signedTWA + 360) % 360;
-
+      const targetHeading = calculateTackTarget(state.session);
+      if (targetHeading === null) return state;
       return {
         ...state,
         session: {
@@ -146,31 +132,13 @@ export function appReducer(state: AppState, action: AppAction): AppState {
 
     case "TOGGLE_TWA_LOCK":
       if (state.tag !== "Playing") return state;
-      if (state.session.lockedTWA !== null) {
-        // Unlock
-        return {
-          ...state,
-          session: {
-            ...state.session,
-            lockedTWA: null,
-          },
-        };
-      } else {
-        // Lock to current TWA (signed, to preserve tack side)
-        const { windSpeed: ws, heading: hdg } = state.session;
-        const wd = (Math.atan2(-ws.u, -ws.v) * 180) / Math.PI + 360;
-        const wdNorm = wd % 360;
-        let twa = wdNorm - hdg;
-        while (twa > 180) twa -= 360;
-        while (twa < -180) twa += 360;
-        return {
-          ...state,
-          session: {
-            ...state.session,
-            lockedTWA: twa,
-          },
-        };
-      }
+      return {
+        ...state,
+        session: {
+          ...state.session,
+          lockedTWA: toggleTWALock(state.session),
+        },
+      };
 
     default:
       return state;
