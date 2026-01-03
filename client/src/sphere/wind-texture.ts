@@ -5,14 +5,24 @@ import { Scene, sphereRadius } from "./scene";
 import type { WorkerResponse } from "./wind-texture.worker";
 import WindTextureWorker from "./wind-texture.worker?worker";
 
+export type WindTextureParams = {
+  currentRaster: WindRaster;
+  nextRaster?: WindRaster;
+  interpolationFactor: number;
+};
+
 export default class Texture {
   readonly canvas: HTMLCanvasElement;
   readonly gl: WebGLRenderingContext;
   readonly init: (scene: Scene) => void;
 
-  wind?: WindRaster;
+  // Track what's currently rendered to avoid unnecessary regeneration
+  private renderedCurrentId?: string;
+  private renderedNextId?: string;
+  private renderedFactor?: number;
+
   texture?: WebGLTexture;
-  pendingWindId?: string;
+  pendingGeneration?: { currentId: string; nextId?: string; factor: number };
 
   constructor(canvas: HTMLCanvasElement) {
     this.canvas = canvas;
@@ -48,13 +58,29 @@ export default class Texture {
     };
   }
 
-  render(scene: Scene, wind: WindRaster) {
-    const needsNewTexture = wind.id !== this.wind?.id;
-    const isAlreadyPending = wind.id === this.pendingWindId;
+  render(scene: Scene, params: WindTextureParams) {
+    const { currentRaster, nextRaster, interpolationFactor } = params;
+
+    // Quantize interpolation factor to avoid too frequent updates (every ~20% change)
+    const quantizedFactor = Math.round(interpolationFactor * 5) / 5;
+
+    const needsNewTexture =
+      currentRaster.id !== this.renderedCurrentId ||
+      nextRaster?.id !== this.renderedNextId ||
+      quantizedFactor !== this.renderedFactor;
+
+    const isAlreadyPending =
+      this.pendingGeneration?.currentId === currentRaster.id &&
+      this.pendingGeneration?.nextId === nextRaster?.id &&
+      this.pendingGeneration?.factor === quantizedFactor;
 
     if (needsNewTexture && !isAlreadyPending) {
-      this.pendingWindId = wind.id;
-      this.generateTextureAsync(wind);
+      this.pendingGeneration = {
+        currentId: currentRaster.id,
+        nextId: nextRaster?.id,
+        factor: quantizedFactor,
+      };
+      this.generateTextureAsync(currentRaster, nextRaster, quantizedFactor);
     }
 
     // Render with existing texture while new one is being generated
@@ -65,34 +91,61 @@ export default class Texture {
     }
   }
 
-  private generateTextureAsync(wind: WindRaster) {
+  private generateTextureAsync(
+    currentRaster: WindRaster,
+    nextRaster: WindRaster | undefined,
+    interpolationFactor: number,
+  ) {
     const worker = new WindTextureWorker();
+    const expectedGeneration = this.pendingGeneration;
 
     worker.onmessage = (e: MessageEvent<WorkerResponse>) => {
-      // Only update if this is still the wind we want
-      if (wind.id === this.pendingWindId) {
+      // Only update if this is still the generation we want
+      if (expectedGeneration && this.pendingGeneration === expectedGeneration) {
         // Copy into a new Uint8ClampedArray to satisfy ImageData constructor
         const data = new Uint8ClampedArray(e.data.data);
         const imageData = new ImageData(data, e.data.width, e.data.height);
         this.texture = shaders.createTexture(this.gl, imageData);
-        this.wind = wind;
-        this.pendingWindId = undefined;
+        this.renderedCurrentId = expectedGeneration.currentId;
+        this.renderedNextId = expectedGeneration.nextId;
+        this.renderedFactor = expectedGeneration.factor;
+        this.pendingGeneration = undefined;
       }
       worker.terminate();
     };
 
     worker.onerror = () => {
-      this.pendingWindId = undefined;
+      if (this.pendingGeneration === expectedGeneration) {
+        this.pendingGeneration = undefined;
+      }
       worker.terminate();
     };
 
-    worker.postMessage(
-      {
-        rasterData: wind.raster.data,
-        rasterWidth: wind.raster.width,
-        rasterHeight: wind.raster.height,
-      },
-      [wind.raster.data.buffer.slice(0)], // Copy buffer since we still need it
-    );
+    const currentData = new Uint8ClampedArray(currentRaster.raster.data);
+    const nextData = nextRaster
+      ? new Uint8ClampedArray(nextRaster.raster.data)
+      : undefined;
+
+    const message: {
+      currentRasterData: Uint8ClampedArray;
+      currentRasterWidth: number;
+      nextRasterData?: Uint8ClampedArray;
+      nextRasterWidth?: number;
+      interpolationFactor: number;
+    } = {
+      currentRasterData: currentData,
+      currentRasterWidth: currentRaster.raster.width,
+      interpolationFactor,
+    };
+
+    const transferables: ArrayBuffer[] = [currentData.buffer];
+
+    if (nextData) {
+      message.nextRasterData = nextData;
+      message.nextRasterWidth = nextRaster!.raster.width;
+      transferables.push(nextData.buffer);
+    }
+
+    worker.postMessage(message, transferables);
   }
 }

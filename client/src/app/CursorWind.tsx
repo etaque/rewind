@@ -4,6 +4,7 @@ import { WindSpeed } from "../models";
 
 type Props = {
   sphereView: SphereView | null;
+  courseTime: number;
 };
 
 type CursorState = {
@@ -12,10 +13,12 @@ type CursorState = {
   wind: WindSpeed | null;
 };
 
-export default function CursorWind({ sphereView }: Props) {
+export default function CursorWind({ sphereView, courseTime }: Props) {
   const [cursor, setCursor] = useState<CursorState | null>(null);
   const rafRef = useRef<number | null>(null);
   const pendingUpdate = useRef<{ x: number; y: number } | null>(null);
+  const courseTimeRef = useRef(courseTime);
+  courseTimeRef.current = courseTime;
 
   useEffect(() => {
     if (!sphereView) return;
@@ -23,7 +26,7 @@ export default function CursorWind({ sphereView }: Props) {
     const processUpdate = () => {
       if (pendingUpdate.current && sphereView) {
         const { x, y } = pendingUpdate.current;
-        const wind = sphereView.getWindAtScreen(x, y);
+        const wind = sphereView.getWindAtScreen(x, y, courseTimeRef.current);
         setCursor({ x, y, wind });
         pendingUpdate.current = null;
       }
@@ -60,7 +63,8 @@ export default function CursorWind({ sphereView }: Props) {
   const knots = speed * 1.944;
 
   // Wind direction (where it comes FROM)
-  const dir = ((Math.atan2(-cursor.wind.u, -cursor.wind.v) * 180) / Math.PI + 360) % 360;
+  const dir =
+    ((Math.atan2(-cursor.wind.u, -cursor.wind.v) * 180) / Math.PI + 360) % 360;
 
   return (
     <div

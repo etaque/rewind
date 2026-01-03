@@ -1,10 +1,10 @@
 import { LngLat, Pixel } from "../models";
 import { Scene } from "./scene";
-import WindRaster from "../wind-raster";
+import InterpolatedWind from "../interpolated-wind";
 import * as utils from "../utils";
 
 const MAX_AGE = 1200; // 10..100
-const PARTICLES_COUNT = 4500; // 0..5000
+const PARTICLES_COUNT = 3000; // 0..5000
 const ALPHA_DECAY = 0.95; // 0.8..1
 const TRAVEL_SPEED = 45; // 1500; // 0..4000
 const FPS = 30;
@@ -25,15 +25,17 @@ export default class Particles {
   rafId?: number;
   paused = false;
   running = false;
-  wind?: WindRaster;
+  wind?: InterpolatedWind;
+  interpolationFactor: number = 0;
 
   constructor(canvas: HTMLCanvasElement) {
     this.canvas = canvas;
   }
 
-  show(scene: Scene, wind: WindRaster) {
+  show(scene: Scene, wind: InterpolatedWind, interpolationFactor: number) {
     // Update wind reference (used by the animation loop)
     this.wind = wind;
+    this.interpolationFactor = interpolationFactor;
 
     // Don't restart if already running
     if (this.running) return;
@@ -56,7 +58,14 @@ export default class Particles {
           context.strokeStyle = "rgba(210,210,210,0.7)";
 
           this.particles.forEach((p) =>
-            moveParticle(p, delta, context, scene, this.wind!),
+            moveParticle(
+              p,
+              delta,
+              context,
+              scene,
+              this.wind!,
+              this.interpolationFactor,
+            ),
           );
 
           context.stroke();
@@ -136,7 +145,8 @@ function moveParticle(
   delta: number,
   context: CanvasRenderingContext2D,
   scene: Scene,
-  wind: WindRaster,
+  wind: InterpolatedWind,
+  interpolationFactor: number,
 ) {
   p.age += delta;
   if (p.age > MAX_AGE) {
@@ -146,7 +156,7 @@ function moveParticle(
     p.visible = true;
   } else {
     if (p.visible) {
-      let windSpeed = wind.speedAt(p.coord);
+      let windSpeed = wind.speedAtWithFactor(p.coord, interpolationFactor);
 
       if (windSpeed) {
         let { u, v } = windSpeed;

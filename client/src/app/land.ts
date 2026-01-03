@@ -7,7 +7,7 @@ import type {
   MultiPolygon,
   GeoJsonProperties,
 } from "geojson";
-import landData from "../static/land-50m.json";
+import landData from "../static/land-110m.json";
 import { Topology, Objects, Point } from "topojson-specification";
 
 type LandFeature = {

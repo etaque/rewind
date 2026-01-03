@@ -1,7 +1,9 @@
 export type WorkerRequest = {
-  rasterData: Uint8ClampedArray;
-  rasterWidth: number;
-  rasterHeight: number;
+  currentRasterData: Uint8ClampedArray;
+  currentRasterWidth: number;
+  nextRasterData?: Uint8ClampedArray;
+  nextRasterWidth?: number;
+  interpolationFactor: number; // 0-1, how much to blend toward next
 };
 
 export type WorkerResponse = {
@@ -21,8 +23,21 @@ const LAT_AMPLITUDE = 180;
 const CHANNELS = 4;
 
 self.onmessage = (e: MessageEvent<WorkerRequest>) => {
-  const { rasterData, rasterWidth } = e.data;
-  const imageData = generateImage(rasterData, rasterWidth);
+  const {
+    currentRasterData,
+    currentRasterWidth,
+    nextRasterData,
+    nextRasterWidth,
+    interpolationFactor,
+  } = e.data;
+
+  const imageData = generateImage(
+    currentRasterData,
+    currentRasterWidth,
+    nextRasterData,
+    nextRasterWidth,
+    interpolationFactor,
+  );
 
   self.postMessage(
     { data: imageData.data, width: imageData.width, height: imageData.height },
@@ -31,12 +46,17 @@ self.onmessage = (e: MessageEvent<WorkerRequest>) => {
 };
 
 function generateImage(
-  rasterData: Uint8ClampedArray,
-  rasterWidth: number,
+  currentRasterData: Uint8ClampedArray,
+  currentRasterWidth: number,
+  nextRasterData?: Uint8ClampedArray,
+  nextRasterWidth?: number,
+  interpolationFactor: number = 0,
 ): ImageData {
   const width = OUTPUT_WIDTH;
   const height = OUTPUT_HEIGHT;
   const arraySize = 4 * width * height;
+  const canInterpolate =
+    nextRasterData && nextRasterWidth && interpolationFactor > 0;
 
   const data = new Uint8ClampedArray(arraySize);
 
@@ -48,7 +68,18 @@ function generateImage(
     const lng = (x / width) * 360 - 180;
     const lat = 90 - (y / height) * 180;
 
-    const windSpeed = speedAt(rasterData, rasterWidth, lng, lat);
+    let windSpeed = speedAt(currentRasterData, currentRasterWidth, lng, lat);
+
+    // Interpolate with next raster if available
+    if (canInterpolate && windSpeed) {
+      const nextWindSpeed = speedAt(nextRasterData, nextRasterWidth, lng, lat);
+      if (nextWindSpeed) {
+        windSpeed = {
+          u: lerp(windSpeed.u, nextWindSpeed.u, interpolationFactor),
+          v: lerp(windSpeed.v, nextWindSpeed.v, interpolationFactor),
+        };
+      }
+    }
 
     if (windSpeed && !isNaN(windSpeed.u) && !isNaN(windSpeed.v)) {
       const speed = Math.sqrt(windSpeed.u ** 2 + windSpeed.v ** 2);
@@ -76,6 +107,10 @@ function generateImage(
   return new ImageData(data, width);
 }
 
+function lerp(a: number, b: number, t: number): number {
+  return a + (b - a) * t;
+}
+
 // Inlined from WindRaster.speedAt
 function speedAt(
   rasterData: Uint8ClampedArray,
@@ -87,23 +122,16 @@ function speedAt(
   if (!floatingPix) return null;
 
   const u = bilinear(floatingPix, (p) =>
-    colorToSpeed(
-      rasterData[pixelToIndex(reframePixel(p, rasterWidth)) + 0],
-    ),
+    colorToSpeed(rasterData[pixelToIndex(reframePixel(p, rasterWidth)) + 0]),
   );
   const v = bilinear(floatingPix, (p) =>
-    colorToSpeed(
-      rasterData[pixelToIndex(reframePixel(p, rasterWidth)) + 1],
-    ),
+    colorToSpeed(rasterData[pixelToIndex(reframePixel(p, rasterWidth)) + 1]),
   );
 
   return { u, v };
 }
 
-function posToPixel(
-  lng: number,
-  lat: number,
-): { x: number; y: number } | null {
+function posToPixel(lng: number, lat: number): { x: number; y: number } | null {
   if (lat < -LAT_AMPLITUDE || lat > LAT_AMPLITUDE) {
     return null;
   }

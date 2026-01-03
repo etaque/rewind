@@ -1,7 +1,7 @@
 import { useReducer, useEffect, useRef, useCallback } from "react";
 import { appReducer, initialState } from "./state";
 import { SphereView } from "../sphere";
-import WindRaster from "../wind-raster";
+import InterpolatedWind from "../interpolated-wind";
 import { Course, WindReport } from "../models";
 import { vg20 } from "./courses";
 import StartScreen from "./StartScreen";
@@ -18,11 +18,14 @@ export default function App() {
   const [state, dispatch] = useReducer(appReducer, initialState);
 
   const sphereViewRef = useRef<SphereView | null>(null);
-  const windRasterRef = useRef<WindRaster | null>(null);
+  const interpolatedWindRef = useRef<InterpolatedWind>(new InterpolatedWind());
   const lastWindRefreshRef = useRef<number>(0);
   const sphereNodeRef = useRef<HTMLDivElement>(null);
   const positionRef = useRef(
     state.tag === "Playing" ? state.session.position : null,
+  );
+  const courseTimeRef = useRef(
+    state.tag === "Playing" ? state.session.courseTime : 0,
   );
 
   const handleLoadCourse = useCallback((course: Course) => {
@@ -58,20 +61,25 @@ export default function App() {
       });
   }, [state.tag === "Loading" ? state.course.key : null]);
 
-  // Load current wind report if changed
+  // Update interpolated wind when reports change
   useEffect(() => {
     if (state.tag !== "Playing" && state.tag !== "Ready") return;
-    if (!state.session.currentReport) return;
 
-    WindRaster.load(state.session.currentReport.id).then((wind) => {
-      windRasterRef.current = wind;
+    const { currentReport, nextReports, courseTime } = state.session;
+    const interpolatedWind = interpolatedWindRef.current;
+
+    interpolatedWind.update(currentReport, nextReports).then(() => {
       if (sphereViewRef.current) {
-        sphereViewRef.current.updateWind(wind);
+        const factor = interpolatedWind.getInterpolationFactor(courseTime);
+        sphereViewRef.current.updateWind(interpolatedWind, factor);
       }
     });
   }, [
-    state.tag === "Playing" || state.tag == "Ready"
-      ? state.session.currentReport
+    state.tag === "Playing" || state.tag === "Ready"
+      ? state.session.currentReport?.id
+      : null,
+    state.tag === "Playing" || state.tag === "Ready"
+      ? state.session.nextReports[0]?.id
       : null,
   ]);
 
@@ -101,12 +109,13 @@ export default function App() {
     return () => window.removeEventListener("keydown", handleKeyDown);
   }, [state.tag]);
 
-  // Sync position and heading to SphereView
+  // Sync position, heading, and courseTime to SphereView
   useEffect(() => {
     if (state.tag !== "Playing") return;
 
-    // Keep positionRef current for the animation loop
+    // Keep refs current for the animation loop
     positionRef.current = state.session.position;
+    courseTimeRef.current = state.session.courseTime;
 
     if (!sphereViewRef.current) return;
 
@@ -115,9 +124,17 @@ export default function App() {
       state.session.heading,
       state.session.boatSpeed,
     );
+
+    // Update interpolation factor for smooth wind transitions
+    const interpolatedWind = interpolatedWindRef.current;
+    const factor = interpolatedWind.getInterpolationFactor(
+      state.session.courseTime,
+    );
+    sphereViewRef.current.updateWind(interpolatedWind, factor);
   }, [
     state.tag === "Playing" ? state.session.position : null,
     state.tag === "Playing" ? state.session.heading : null,
+    state.tag === "Playing" ? state.session.courseTime : null,
   ]);
 
   // Animation loop when Playing
@@ -142,9 +159,11 @@ export default function App() {
         ) {
           lastWindRefreshRef.current = accumulatedClock;
 
-          if (windRasterRef.current && positionRef.current) {
-            const windSpeed = windRasterRef.current.speedAt(
+          const interpolatedWind = interpolatedWindRef.current;
+          if (positionRef.current && courseTimeRef.current) {
+            const windSpeed = interpolatedWind.speedAt(
               positionRef.current,
+              courseTimeRef.current,
             ) ?? {
               u: 0,
               v: 0,
@@ -179,7 +198,14 @@ export default function App() {
           <Hud session={state.session} />
         )}
       </div>
-      <CursorWind sphereView={sphereViewRef.current} />
+      <CursorWind
+        sphereView={sphereViewRef.current}
+        courseTime={
+          state.tag === "Playing" || state.tag === "Ready"
+            ? state.session.courseTime
+            : 0
+        }
+      />
     </>
   );
 }

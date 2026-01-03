@@ -6,7 +6,7 @@ import * as versor from "./versor";
 import * as d3 from "d3";
 import { Course, LngLat, Spherical, WindSpeed } from "../models";
 import { sphere, sphereCenter, sphereRadius } from "./scene";
-import WindRaster from "../wind-raster";
+import InterpolatedWind from "../interpolated-wind";
 import Land from "./land";
 import Boat from "./boat";
 import Wake from "./wake";
@@ -20,7 +20,8 @@ export class SphereView {
   width: number;
   height: number;
 
-  wind?: WindRaster;
+  interpolatedWind?: InterpolatedWind;
+  interpolationFactor: number = 0;
   position: LngLat;
   heading: number;
 
@@ -135,9 +136,9 @@ export class SphereView {
     d3.select(this.node).call(zoom);
   }
 
-  updateWind(wind: WindRaster) {
-    console.log("Updating wind");
-    this.wind = wind;
+  updateWind(interpolatedWind: InterpolatedWind, interpolationFactor: number) {
+    this.interpolatedWind = interpolatedWind;
+    this.interpolationFactor = interpolationFactor;
     this.render();
   }
 
@@ -145,14 +146,14 @@ export class SphereView {
    * Get wind speed at screen coordinates.
    * Returns null if position is outside the globe or no wind data is loaded.
    */
-  getWindAtScreen(x: number, y: number): WindSpeed | null {
-    if (!this.wind || !this.projection.invert) return null;
+  getWindAtScreen(x: number, y: number, courseTime: number): WindSpeed | null {
+    if (!this.interpolatedWind || !this.projection.invert) return null;
 
     const coords = this.projection.invert([x, y]);
     if (!coords) return null;
 
     const [lng, lat] = coords;
-    return this.wind.speedAt({ lng, lat });
+    return this.interpolatedWind.speedAt({ lng, lat }, courseTime);
   }
 
   updatePosition(pos: LngLat, heading: number, boatSpeed: number = 0) {
@@ -177,11 +178,21 @@ export class SphereView {
       this.boat.render(scene, this.position, this.heading);
     });
 
-    if (this.wind) {
-      this.windTexture.render(scene, this.wind);
+    const currentRaster = this.interpolatedWind?.getCurrentRaster();
+    if (currentRaster) {
+      this.windTexture.render(scene, {
+        currentRaster,
+        nextRaster: this.interpolatedWind?.getNextRaster() ?? undefined,
+        interpolationFactor: this.interpolationFactor,
+      });
 
       if (!this.moving) {
-        this.particles.show(scene, this.wind);
+        // Pass interpolated wind to particles for smooth wind flow visualization
+        this.particles.show(
+          scene,
+          this.interpolatedWind!,
+          this.interpolationFactor,
+        );
       }
     }
   }
