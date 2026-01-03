@@ -84,6 +84,9 @@ export default function App() {
         dispatch({ type: "TURN", delta: -TURN_DELTA });
       } else if (e.key === "ArrowRight") {
         dispatch({ type: "TURN", delta: TURN_DELTA });
+      } else if (e.key === " ") {
+        e.preventDefault();
+        dispatch({ type: "TACK" });
       }
     };
 

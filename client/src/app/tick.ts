@@ -8,13 +8,41 @@ export type TickResult = {
   courseTime: number;
   boatSpeed: number;
   position: LngLat;
+  heading: number;
+  targetHeading: number | null;
 };
+
+// Turn rate in degrees per second during a tack
+const TACK_TURN_RATE = 30;
 
 export function tick(session: Session, delta: number): TickResult {
   const newClock = session.clock + delta;
   const newCourseTime =
-    session.course.startTime +
-    Math.round(newClock * session.course.timeFactor);
+    session.course.startTime + Math.round(newClock * session.course.timeFactor);
+
+  // Handle progressive turning during tack
+  let heading = session.heading;
+  let targetHeading = session.targetHeading;
+
+  if (targetHeading !== null) {
+    const deltaSeconds = delta / 1000;
+    const maxTurn = TACK_TURN_RATE * deltaSeconds;
+
+    // Calculate shortest turn direction
+    let diff = targetHeading - heading;
+    // Normalize to -180 to 180
+    while (diff > 180) diff -= 360;
+    while (diff < -180) diff += 360;
+
+    if (Math.abs(diff) <= maxTurn) {
+      // Reached target
+      heading = targetHeading;
+      targetHeading = null;
+    } else {
+      // Turn toward target
+      heading = (heading + Math.sign(diff) * maxTurn + 360) % 360;
+    }
+  }
 
   // Calculate wind direction (where wind comes FROM)
   const windDir =
@@ -23,13 +51,11 @@ export function tick(session: Session, delta: number): TickResult {
   const windDirNorm = windDir % 360;
 
   // Calculate TWS in knots (wind is in m/s, convert to knots)
-  const twsMs = Math.sqrt(
-    session.windSpeed.u ** 2 + session.windSpeed.v ** 2,
-  );
+  const twsMs = Math.sqrt(session.windSpeed.u ** 2 + session.windSpeed.v ** 2);
   const tws = twsMs * 1.944;
 
   // Calculate TWA and boat speed from polar
-  const twa = calculateTWA(session.heading, windDirNorm);
+  const twa = calculateTWA(heading, windDirNorm);
   const boatSpeed = getBoatSpeed(tws, twa);
 
   // Move boat based on speed and heading
@@ -40,7 +66,7 @@ export function tick(session: Session, delta: number): TickResult {
   const distanceKm = boatSpeed * 1.852 * (simDeltaSeconds / 3600);
 
   // Convert heading to radians (0 = north, clockwise)
-  const headingRad = (session.heading * Math.PI) / 180;
+  const headingRad = (heading * Math.PI) / 180;
 
   // Calculate position delta
   // 1 degree latitude ≈ 111 km
@@ -62,6 +88,8 @@ export function tick(session: Session, delta: number): TickResult {
       courseTime: newCourseTime,
       boatSpeed: 0,
       position: session.position,
+      heading,
+      targetHeading,
     };
   }
 
@@ -70,5 +98,7 @@ export function tick(session: Session, delta: number): TickResult {
     courseTime: newCourseTime,
     boatSpeed,
     position: newPosition,
+    heading,
+    targetHeading,
   };
 }

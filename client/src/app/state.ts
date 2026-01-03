@@ -15,6 +15,7 @@ export type Session = {
   courseTime: number;
   position: LngLat;
   heading: number;
+  targetHeading: number | null; // for progressive tacking
   boatSpeed: number; // in knots
   course: Course;
   reports: WindReport[];
@@ -29,7 +30,8 @@ export type AppAction =
   | { type: "START_RACE" }
   | { type: "WIND_UPDATED"; windSpeed: WindSpeed }
   | { type: "TICK"; delta: number }
-  | { type: "TURN"; delta: number };
+  | { type: "TURN"; delta: number }
+  | { type: "TACK" };
 
 export const initialState: AppState = { tag: "Idle" };
 
@@ -54,6 +56,7 @@ export function appReducer(state: AppState, action: AppAction): AppState {
           courseTime: state.course.startTime,
           position: state.course.start,
           heading: state.course.startHeading,
+          targetHeading: null,
           boatSpeed: 0,
           course: state.course,
           reports: action.reports,
@@ -105,6 +108,35 @@ export function appReducer(state: AppState, action: AppAction): AppState {
         session: {
           ...state.session,
           heading: (state.session.heading + action.delta + 360) % 360,
+          targetHeading: null, // cancel any ongoing tack
+        },
+      };
+
+    case "TACK":
+      if (state.tag !== "Playing") return state;
+      // Don't start a new tack if one is already in progress
+      if (state.session.targetHeading !== null) return state;
+
+      const { windSpeed, heading } = state.session;
+      // Calculate wind direction (where wind comes FROM)
+      const windDir =
+        (Math.atan2(-windSpeed.u, -windSpeed.v) * 180) / Math.PI + 360;
+      const windDirNorm = windDir % 360;
+
+      // Calculate angle from wind to current heading
+      let angleFromWind = heading - windDirNorm;
+      // Normalize to -180 to 180
+      while (angleFromWind > 180) angleFromWind -= 360;
+      while (angleFromWind < -180) angleFromWind += 360;
+
+      // Mirror across the wind direction
+      const targetHeading = (windDirNorm - angleFromWind + 360) % 360;
+
+      return {
+        ...state,
+        session: {
+          ...state.session,
+          targetHeading,
         },
       };
 
