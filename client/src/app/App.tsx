@@ -12,7 +12,6 @@ import { initLandData } from "./land";
 
 const serverUrl = import.meta.env.REWIND_SERVER_URL;
 const WIND_REFRESH_INTERVAL = 100;
-const TURN_DELTA = 2;
 
 export default function App() {
   const [state, dispatch] = useReducer(appReducer, initialState);
@@ -93,9 +92,9 @@ export default function App() {
 
     const handleKeyDown = (e: KeyboardEvent) => {
       if (e.key === "ArrowLeft") {
-        dispatch({ type: "TURN", delta: -TURN_DELTA });
+        dispatch({ type: "TURN", direction: "left" });
       } else if (e.key === "ArrowRight") {
-        dispatch({ type: "TURN", delta: TURN_DELTA });
+        dispatch({ type: "TURN", direction: "right" });
       } else if (e.key === "ArrowUp") {
         e.preventDefault();
         dispatch({ type: "TOGGLE_TWA_LOCK" });
@@ -105,8 +104,18 @@ export default function App() {
       }
     };
 
+    const handleKeyUp = (e: KeyboardEvent) => {
+      if (e.key === "ArrowLeft" || e.key === "ArrowRight") {
+        dispatch({ type: "TURN", direction: null });
+      }
+    };
+
     window.addEventListener("keydown", handleKeyDown);
-    return () => window.removeEventListener("keydown", handleKeyDown);
+    window.addEventListener("keyup", handleKeyUp);
+    return () => {
+      window.removeEventListener("keydown", handleKeyDown);
+      window.removeEventListener("keyup", handleKeyUp);
+    };
   }, [state.tag]);
 
   // Sync position, heading, and courseTime to SphereView

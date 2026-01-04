@@ -15,6 +15,7 @@ export type Session = {
   lastWindRefresh: number;
   courseTime: number;
   position: LngLat;
+  turning: Turn;
   heading: number;
   targetHeading: number | null; // for progressive tacking
   lockedTWA: number | null; // when set, maintain this TWA as wind changes
@@ -32,9 +33,11 @@ export type AppAction =
   | { type: "START_RACE" }
   | { type: "LOCAL_WIND_UPDATED"; windSpeed: WindSpeed }
   | { type: "TICK"; delta: number }
-  | { type: "TURN"; delta: number }
+  | { type: "TURN"; direction: Turn }
   | { type: "TACK" }
   | { type: "TOGGLE_TWA_LOCK" };
+
+export type Turn = "left" | "right" | null;
 
 export const initialState: AppState = { tag: "Idle" };
 
@@ -58,6 +61,7 @@ export function appReducer(state: AppState, action: AppAction): AppState {
           lastWindRefresh: 0,
           courseTime: state.course.startTime,
           position: state.course.start,
+          turning: null,
           heading: state.course.startHeading,
           targetHeading: null,
           lockedTWA: null,
@@ -103,7 +107,7 @@ export function appReducer(state: AppState, action: AppAction): AppState {
         ...state,
         session: {
           ...state.session,
-          heading: (state.session.heading + action.delta + 360) % 360,
+          turning: action.direction,
           targetHeading: null, // cancel any ongoing tack
           lockedTWA: null, // cancel TWA lock
         },

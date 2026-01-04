@@ -18,6 +18,7 @@ export type TickResult = {
 
 // Turn rate in degrees per second during a tack
 const TACK_TURN_RATE = 90;
+const MANUAL_TURN_RATE = 45;
 
 export function tick(session: Session, delta: number): TickResult {
   const newClock = session.clock + delta;
@@ -30,8 +31,17 @@ export function tick(session: Session, delta: number): TickResult {
     session.nextReports,
   );
 
-  // Handle progressive turning during tack
   let heading = session.heading;
+
+  // Handle turning
+  if (session.turning !== null) {
+    const deltaSeconds = delta / 1000;
+    const maxTurn = MANUAL_TURN_RATE * deltaSeconds;
+    const factor = session.turning === "left" ? -1 : 1;
+    heading = (heading + factor * maxTurn + 360) % 360;
+  }
+
+  // Handle progressive turning during tack
   let targetHeading = session.targetHeading;
   let lockedTWA = session.lockedTWA;
 
