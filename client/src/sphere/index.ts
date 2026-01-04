@@ -12,6 +12,7 @@ import Boat from "./boat";
 import Wake from "./wake";
 import WindTexture from "./wind-texture";
 import WindParticles from "./wind-particles";
+import GhostBoats from "./ghost-boats";
 
 export class SphereView {
   readonly course: Course;
@@ -32,6 +33,7 @@ export class SphereView {
   wake: Wake;
   particles: WindParticles;
   windTexture: WindTexture;
+  ghostBoats: GhostBoats;
 
   v0?: versor.Cartesian;
   q0?: versor.Versor;
@@ -85,6 +87,7 @@ export class SphereView {
     this.land = new Land(landCanvas);
     this.wake = new Wake(landCanvas);
     this.boat = new Boat(landCanvas);
+    this.ghostBoats = new GhostBoats(landCanvas);
 
     const initialScale = this.projection.scale();
 
@@ -163,6 +166,16 @@ export class SphereView {
     this.render();
   }
 
+  updatePeerPosition(peerId: string, position: LngLat, heading: number) {
+    this.ghostBoats.updatePeer(peerId, position, heading);
+    this.render();
+  }
+
+  removePeer(peerId: string) {
+    this.ghostBoats.removePeer(peerId);
+    this.render();
+  }
+
   render() {
     const scene = {
       projection: this.projection,
@@ -173,8 +186,9 @@ export class SphereView {
     };
 
     this.land.render(scene, this.moving).then(() => {
-      // Draw wake and boat on top of land
+      // Draw wake and boats on top of land
       this.wake.render(scene);
+      this.ghostBoats.render(scene);
       this.boat.render(scene, this.position, this.heading);
     });
 

@@ -9,6 +9,10 @@ import StartRaceButton from "./StartRaceButton";
 import Hud from "./Hud";
 import CursorWind from "./CursorWind";
 import { initLandData } from "./land";
+import MultiplayerMenu from "./MultiplayerMenu";
+import LobbyScreen from "./LobbyScreen";
+import { WebRTCManager } from "../multiplayer/webrtc-manager";
+import { PlayerInfo, PeerState } from "../multiplayer/types";
 
 const serverUrl = import.meta.env.REWIND_SERVER_URL;
 const WIND_REFRESH_INTERVAL = 100;
@@ -26,6 +30,12 @@ export default function App() {
   const courseTimeRef = useRef(
     state.tag === "Playing" ? state.session.courseTime : 0,
   );
+  const headingRef = useRef(
+    state.tag === "Playing" ? state.session.heading : 0,
+  );
+  const webrtcManagerRef = useRef<WebRTCManager | null>(null);
+  const lobbyIdRef = useRef<string | null>(null);
+  const courseKeyRef = useRef<string>("vg20");
 
   const handleLoadCourse = useCallback((course: Course) => {
     dispatch({ type: "LOAD_COURSE", course });
@@ -86,6 +96,158 @@ export default function App() {
     dispatch({ type: "START_RACE" });
   }, []);
 
+  // Multiplayer handlers
+  const handleOpenMultiplayer = useCallback(() => {
+    dispatch({ type: "OPEN_MULTIPLAYER" });
+  }, []);
+
+  const handleCloseMultiplayer = useCallback(() => {
+    dispatch({ type: "CLOSE_MULTIPLAYER" });
+  }, []);
+
+  const handleCreateLobby = useCallback(async (playerName: string) => {
+    const manager = new WebRTCManager({
+      onLobbyCreated: (lobbyId, playerId) => {
+        lobbyIdRef.current = lobbyId;
+        dispatch({
+          type: "LOBBY_CREATED",
+          lobbyId,
+          playerId,
+          courseKey: courseKeyRef.current,
+        });
+      },
+      onLobbyJoined: (lobbyId, playerId, players, isCreator) => {
+        lobbyIdRef.current = lobbyId;
+        const playerMap = new Map<string, PeerState>();
+        players.forEach((p: PlayerInfo) => {
+          if (p.id !== playerId) {
+            playerMap.set(p.id, {
+              id: p.id,
+              name: p.name,
+              position: null,
+              heading: null,
+              lastUpdate: 0,
+            });
+          }
+        });
+        dispatch({
+          type: "LOBBY_JOINED",
+          lobbyId,
+          playerId,
+          courseKey: courseKeyRef.current,
+          isCreator,
+          players: playerMap,
+        });
+      },
+      onPlayerJoined: (playerId, playerName) => {
+        dispatch({ type: "PLAYER_JOINED", playerId, playerName });
+      },
+      onPlayerLeft: (playerId) => {
+        dispatch({ type: "PLAYER_LEFT", playerId });
+        sphereViewRef.current?.removePeer(playerId);
+      },
+      onPeerPositionUpdate: (peerId, position, heading) => {
+        sphereViewRef.current?.updatePeerPosition(peerId, position, heading);
+      },
+      onCountdown: (seconds) => {
+        dispatch({ type: "COUNTDOWN", seconds });
+      },
+      onRaceStarted: (_startTime, courseKey) => {
+        dispatch({ type: "MULTIPLAYER_RACE_STARTED", courseKey });
+      },
+      onError: (message) => {
+        console.error("Multiplayer error:", message);
+      },
+      onDisconnect: () => {
+        webrtcManagerRef.current = null;
+        lobbyIdRef.current = null;
+      },
+    });
+
+    webrtcManagerRef.current = manager;
+    await manager.connect();
+    manager.createLobby(courseKeyRef.current, playerName);
+  }, []);
+
+  const handleJoinLobby = useCallback(
+    async (lobbyId: string, playerName: string) => {
+      const manager = new WebRTCManager({
+        onLobbyCreated: (lobbyId, playerId) => {
+          lobbyIdRef.current = lobbyId;
+          dispatch({
+            type: "LOBBY_CREATED",
+            lobbyId,
+            playerId,
+            courseKey: courseKeyRef.current,
+          });
+        },
+        onLobbyJoined: (lobbyId, playerId, players, isCreator) => {
+          lobbyIdRef.current = lobbyId;
+          const playerMap = new Map<string, PeerState>();
+          players.forEach((p: PlayerInfo) => {
+            if (p.id !== playerId) {
+              playerMap.set(p.id, {
+                id: p.id,
+                name: p.name,
+                position: null,
+                heading: null,
+                lastUpdate: 0,
+              });
+            }
+          });
+          dispatch({
+            type: "LOBBY_JOINED",
+            lobbyId,
+            playerId,
+            courseKey: courseKeyRef.current,
+            isCreator,
+            players: playerMap,
+          });
+        },
+        onPlayerJoined: (playerId, playerName) => {
+          dispatch({ type: "PLAYER_JOINED", playerId, playerName });
+        },
+        onPlayerLeft: (playerId) => {
+          dispatch({ type: "PLAYER_LEFT", playerId });
+          sphereViewRef.current?.removePeer(playerId);
+        },
+        onPeerPositionUpdate: (peerId, position, heading) => {
+          sphereViewRef.current?.updatePeerPosition(peerId, position, heading);
+        },
+        onCountdown: (seconds) => {
+          dispatch({ type: "COUNTDOWN", seconds });
+        },
+        onRaceStarted: (_startTime, courseKey) => {
+          dispatch({ type: "MULTIPLAYER_RACE_STARTED", courseKey });
+        },
+        onError: (message) => {
+          console.error("Multiplayer error:", message);
+        },
+        onDisconnect: () => {
+          webrtcManagerRef.current = null;
+          lobbyIdRef.current = null;
+        },
+      });
+
+      webrtcManagerRef.current = manager;
+      await manager.connect();
+      manager.joinLobby(lobbyId, playerName);
+    },
+    [],
+  );
+
+  const handleLobbyStartRace = useCallback(() => {
+    webrtcManagerRef.current?.startRace();
+  }, []);
+
+  const handleLeaveLobby = useCallback(() => {
+    webrtcManagerRef.current?.leaveLobby();
+    webrtcManagerRef.current?.disconnect();
+    webrtcManagerRef.current = null;
+    lobbyIdRef.current = null;
+    dispatch({ type: "LEAVE_LOBBY" });
+  }, []);
+
   // Keyboard controls when Playing
   useEffect(() => {
     if (state.tag !== "Playing") return;
@@ -125,6 +287,7 @@ export default function App() {
     // Keep refs current for the animation loop
     positionRef.current = state.session.position;
     courseTimeRef.current = state.session.courseTime;
+    headingRef.current = state.session.heading;
 
     if (!sphereViewRef.current) return;
 
@@ -180,6 +343,14 @@ export default function App() {
             dispatch({ type: "LOCAL_WIND_UPDATED", windSpeed });
           }
         }
+
+        // Broadcast position to multiplayer peers
+        if (webrtcManagerRef.current && positionRef.current) {
+          webrtcManagerRef.current.broadcastPosition(
+            positionRef.current,
+            headingRef.current,
+          );
+        }
       }
       lastTime = time;
       animationId = requestAnimationFrame(tick);
@@ -195,7 +366,32 @@ export default function App() {
       <div id="app" className="fixed inset-0 z-10 pointer-events-none">
         {state.tag === "Idle" && (
           <div className="pointer-events-auto">
-            <StartScreen onStart={() => handleLoadCourse(vg20)} />
+            <StartScreen
+              onStart={() => handleLoadCourse(vg20)}
+              onMultiplayer={handleOpenMultiplayer}
+            />
+          </div>
+        )}
+        {state.tag === "Multiplayer" && (
+          <div className="pointer-events-auto">
+            <MultiplayerMenu
+              onCreateLobby={handleCreateLobby}
+              onJoinLobby={handleJoinLobby}
+              onBack={handleCloseMultiplayer}
+            />
+          </div>
+        )}
+        {state.tag === "InLobby" && (
+          <div className="pointer-events-auto">
+            <LobbyScreen
+              lobbyId={state.lobby.id}
+              myPlayerId={state.lobby.myPlayerId}
+              isCreator={state.lobby.isCreator}
+              players={state.lobby.players}
+              countdown={state.lobby.countdown}
+              onStartRace={handleLobbyStartRace}
+              onLeaveLobby={handleLeaveLobby}
+            />
           </div>
         )}
         {state.tag === "Ready" && (

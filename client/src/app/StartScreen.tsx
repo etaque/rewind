@@ -1,13 +1,20 @@
 type Props = {
   onStart: () => void;
+  onMultiplayer: () => void;
 };
 
-export default function StartScreen({ onStart }: Props) {
+export default function StartScreen({ onStart, onMultiplayer }: Props) {
   return (
     <div className="fixed inset-0 flex flex-col space-y-4 items-center justify-center bg-black bg-opacity-10">
       <h1 className="logo">Re:wind</h1>
       <button className="btn-start" onClick={onStart}>
         <RewindIcon />
+      </button>
+      <button
+        className="text-white text-sm hover:text-blue-400 transition-colors mt-4"
+        onClick={onMultiplayer}
+      >
+        Multiplayer
       </button>
     </div>
   );

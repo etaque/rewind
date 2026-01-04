@@ -65,7 +65,7 @@ RaceStarted { start_time, course_key }   // Race started with sync time
 - Automatic cleanup of empty lobbies (5 min expiration)
 - WebRTC signaling message forwarding between peers
 
-### Phase 2: WebRTC Manager (Client)
+### Phase 2: WebRTC Manager (Client) ✅ COMPLETE
 
 **File:** `client/src/multiplayer/webrtc-manager.ts`
 
@@ -115,9 +115,9 @@ Position Update (12 bytes):
 [8-11]  float32 heading
 ```
 
-### Phase 3: Multiplayer State Management
+### Phase 3: Multiplayer State Management ✅ COMPLETE
 
-**File:** `client/src/app/multiplayer-state.ts`
+**File:** `client/src/app/state.ts` (integrated into main state)
 
 ```typescript
 type MultiplayerState =
@@ -159,27 +159,27 @@ export type Session = {
 };
 ```
 
-### Phase 4: UI Components
+### Phase 4: UI Components ✅ COMPLETE
 
 **New Components:**
 
-1. **`client/src/app/LobbyScreen.tsx`**
+1. **`client/src/app/LobbyScreen.tsx`** ✅
    - Show lobby ID (shareable link)
    - List connected players
    - "Start Race" button (visible to lobby creator)
    - Leave lobby button
 
-2. **`client/src/app/MultiplayerMenu.tsx`**
+2. **`client/src/app/MultiplayerMenu.tsx`** ✅
    - "Create Race" button
    - "Join Race" input (lobby ID)
    - Player name input
 
-3. **`client/src/sphere/ghost-boats.ts`**
+3. **`client/src/sphere/ghost-boats.ts`** ✅
    - Render other players' boats
    - Similar to `Boat` but with different color/opacity
    - Show player names above boats
 
-### Phase 5: SphereView Integration
+### Phase 5: SphereView Integration ✅ COMPLETE
 
 **File:** `client/src/sphere/index.ts`
 
@@ -208,7 +208,7 @@ render() {
 }
 ```
 
-### Phase 6: App Integration
+### Phase 6: App Integration ✅ COMPLETE
 
 **File:** `client/src/app/App.tsx`
 
@@ -300,17 +300,16 @@ Player A                    Player B                    Player C
 - [x] Add race start coordination logic (3-2-1 countdown)
 - [x] Add lobby cleanup on disconnect (5 min expiration)
 
-### Frontend
-- [ ] Install WebRTC types: `npm install --save-dev @types/webrtc`
-- [ ] Create `client/src/multiplayer/` directory
-- [ ] Implement `WebRTCManager` class
-- [ ] Add multiplayer state to `app/state.ts`
-- [ ] Create `MultiplayerMenu` component
-- [ ] Create `LobbyScreen` component
-- [ ] Implement `GhostBoats` renderer
-- [ ] Integrate WebRTC manager in `App.tsx`
-- [ ] Add position broadcasting in animation loop
-- [ ] Update `StartScreen` to show multiplayer options
+### Frontend ✅ COMPLETE
+- [x] Create `client/src/multiplayer/` directory
+- [x] Implement `WebRTCManager` class
+- [x] Add multiplayer state to `app/state.ts`
+- [x] Create `MultiplayerMenu` component
+- [x] Create `LobbyScreen` component
+- [x] Implement `GhostBoats` renderer
+- [x] Integrate WebRTC manager in `App.tsx`
+- [x] Add position broadcasting in animation loop
+- [x] Update `StartScreen` to show multiplayer options
 
 ### Testing
 - [ ] Test 2-player race
