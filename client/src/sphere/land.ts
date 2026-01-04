@@ -4,22 +4,20 @@ import { Topology } from "topojson-specification";
 import { Scene } from "./scene";
 
 const LOW_RES_PATH = "/sphere/land-110m.json";
-// const HIGH_RES_PATH = "/sphere/land-50m.json";
 
 export default class Land {
   canvas: HTMLCanvasElement;
   lowRes?: d3.GeoPermissibleObjects;
   highRes?: d3.GeoPermissibleObjects;
 
+  land?: d3.GeoPermissibleObjects;
+
   constructor(canvas: HTMLCanvasElement) {
     this.canvas = canvas;
   }
 
   async render(scene: Scene, _moving: boolean) {
-    const land = await getLand(LOW_RES_PATH);
-    // const land = moving
-    //   ? (this.lowRes ??= await getLand(LOW_RES_PATH))
-    //   : (this.highRes ??= await getLand(HIGH_RES_PATH));
+    this.land ??= await getLand(LOW_RES_PATH);
 
     const graticule = d3.geoGraticule10();
     const context = this.canvas.getContext("2d")!;
@@ -29,7 +27,7 @@ export default class Land {
     context.strokeStyle = "rgba(255, 255, 255, 0.8)";
     context.fillStyle = "rgba(0, 0, 0, 0.1)";
     context.beginPath();
-    path(land);
+    path(this.land);
     context.stroke();
     context.fill();
 
