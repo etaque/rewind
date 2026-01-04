@@ -18,10 +18,7 @@ async fn main() {
     let args = Cli::parse();
 
     match args.cmd {
-        Command::Http {
-            address,
-            client_url,
-        } => server::run(address, &client_url, &args.database_url).await,
+        Command::Http { address } => server::run(address, &args.database_url).await,
         Command::Db(db_cmd) => match db_cmd.cmd {
             cli::DbSubCommand::Migrate => {
                 db::migrate(&args.database_url).await.unwrap();

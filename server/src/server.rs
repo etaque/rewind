@@ -14,7 +14,7 @@ use super::models::RasterRenderingMode;
 use super::multiplayer::{handle_websocket, LobbyManager};
 use super::repos;
 
-pub async fn run(address: std::net::SocketAddr, _client_url: &str, database_url: &str) {
+pub async fn run(address: std::net::SocketAddr, database_url: &str) {
     let pool = db::pool(&database_url)
         .await
         .expect(format!("Failed to connect to DB: {}", &database_url).as_str());

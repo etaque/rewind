@@ -31,7 +31,6 @@ services:
     environment:
       REWIND_DATABASE_URL: postgresql://rewind:rewind@db:5432/rewind
       REWIND_SERVER_ADDRESS: 0.0.0.0:3001
-      REWIND_CLIENT_URL: http://localhost:3000
       RUST_LOG: info
 
   martin:

@@ -15,8 +15,6 @@ pub enum Command {
     Http {
         #[arg(env = "REWIND_SERVER_ADDRESS")]
         address: std::net::SocketAddr,
-        #[arg(env = "REWIND_CLIENT_URL")]
-        client_url: String,
     },
     Db(DbCommand),
     ImportGribRange(GribRangeArgs),
