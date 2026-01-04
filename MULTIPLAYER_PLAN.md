@@ -24,69 +24,46 @@ Add peer-to-peer multiplayer racing using WebRTC mesh topology. Players in the s
 
 ## Implementation Phases
 
-### Phase 1: Signaling Server (Rust Backend)
+### Phase 1: Signaling Server (Rust Backend) ✅ COMPLETE
 
 **File:** `server/src/multiplayer.rs`
 
-Add WebSocket endpoints for signaling:
+Implemented WebSocket signaling server with:
 
+**Client → Server Messages (`ClientMessage`):**
 ```rust
-// Data structures
-struct Lobby {
-    id: String,
-    course_key: String,
-    players: HashMap<String, Player>,
-    max_players: usize,
-    race_start_time: Option<i64>, // Unix timestamp in ms
-}
-
-struct Player {
-    id: String,
-    name: String,
-    ws_connection: WebSocket,
-}
-
-// WebSocket messages
-enum SignalingMessage {
-    // Lobby management
-    CreateLobby { course_key: String, player_name: String },
-    JoinLobby { lobby_id: String, player_name: String },
-    LeaveLobby,
-    
-    // WebRTC signaling
-    Offer { target_player_id: String, sdp: String },
-    Answer { target_player_id: String, sdp: String },
-    IceCandidate { target_player_id: String, candidate: String },
-    
-    // Race coordination
-    StartRace,
-}
-
-enum SignalingResponse {
-    LobbyCreated { lobby_id: String, player_id: String },
-    LobbyJoined { lobby_id: String, player_id: String, players: Vec<PlayerInfo> },
-    PlayerJoined { player_id: String, player_name: String },
-    PlayerLeft { player_id: String },
-    
-    // Forward WebRTC messages to target
-    Offer { from_player_id: String, sdp: String },
-    Answer { from_player_id: String, sdp: String },
-    IceCandidate { from_player_id: String, candidate: String },
-    
-    // Race events
-    RaceStarting { countdown: i32 }, // seconds until start
-    RaceStarted { start_time: i64, wind_report_id: String },
-}
+CreateLobby { course_key, player_name }  // Create new lobby
+JoinLobby { lobby_id, player_name }      // Join existing lobby
+LeaveLobby                                // Leave current lobby
+Offer { target_player_id, sdp }          // WebRTC offer
+Answer { target_player_id, sdp }         // WebRTC answer
+IceCandidate { target_player_id, candidate }  // ICE candidate
+StartRace                                 // Start the race (creator only)
 ```
 
-**Endpoints:**
-- `WS /multiplayer/lobby` - WebSocket connection for signaling
+**Server → Client Messages (`ServerMessage`):**
+```rust
+Error { message }                         // Error response
+LobbyCreated { lobby_id, player_id }     // Lobby created successfully
+LobbyJoined { lobby_id, player_id, players, is_creator }  // Joined lobby
+PlayerJoined { player_id, player_name }  // Another player joined
+PlayerLeft { player_id }                 // Player left
+Offer { from_player_id, sdp }            // Forwarded WebRTC offer
+Answer { from_player_id, sdp }           // Forwarded WebRTC answer
+IceCandidate { from_player_id, candidate }  // Forwarded ICE candidate
+RaceCountdown { seconds }                // Countdown (3, 2, 1)
+RaceStarted { start_time, course_key }   // Race started with sync time
+```
 
-**Responsibilities:**
-- Create and manage lobbies
-- Route WebRTC signaling messages between peers
-- Coordinate race start (countdown + synchronized start time)
-- Provide canonical wind report ID to prevent drift
+**Endpoint:** `WS /multiplayer/lobby`
+
+**Features:**
+- Lobby creation with 6-character hex ID
+- Max 10 players per lobby
+- Race locking (no joins after start)
+- 3-2-1 countdown before race
+- Automatic cleanup of empty lobbies (5 min expiration)
+- WebRTC signaling message forwarding between peers
 
 ### Phase 2: WebRTC Manager (Client)
 
@@ -314,14 +291,14 @@ Player A                    Player B                    Player C
 
 ## Implementation Checklist
 
-### Backend (Rust)
-- [ ] Add `warp` WebSocket support to dependencies
-- [ ] Create `server/src/multiplayer.rs` module
-- [ ] Implement `Lobby` data structure
-- [ ] Add WebSocket endpoint `/multiplayer/lobby`
-- [ ] Implement signaling message routing
-- [ ] Add race start coordination logic
-- [ ] Add lobby cleanup on disconnect
+### Backend (Rust) ✅ COMPLETE
+- [x] Add `warp` WebSocket support to dependencies (already enabled)
+- [x] Create `server/src/multiplayer.rs` module
+- [x] Implement `Lobby` data structure
+- [x] Add WebSocket endpoint `/multiplayer/lobby`
+- [x] Implement signaling message routing
+- [x] Add race start coordination logic (3-2-1 countdown)
+- [x] Add lobby cleanup on disconnect (5 min expiration)
 
 ### Frontend
 - [ ] Install WebRTC types: `npm install --save-dev @types/webrtc`
@@ -339,7 +316,7 @@ Player A                    Player B                    Player C
 - [ ] Test 2-player race
 - [ ] Test 5-player race
 - [ ] Test player disconnect/reconnect
-- [ ] Test late join (after race started)
+- [ ] Test late join (after race started - should be blocked)
 - [ ] Test network latency simulation
 - [ ] Test mobile data bandwidth
 

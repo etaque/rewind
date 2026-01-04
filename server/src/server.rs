@@ -11,12 +11,15 @@ use warp::{path, Filter, Rejection, Reply};
 use super::db;
 use super::messages;
 use super::models::RasterRenderingMode;
+use super::multiplayer::{handle_websocket, LobbyManager};
 use super::repos;
 
 pub async fn run(address: std::net::SocketAddr, _client_url: &str, database_url: &str) {
     let pool = db::pool(&database_url)
         .await
         .expect(format!("Failed to connect to DB: {}", &database_url).as_str());
+
+    let lobby_manager = LobbyManager::new();
 
     let cors = warp::cors().allow_any_origin().allow_methods(vec!["GET"]);
 
@@ -34,15 +37,30 @@ pub async fn run(address: std::net::SocketAddr, _client_url: &str, database_url:
         .and(with_db(pool.clone()))
         .and_then(raster_png);
 
+    // WebSocket route for multiplayer signaling
+    let multiplayer_route = path!("multiplayer" / "lobby")
+        .and(warp::ws())
+        .and(with_lobby_manager(lobby_manager))
+        .map(|ws: warp::ws::Ws, manager: LobbyManager| {
+            ws.on_upgrade(move |socket| handle_websocket(socket, manager))
+        });
+
     let routes = health_route
         .or(reports_since_route)
         .or(raster_png_route)
         .or(raster_wkb_route)
+        .or(multiplayer_route)
         .recover(rejection)
         .with(cors)
         .with(warp::compression::gzip());
 
     warp::serve(routes).run(address).await
+}
+
+fn with_lobby_manager(
+    manager: LobbyManager,
+) -> impl Filter<Extract = (LobbyManager,), Error = Infallible> + Clone {
+    warp::any().map(move || manager.clone())
 }
 
 fn with_db(db_pool: db::Pool) -> impl Filter<Extract = (db::Pool,), Error = Infallible> + Clone {

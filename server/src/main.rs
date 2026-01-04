@@ -6,6 +6,7 @@ mod db;
 mod grib_store;
 mod messages;
 mod models;
+mod multiplayer;
 mod repos;
 mod server;
 

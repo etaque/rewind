@@ -116,10 +116,90 @@ Particles store initial positions (`pix0`, `coord0`) at creation time using the 
 
 ### Server (`server/`)
 
-Rust with Tokio async runtime
-- Warp HTTP server with WebSocket support
-- PostgreSQL 16 + PostGIS 3.4 for storing wind raster data
-- GRIB file parser for importing meteorological data
+Rust with Tokio async runtime, Warp HTTP framework, PostgreSQL 16 + PostGIS 3.4.
+
+#### Directory Structure
+
+```
+server/
+├── src/
+│   ├── main.rs             # CLI entry point (clap), dispatches to commands
+│   ├── cli.rs              # Command definitions (Http, Db, ImportGribRange)
+│   ├── server.rs           # Warp routes and handlers
+│   ├── db.rs               # Connection pooling (bb8 + tokio-postgres)
+│   ├── multiplayer.rs      # WebSocket signaling for multiplayer races
+│   ├── models.rs           # Domain types (WindReport, RasterRenderingMode)
+│   ├── messages.rs         # JSON-serializable API DTOs
+│   ├── grib_store.rs       # GRIB file import logic
+│   └── repos/              # Database repositories
+│       ├── mod.rs          # Generic from_rows() helper
+│       ├── wind_reports.rs # Wind report CRUD operations
+│       └── wind_rasters.rs # Raster rendering (PNG/WKB via PostGIS)
+├── migrations/             # Refinery SQL migrations
+├── Cargo.toml              # Dependencies (warp, tokio, postgis, etc.)
+└── bin/                    # Shell scripts (container, dev-server)
+```
+
+#### HTTP Endpoints
+
+| Method | Path | Description |
+|--------|------|-------------|
+| GET | `/health` | Database health check |
+| GET | `/wind-reports/since/{timestamp_ms}` | List wind reports after timestamp |
+| GET | `/wind-reports/{uuid}/uv.png` | Wind UV components as PNG |
+| GET | `/wind-reports/{uuid}/speed.png` | Wind speed magnitude as PNG |
+| GET | `/wind-reports/{uuid}/raster.wkb` | Raw raster as WKB |
+| WS | `/multiplayer/lobby` | WebSocket for multiplayer signaling |
+
+#### Multiplayer Signaling (`multiplayer.rs`)
+
+WebSocket-based lobby system for peer-to-peer racing:
+
+**State Management:**
+- `LobbyManager` - Thread-safe state with `Arc<RwLock<HashMap<String, Lobby>>>`
+- `Lobby` - Players, course key, race state, activity timestamp
+- `Player` - ID, name, mpsc channel for outbound messages
+
+**Client → Server Messages:**
+- `CreateLobby { course_key, player_name }` - Create new lobby
+- `JoinLobby { lobby_id, player_name }` - Join existing lobby
+- `LeaveLobby` - Leave current lobby
+- `Offer/Answer/IceCandidate` - WebRTC signaling forwarding
+- `StartRace` - Start race (creator only, requires 2+ players)
+
+**Server → Client Messages:**
+- `LobbyCreated/LobbyJoined` - Lobby state responses
+- `PlayerJoined/PlayerLeft` - Player notifications
+- `Offer/Answer/IceCandidate` - Forwarded WebRTC signaling
+- `RaceCountdown { seconds }` - 3-2-1 countdown
+- `RaceStarted { start_time, course_key }` - Synchronized race start
+
+**Features:**
+- 6-character hex lobby IDs
+- Max 10 players per lobby
+- Race locking (no joins after start)
+- 5-minute expiration for empty lobbies
+
+#### Database Schema
+
+**Tables:**
+- `wind_rasters` - UUID PK, PostGIS raster geometry (u/v bands)
+- `wind_reports` - UUID PK, FK to raster, timestamps, GRIB metadata
+
+**PostGIS Functions:**
+- `ST_AsPNG()` - Raster to PNG conversion
+- `ST_Reclass()` - Reclassify raster values for rendering
+
+#### Key Dependencies
+
+- **tokio 1.x** - Async runtime with full features
+- **warp 0.3** - HTTP framework with WebSocket support
+- **tokio-postgres 0.7** - Async PostgreSQL driver
+- **bb8 0.8** - Connection pooling
+- **postgis 0.9** - PostGIS type support
+- **serde/serde_json** - JSON serialization
+- **chrono** - Date/time handling
+- **uuid** - UUID generation and parsing
 
 ## Development Commands
 
