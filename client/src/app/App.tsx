@@ -55,8 +55,46 @@ export default function App() {
 
     fetch(url)
       .then((res) => res.json())
-      .then((reports: WindReport[]) => {
+      .then(async (reports: WindReport[]) => {
         reportsRef.current = reports;
+
+        // Load and display wind immediately
+        if (reports.length > 0 && sphereViewRef.current) {
+          // Find current report (latest one before or at startTime) and next reports
+          const sortedReports = [...reports].sort((a, b) => a.time - b.time);
+          let currentReport: WindReport | null = null;
+          let nextReports: WindReport[] = [];
+
+          for (let i = 0; i < sortedReports.length; i++) {
+            if (sortedReports[i].time <= course.startTime) {
+              currentReport = sortedReports[i];
+              nextReports = sortedReports.slice(i + 1);
+            } else {
+              break;
+            }
+          }
+
+          // If no report before startTime, use the first one
+          if (!currentReport && sortedReports.length > 0) {
+            currentReport = sortedReports[0];
+            nextReports = sortedReports.slice(1);
+          }
+
+          if (currentReport) {
+            await interpolatedWindRef.current.update(
+              currentReport,
+              nextReports,
+            );
+            const factor = interpolatedWindRef.current.getInterpolationFactor(
+              course.startTime,
+            );
+            sphereViewRef.current.updateWind(
+              interpolatedWindRef.current,
+              factor,
+            );
+          }
+        }
+
         dispatch({ type: "REPORTS_LOADED", reports });
       })
       .catch((err) => {
@@ -198,7 +236,6 @@ export default function App() {
   );
 
   const handleLobbyStartRace = useCallback(() => {
-    console.log("Starting race...");
     webrtcManagerRef.current?.startRace();
   }, []);
 

@@ -65,6 +65,7 @@ export class SphereView {
       .node()!;
 
     this.windTexture = new WindTexture(textureCanvas);
+    this.windTexture.onTextureReady = () => this.render();
 
     const particlesCanvas = d3
       .select(this.node)

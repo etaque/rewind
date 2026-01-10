@@ -24,6 +24,9 @@ export default class Texture {
   texture?: WebGLTexture;
   pendingGeneration?: { currentId: string; nextId?: string; factor: number };
 
+  // Callback to notify when texture is ready (for triggering re-render)
+  onTextureReady?: () => void;
+
   constructor(canvas: HTMLCanvasElement) {
     this.canvas = canvas;
     const gl = canvas.getContext("webgl", { alpha: true })!;
@@ -110,6 +113,9 @@ export default class Texture {
         this.renderedNextId = expectedGeneration.nextId;
         this.renderedFactor = expectedGeneration.factor;
         this.pendingGeneration = undefined;
+
+        // Notify that texture is ready for rendering
+        this.onTextureReady?.();
       }
       worker.terminate();
     };
