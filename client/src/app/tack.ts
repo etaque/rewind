@@ -1,4 +1,5 @@
 import { Session } from "./state";
+import { getWindDirection } from "../utils";
 
 /**
  * Calculate the target heading for a tack maneuver.
@@ -11,9 +12,7 @@ export function calculateTackTarget(session: Session): number | null {
   const { windSpeed, heading } = session;
 
   // Calculate wind direction (where wind comes FROM)
-  const windDir =
-    (Math.atan2(-windSpeed.u, -windSpeed.v) * 180) / Math.PI + 360;
-  const windDirNorm = windDir % 360;
+  const windDirNorm = getWindDirection(windSpeed);
 
   // Calculate signed TWA (positive = wind from starboard, negative = wind from port)
   let signedTWA = windDirNorm - heading;

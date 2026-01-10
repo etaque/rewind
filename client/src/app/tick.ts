@@ -3,6 +3,7 @@ import { getBoatSpeed, calculateTWA } from "./polar";
 import { isPointOnLand } from "./land";
 import { Session } from "./state";
 import { refreshWindReport } from "./wind-report";
+import { getWindDirection, getWindSpeed, msToKnots } from "../utils";
 
 export type TickResult = {
   clock: number;
@@ -70,10 +71,7 @@ export function tick(session: Session, delta: number): TickResult {
   }
 
   // Calculate wind direction (where wind comes FROM)
-  const windDir =
-    (Math.atan2(-session.windSpeed.u, -session.windSpeed.v) * 180) / Math.PI +
-    360;
-  const windDirNorm = windDir % 360;
+  const windDirNorm = getWindDirection(session.windSpeed);
 
   // Apply TWA lock: adjust heading to maintain locked TWA (only when not tacking)
   if (lockedTWA !== null && targetHeading === null) {
@@ -82,8 +80,7 @@ export function tick(session: Session, delta: number): TickResult {
   }
 
   // Calculate TWS in knots (wind is in m/s, convert to knots)
-  const twsMs = Math.sqrt(session.windSpeed.u ** 2 + session.windSpeed.v ** 2);
-  const tws = twsMs * 1.944;
+  const tws = msToKnots(getWindSpeed(session.windSpeed));
 
   // Calculate TWA and boat speed from polar
   const twa = calculateTWA(heading, windDirNorm);

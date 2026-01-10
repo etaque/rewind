@@ -172,9 +172,7 @@ export class WebRTCManager {
         connection.connectionState === "failed" ||
         connection.connectionState === "disconnected"
       ) {
-        console.log(
-          `Peer ${peerId} connection state: ${connection.connectionState}`,
-        );
+        // Connection lost - peer will be cleaned up when they leave the lobby
       }
     };
 

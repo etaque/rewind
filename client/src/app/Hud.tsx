@@ -1,5 +1,6 @@
-import { WindSpeed } from "../models";
 import { Session } from "./state";
+import { calculateTWA } from "./polar";
+import { getWindDirection, getWindSpeedKnots } from "../utils";
 
 type Props = {
   session: Session;
@@ -26,29 +27,6 @@ function formatCourseTime(timestamp: number): string {
   const hours = String(date.getUTCHours()).padStart(2, "0");
   const minutes = String(date.getUTCMinutes()).padStart(2, "0");
   return `${year}-${month}-${day} ${hours}:${minutes}Z`;
-}
-
-function formatWindSpeed(windSpeed: WindSpeed): string {
-  const speed = Math.sqrt(windSpeed.u ** 2 + windSpeed.v ** 2);
-  const knots = speed * 1.944; // m/s to knots
-  return `${knots.toFixed(1)}kts`;
-}
-
-function formatWindDirection(windSpeed: WindSpeed): string {
-  // Wind direction is where wind comes FROM (meteorological convention)
-  // u = east component, v = north component
-  const radians = Math.atan2(-windSpeed.u, -windSpeed.v);
-  const degrees = ((radians * 180) / Math.PI + 360) % 360;
-  return `${degrees.toFixed(0)}°`;
-}
-
-function calculateTWA(heading: number, windSpeed: WindSpeed): number {
-  const radians = Math.atan2(-windSpeed.u, -windSpeed.v);
-  const windDirection = ((radians * 180) / Math.PI + 360) % 360;
-  let twa = windDirection - heading;
-  while (twa > 180) twa -= 360;
-  while (twa < -180) twa += 360;
-  return Math.abs(twa);
 }
 
 export default function Hud({ session }: Props) {
@@ -82,12 +60,16 @@ export default function Hud({ session }: Props) {
         </div>
         <div>
           <span className="text-gray-400">TWD </span>
-          <span>{formatWindDirection(session.windSpeed)}</span>
+          <span>{getWindDirection(session.windSpeed).toFixed(0)}°</span>
           <span className="text-gray-400 ml-2">TWS </span>
-          <span>{formatWindSpeed(session.windSpeed)}</span>
+          <span>{getWindSpeedKnots(session.windSpeed).toFixed(1)}kts</span>
           <span className="text-gray-400 ml-2">TWA </span>
           <span>
-            {calculateTWA(session.heading, session.windSpeed).toFixed(0)}°
+            {calculateTWA(
+              session.heading,
+              getWindDirection(session.windSpeed),
+            ).toFixed(0)}
+            °
           </span>
           {session.lockedTWA !== null && (
             <span className="ml-1 text-green-400">[LOCK]</span>

@@ -1,13 +1,8 @@
 import { geoDistance, geoPath } from "d3-geo";
-import type { Polygon } from "geojson";
 import { LngLat } from "../models";
 import { Scene } from "./scene";
 import { PeerState } from "../multiplayer/types";
-
-// Boat size in screen pixels (approximate)
-const BOAT_SIZE_PX = 64;
-// Reference scale at which BOAT_SIZE_PX is the target size
-const REFERENCE_SCALE = 4000;
+import { createBoatPolygon, getBoatSizeKm } from "./boat-geometry";
 
 /**
  * Renders other players' boats on the globe.
@@ -48,7 +43,7 @@ export default class GhostBoats {
     const rotate = scene.projection.rotate();
     const center: [number, number] = [-rotate[0], -rotate[1]];
     const scale = scene.projection.scale();
-    const sizeKm = (BOAT_SIZE_PX * REFERENCE_SCALE * 111) / (scale * 360);
+    const sizeKm = getBoatSizeKm(scale);
 
     this.peers.forEach((peer) => {
       if (!peer.position || peer.heading == null) return;
@@ -91,52 +86,4 @@ export default class GhostBoats {
       }
     });
   }
-}
-
-/**
- * Create a triangle polygon in geo coordinates.
- * The triangle points in the heading direction.
- */
-function createBoatPolygon(
-  position: LngLat,
-  heading: number,
-  sizeKm: number,
-): Polygon {
-  // Triangle vertices relative to center (in local coords, before rotation):
-  // Counter-clockwise winding for GeoJSON exterior ring
-  const vertices = [
-    { dx: 0, dy: sizeKm }, // Tip (forward)
-    { dx: sizeKm * 0.6, dy: -sizeKm * 0.6 }, // Bottom right
-    { dx: -sizeKm * 0.6, dy: -sizeKm * 0.6 }, // Bottom left
-  ];
-
-  // Convert heading to radians (0 = north, clockwise)
-  const headingRad = (heading * Math.PI) / 180;
-
-  // Convert each vertex to lat/lng
-  const coords = vertices.map(({ dx, dy }) => {
-    // Rotate by heading
-    const rotatedX = dx * Math.cos(headingRad) + dy * Math.sin(headingRad);
-    const rotatedY = -dx * Math.sin(headingRad) + dy * Math.cos(headingRad);
-
-    // Convert km offset to degrees
-    // 1 degree latitude ≈ 111 km
-    // 1 degree longitude ≈ 111 km * cos(latitude)
-    const latOffset = rotatedY / 111;
-    const lngOffset =
-      rotatedX / (111 * Math.cos((position.lat * Math.PI) / 180));
-
-    return [position.lng + lngOffset, position.lat + latOffset] as [
-      number,
-      number,
-    ];
-  });
-
-  // Close the polygon
-  coords.push(coords[0]);
-
-  return {
-    type: "Polygon",
-    coordinates: [coords],
-  };
 }

@@ -1,6 +1,7 @@
 import { useEffect, useState, useRef } from "react";
 import { SphereView } from "../sphere";
 import { WindSpeed } from "../models";
+import { getWindDirection, getWindSpeedKnots } from "../utils";
 
 type Props = {
   sphereView: SphereView | null;
@@ -59,12 +60,8 @@ export default function CursorWind({ sphereView, courseTime }: Props) {
 
   if (!cursor || !cursor.wind) return null;
 
-  const speed = Math.sqrt(cursor.wind.u ** 2 + cursor.wind.v ** 2);
-  const knots = speed * 1.944;
-
-  // Wind direction (where it comes FROM)
-  const dir =
-    ((Math.atan2(-cursor.wind.u, -cursor.wind.v) * 180) / Math.PI + 360) % 360;
+  const knots = getWindSpeedKnots(cursor.wind);
+  const dir = getWindDirection(cursor.wind);
 
   return (
     <div

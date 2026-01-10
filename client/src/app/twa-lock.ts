@@ -1,4 +1,5 @@
 import { Session } from "./state";
+import { getWindDirection } from "../utils";
 
 /**
  * Calculate the signed TWA for locking.
@@ -7,9 +8,7 @@ import { Session } from "./state";
 export function calculateSignedTWA(session: Session): number {
   const { windSpeed, heading } = session;
 
-  const windDir =
-    (Math.atan2(-windSpeed.u, -windSpeed.v) * 180) / Math.PI + 360;
-  const windDirNorm = windDir % 360;
+  const windDirNorm = getWindDirection(windSpeed);
 
   let twa = windDirNorm - heading;
   // Normalize to -180 to 180

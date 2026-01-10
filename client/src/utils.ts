@@ -1,13 +1,39 @@
-import { Pixel, Spherical, WindSpeed } from "./models";
+import { Pixel, WindSpeed } from "./models";
 
+// Conversion factor: m/s to knots
+export const MS_TO_KNOTS = 1.944;
+
+/**
+ * Convert wind speed from m/s to knots.
+ */
+export const msToKnots = (ms: number): number => ms * MS_TO_KNOTS;
+
+/**
+ * Calculate wind direction in degrees (meteorological convention: where wind comes FROM).
+ * Returns value in range [0, 360).
+ */
+export const getWindDirection = (windSpeed: WindSpeed): number => {
+  const radians = Math.atan2(-windSpeed.u, -windSpeed.v);
+  return ((radians * 180) / Math.PI + 360) % 360;
+};
+
+/**
+ * Calculate wind speed magnitude in m/s.
+ */
+export const getWindSpeed = (windSpeed: WindSpeed): number =>
+  Math.sqrt(windSpeed.u ** 2 + windSpeed.v ** 2);
+
+/**
+ * Calculate wind speed magnitude in knots.
+ */
+export const getWindSpeedKnots = (windSpeed: WindSpeed): number =>
+  msToKnots(getWindSpeed(windSpeed));
+
+/**
+ * Convert degrees to radians for projection rotation.
+ */
 export const toRadians = (d: number): number =>
   d < 0 ? (Math.abs(d) * Math.PI) / 180 : Math.PI + ((180 - d) * Math.PI) / 180;
-
-export const sphericalToRadians = ([l, p, g]: Spherical): Spherical => [
-  toRadians(l),
-  toRadians(p),
-  toRadians(g),
-];
 
 export const reframeLongitude = (lng: number): number =>
   lng > 180 ? lng - 360 : lng < -180 ? lng + 360 : lng;
@@ -19,16 +45,6 @@ export const lngOneDegToM = (lat: number): number =>
   (Math.PI / 180) * 6378137 * Math.cos(lat * (Math.PI / 180));
 
 export const latOneDegToM = 111000;
-
-export const roundPixel = ({ x, y }: Pixel): Pixel => ({
-  x: Math.round(x),
-  y: Math.round(y),
-});
-
-export const speed = ({ u, v }: WindSpeed): number =>
-  Math.sqrt(u ** 2 + v ** 2);
-
-export const roundHalf = (n: number): number => Math.round(n * 2) / 2;
 
 export const bilinear = ({ x, y }: Pixel, f: (p: Pixel) => number): number => {
   const xf = Math.floor(x);

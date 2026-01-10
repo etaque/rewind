@@ -141,9 +141,8 @@ function generateParticles(scene: Scene) {
         age: MAX_AGE * Math.random(),
         visible: true,
       });
-    } else {
-      console.error("Particle generated out of bounds", pix0);
     }
+    // Skip particles that can't be projected (edge of globe)
   }
   return particles;
 }
