@@ -164,7 +164,8 @@ export default function App() {
         console.error("Multiplayer error:", message);
       },
       onDisconnect: () => {
-        webrtcManagerRef.current = null;
+        // Don't null the ref here - it may have already been replaced
+        // by a new manager when switching lobbies
       },
     });
   }, []);
@@ -197,6 +198,7 @@ export default function App() {
   );
 
   const handleLobbyStartRace = useCallback(() => {
+    console.log("Starting race...");
     webrtcManagerRef.current?.startRace();
   }, []);
 

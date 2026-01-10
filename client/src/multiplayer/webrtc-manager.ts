@@ -189,14 +189,6 @@ export class WebRTCManager {
         this.handlePositionUpdate(peerId, event.data);
       }
     };
-
-    channel.onopen = () => {
-      console.log(`Data channel open with peer ${peerId}`);
-    };
-
-    channel.onclose = () => {
-      console.log(`Data channel closed with peer ${peerId}`);
-    };
   }
 
   private handlePositionUpdate(peerId: string, data: ArrayBuffer) {
