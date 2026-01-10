@@ -1,4 +1,7 @@
+use bytes::Bytes;
 use chrono::{DateTime, Utc};
+use object_store::path::Path;
+use object_store::ObjectStoreExt;
 use serde::Serialize;
 use std::convert::Infallible;
 use std::str::FromStr;
@@ -10,6 +13,7 @@ use warp::{path, Filter, Rejection, Reply};
 
 use super::courses;
 use super::db;
+use super::grib_store;
 use super::messages;
 use super::models::RasterRenderingMode;
 use super::multiplayer::{handle_websocket, LobbyInfo, LobbyManager};
@@ -87,10 +91,15 @@ pub async fn list_lobbies(manager: LobbyManager) -> Result<impl Reply, Rejection
 }
 
 pub async fn health(pool: db::Pool) -> Result<impl Reply, Rejection> {
-    db::health(&pool)
-        .await
-        .map_err(|e| warp::reject::custom(Error(e)))
-        .map(|h| warp::reply::with_status(h, StatusCode::OK))
+    let s3 = grib_store::s3_client();
+    let health_path = Path::from("/healthcheck");
+    let (s3_health, db_health) =
+        tokio::join!(s3.put(&health_path, Bytes::new().into()), db::health(&pool));
+    match (s3_health, db_health) {
+        (Ok(_), Ok(_)) => Ok(warp::reply::with_status("OK", StatusCode::OK)),
+        (Err(e), _) => Err(warp::reject::custom(Error(e.into()))),
+        (_, Err(e)) => Err(warp::reject::custom(Error(e))),
+    }
 }
 
 impl FromStr for RasterRenderingMode {

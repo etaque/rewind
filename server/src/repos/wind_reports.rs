@@ -1,4 +1,4 @@
-use chrono::{DateTime, Utc};
+use chrono::{DateTime, NaiveDate, Utc};
 use uuid::Uuid;
 
 use crate::db;
@@ -19,6 +19,18 @@ pub async fn get<'a>(client: &db::Client<'a>, id: Uuid) -> anyhow::Result<WindRe
     let stmt = "SELECT * FROM wind_reports WHERE id = $1";
     let row = client.query_one(stmt, &[&id]).await?;
     let wr = WindReport::try_from(&row)?;
+    Ok(wr)
+}
+
+pub async fn get_by_day_hour_forecast<'a>(
+    client: &db::Client<'a>,
+    day: NaiveDate,
+    hour: i16,
+    forecast: i16,
+) -> anyhow::Result<Option<WindReport>> {
+    let stmt = "SELECT * FROM wind_reports WHERE day = $1 AND hour = $2 AND forecast = $3";
+    let row = client.query_opt(stmt, &[&day, &hour, &forecast]).await?;
+    let wr = row.map(|row| WindReport::try_from(&row)).transpose()?;
     Ok(wr)
 }
 
