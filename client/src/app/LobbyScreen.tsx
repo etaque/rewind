@@ -13,14 +13,15 @@ type LobbyInfo = {
 };
 
 type Props = {
-  lobbyId: string;
-  myPlayerId: string;
+  lobbyId: string | null;
+  myPlayerId: string | null;
   isCreator: boolean;
   players: Map<string, PeerState>;
   countdown: number | null;
+  onCreateLobby: (playerName: string) => void;
+  onJoinLobby: (lobbyId: string, playerName: string) => void;
   onStartRace: () => void;
   onLeaveLobby: () => void;
-  onJoinLobby: (lobbyId: string, playerName: string) => void;
 };
 
 export default function LobbyScreen({
@@ -29,15 +30,32 @@ export default function LobbyScreen({
   isCreator,
   players,
   countdown,
+  onCreateLobby,
+  onJoinLobby,
   onStartRace,
   onLeaveLobby,
-  onJoinLobby,
 }: Props) {
+  const [playerName, setPlayerName] = useState("");
   const [joinCode, setJoinCode] = useState("");
   const [showJoinInput, setShowJoinInput] = useState(false);
   const [availableLobbies, setAvailableLobbies] = useState<LobbyInfo[]>([]);
+
   const playerList = Array.from(players.values());
   const totalPlayers = playerList.length + 1; // +1 for self
+  const inLobby = lobbyId !== null;
+
+  // Load player name from localStorage on mount and auto-create lobby
+  useEffect(() => {
+    const savedName = localStorage.getItem(PLAYER_NAME_KEY);
+    if (savedName) {
+      setPlayerName(savedName);
+    }
+    // Auto-create lobby when not in one
+    if (!inLobby) {
+      const name = savedName || "Skipper";
+      onCreateLobby(name);
+    }
+  }, []);
 
   // Fetch available lobbies periodically
   useEffect(() => {
@@ -46,7 +64,9 @@ export default function LobbyScreen({
         const res = await fetch(`${serverUrl}/multiplayer/lobbies`);
         const lobbies: LobbyInfo[] = await res.json();
         // Filter out our own lobby
-        setAvailableLobbies(lobbies.filter((l) => l.id !== lobbyId));
+        setAvailableLobbies(
+          lobbyId ? lobbies.filter((l) => l.id !== lobbyId) : lobbies,
+        );
       } catch (err) {
         console.error("Failed to fetch lobbies:", err);
       }
@@ -57,36 +77,68 @@ export default function LobbyScreen({
     return () => clearInterval(interval);
   }, [lobbyId]);
 
-  const copyLobbyCode = () => {
-    if (navigator.clipboard) {
-      navigator.clipboard.writeText(lobbyId);
-    }
+  const getPlayerName = () => {
+    const name = playerName.trim() || "Skipper";
+    localStorage.setItem(PLAYER_NAME_KEY, name);
+    return name;
+  };
+
+  const handlePlayerNameChange = (newName: string) => {
+    setPlayerName(newName);
+    localStorage.setItem(PLAYER_NAME_KEY, newName);
   };
 
   const handleJoin = () => {
     if (joinCode.trim()) {
-      const playerName = localStorage.getItem(PLAYER_NAME_KEY) || "Skipper";
-      onJoinLobby(joinCode.trim().toUpperCase(), playerName);
+      onJoinLobby(joinCode.trim().toUpperCase(), getPlayerName());
+      setJoinCode("");
+      setShowJoinInput(false);
     }
   };
 
-  const handleJoinLobby = (lobbyId: string) => {
-    const playerName = localStorage.getItem(PLAYER_NAME_KEY) || "Skipper";
-    onJoinLobby(lobbyId, playerName);
+  const handleJoinLobby = (targetLobbyId: string) => {
+    onJoinLobby(targetLobbyId, getPlayerName());
+  };
+
+  const copyLobbyCode = () => {
+    if (navigator.clipboard && lobbyId) {
+      navigator.clipboard.writeText(lobbyId);
+    }
   };
 
   return (
     <div className="fixed inset-0 flex flex-col items-center justify-center bg-black bg-opacity-10">
+      {/* Logo always on top */}
+      <h1 className="logo mb-6">Re:wind</h1>
+
       <div className="bg-slate-900 bg-opacity-90 rounded-lg p-8 max-w-md w-full mx-4 space-y-6">
         {countdown !== null ? (
+          // Countdown view
           <div className="text-center space-y-4">
             <h2 className="text-white text-2xl font-semibold">Race Starting</h2>
             <div className="text-8xl font-bold text-transparent bg-clip-text bg-gradient-to-r from-green-400 to-blue-500">
               {countdown}
             </div>
           </div>
+        ) : !inLobby ? (
+          // Loading state while auto-creating lobby
+          <div className="text-center text-slate-400 py-4">Connecting...</div>
         ) : (
+          // In-lobby view
           <>
+            {/* Player name input */}
+            <div className="space-y-2">
+              <label className="text-slate-400 text-sm">Your Name</label>
+              <input
+                type="text"
+                value={playerName}
+                onChange={(e) => handlePlayerNameChange(e.target.value)}
+                placeholder="Skipper"
+                maxLength={20}
+                className="w-full bg-slate-800 text-white text-center px-4 py-3 rounded-lg border border-slate-700 focus:border-blue-500 focus:outline-none"
+              />
+            </div>
+
             {/* Lobby Code */}
             <div className="text-center space-y-2">
               <label className="text-slate-400 text-sm">Lobby Code</label>
@@ -215,7 +267,7 @@ export default function LobbyScreen({
                 >
                   {availableLobbies.length > 0
                     ? "Enter Code Manually"
-                    : "Join Different Lobby"}
+                    : "Join with Code"}
                 </button>
               )}
 

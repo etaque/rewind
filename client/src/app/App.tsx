@@ -3,7 +3,6 @@ import { appReducer, initialState } from "./state";
 import { SphereView } from "../sphere";
 import InterpolatedWind from "../interpolated-wind";
 import { WindReport } from "../models";
-import StartScreen from "./StartScreen";
 import Hud from "./Hud";
 import CursorWind from "./CursorWind";
 import { initLandData } from "./land";
@@ -324,22 +323,24 @@ export default function App() {
     <>
       <div ref={sphereNodeRef} id="sphere" className="fixed inset-0" />
       <div id="app" className="fixed inset-0 z-10 pointer-events-none">
-        {state.tag === "Idle" && (
-          <div className="pointer-events-auto">
-            <StartScreen onStart={handleCreateLobby} />
-          </div>
-        )}
-        {state.tag === "Loading" && (
+        {(state.tag === "Idle" || state.tag === "Loading") && (
           <div className="pointer-events-auto">
             <LobbyScreen
-              lobbyId={state.lobby.id}
-              myPlayerId={state.lobby.myPlayerId}
-              isCreator={state.lobby.isCreator}
-              players={state.lobby.players}
-              countdown={state.lobby.countdown}
+              lobbyId={state.tag === "Loading" ? state.lobby.id : null}
+              myPlayerId={
+                state.tag === "Loading" ? state.lobby.myPlayerId : null
+              }
+              isCreator={
+                state.tag === "Loading" ? state.lobby.isCreator : false
+              }
+              players={
+                state.tag === "Loading" ? state.lobby.players : new Map()
+              }
+              countdown={state.tag === "Loading" ? state.lobby.countdown : null}
+              onCreateLobby={handleCreateLobby}
+              onJoinLobby={handleJoinLobby}
               onStartRace={handleLobbyStartRace}
               onLeaveLobby={handleLeaveLobby}
-              onJoinLobby={handleJoinLobby}
             />
           </div>
         )}
