@@ -33,16 +33,36 @@ services:
       REWIND_SERVER_ADDRESS: 0.0.0.0:3001
       RUST_LOG: info
 
-  martin:
-    image: ghcr.io/maplibre/martin:v0.15.0
+  minio:
+    image: minio/minio:latest
     ports:
-      - "3002:3000"
+      - "9000:9000"
+      - "9001:9001"
     restart: unless-stopped
-    depends_on:
-      db:
-        condition: service_healthy
+    volumes:
+      - minio-data:/data
     environment:
-      DATABASE_URL: postgresql://rewind:rewind@db:5432/rewind
+      MINIO_ROOT_USER: rewind
+      MINIO_ROOT_PASSWORD: rewindpass
+    command: server /data --console-address ":9001"
+    healthcheck:
+      test: ["CMD", "mc", "ready", "local"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  minio-init:
+    image: minio/mc:latest
+    depends_on:
+      minio:
+        condition: service_healthy
+    entrypoint: >
+      /bin/sh -c "
+      mc alias set local http://minio:9000 rewind rewindpass;
+      mc mb local/grib-files --ignore-existing;
+      exit 0;
+      "
 
 volumes:
   db-data:
+  minio-data:

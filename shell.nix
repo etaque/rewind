@@ -1,17 +1,21 @@
 let
-  mozOverlay = import (builtins.fetchTarball https://github.com/mozilla/nixpkgs-mozilla/archive/master.tar.gz);
+  mozOverlay = import (
+    builtins.fetchTarball "https://github.com/mozilla/nixpkgs-mozilla/archive/master.tar.gz"
+  );
   nixpkgs = import <nixpkgs> {
     overlays = [ mozOverlay ];
   };
-  rustStable = (nixpkgs.latest.rustChannels.stable.rust.override {
-    extensions = [ 
-      "rust-src"
-      "rls-preview"
-      "clippy-preview"
-      "rustfmt-preview"
-      "rust-analysis"
-    ];
-  });
+  rustStable = (
+    nixpkgs.latest.rustChannels.stable.rust.override {
+      extensions = [
+        "rust-src"
+        "rls-preview"
+        "clippy-preview"
+        "rustfmt-preview"
+        "rust-analysis"
+      ];
+    }
+  );
 in
 with nixpkgs;
 
@@ -31,7 +35,6 @@ mkShell {
     postgresql_11
     postgis
     osm2pgsql
-    martin
 
     # client
     nodejs
@@ -40,9 +43,9 @@ mkShell {
     elmPackages.elm-format
     elmPackages.elm-analyse
     elmPackages.elm-test
-  ] ++ lib.optionals stdenv.isDarwin [
+  ]
+  ++ lib.optionals stdenv.isDarwin [
     darwin.apple_sdk.frameworks.Security # To build `mime_guess` crate on MacOS
   ];
 
 }
-

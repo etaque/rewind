@@ -49,13 +49,13 @@ npm run dev
 **Ports:**
 - Client: http://localhost:3000
 - Server: http://localhost:3001
-- Martin (tile server): http://localhost:3002
 - PostgreSQL: localhost:25432
+- Minio: http://localhost:9000
 
 ### Container Commands
 
 ```bash
-./server/bin/container up       # Start db and martin
+./server/bin/container up       # Start db and minio
 ./server/bin/container down     # Stop containers
 ./server/bin/container logs     # Follow logs
 ./server/bin/container psql     # PostgreSQL shell
@@ -77,7 +77,6 @@ npm run dev
 - Rust with Tokio async runtime
 - Warp web framework (HTTP + WebSocket)
 - PostgreSQL 16 + PostGIS 3.4 for wind raster data
-- Martin for vector tiles
 
 ## Scripts
 

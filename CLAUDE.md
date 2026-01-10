@@ -234,12 +234,24 @@ WebSocket-based lobby system for peer-to-peer racing:
 
 ### Docker (recommended)
 ```bash
-./server/bin/container up       # Start db + server, run migrations
+./server/bin/container up       # Start db and minio containers
 ./server/bin/container down     # Stop containers
 ./server/bin/container logs     # Follow logs
 ./server/bin/container psql     # PostgreSQL shell
+./server/bin/container minio    # Open MinIO console in browser
 ./server/bin/container destroy  # Remove containers and volumes
 ```
+
+### Local S3 (MinIO)
+
+MinIO provides S3-compatible object storage for local development:
+
+| Service | URL | Credentials |
+|---------|-----|-------------|
+| S3 API | http://localhost:9000 | rewind / rewindpass |
+| Web Console | http://localhost:9001 | rewind / rewindpass |
+
+A `grib-files` bucket is auto-created on startup.
 
 ### Client
 ```bash
