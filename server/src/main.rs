@@ -2,6 +2,7 @@ use clap::Parser;
 use cli::{Cli, Command};
 
 mod cli;
+mod courses;
 mod db;
 mod grib_store;
 mod messages;

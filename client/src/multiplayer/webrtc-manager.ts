@@ -27,7 +27,7 @@ export class WebRTCManager {
         onLobbyCreated: (lobbyId, playerId) => {
           callbacks.onLobbyCreated(lobbyId, playerId);
         },
-        onLobbyJoined: (lobbyId, playerId, players, isCreator) => {
+        onLobbyJoined: (lobbyId, playerId, players, isCreator, courseKey) => {
           // Initialize peer states for existing players
           players.forEach((p) => {
             if (p.id !== playerId) {
@@ -40,7 +40,13 @@ export class WebRTCManager {
               });
             }
           });
-          callbacks.onLobbyJoined(lobbyId, playerId, players, isCreator);
+          callbacks.onLobbyJoined(
+            lobbyId,
+            playerId,
+            players,
+            isCreator,
+            courseKey,
+          );
           // Initiate WebRTC connections to existing players
           players.forEach((p) => {
             if (p.id !== playerId) {

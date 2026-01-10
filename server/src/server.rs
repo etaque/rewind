@@ -8,6 +8,7 @@ use warp::http::Response;
 use warp::http::StatusCode;
 use warp::{path, Filter, Rejection, Reply};
 
+use super::courses;
 use super::db;
 use super::messages;
 use super::models::RasterRenderingMode;
@@ -37,6 +38,11 @@ pub async fn run(address: std::net::SocketAddr, database_url: &str) {
         .and(with_db(pool.clone()))
         .and_then(raster_png);
 
+    // List available courses
+    let courses_route = path!("courses")
+        .and(warp::get())
+        .map(|| warp::reply::json(&courses::all()));
+
     // List available lobbies
     let lobbies_list_route = path!("multiplayer" / "lobbies")
         .and(warp::get())
@@ -52,6 +58,7 @@ pub async fn run(address: std::net::SocketAddr, database_url: &str) {
         });
 
     let routes = health_route
+        .or(courses_route)
         .or(reports_since_route)
         .or(raster_png_route)
         .or(raster_wkb_route)

@@ -20,6 +20,7 @@ export type ServerMessage =
       type: "LobbyJoined";
       lobby_id: string;
       player_id: string;
+      course_key: string;
       players: PlayerInfo[];
       is_creator: boolean;
     }
@@ -65,6 +66,7 @@ export type MultiplayerCallbacks = {
     playerId: string,
     players: PlayerInfo[],
     isCreator: boolean,
+    courseKey: string,
   ) => void;
   onPlayerJoined: (playerId: string, playerName: string) => void;
   onPlayerLeft: (playerId: string) => void;

@@ -53,6 +53,7 @@ pub enum ServerMessage {
     LobbyJoined {
         lobby_id: String,
         player_id: String,
+        course_key: String,
         players: Vec<PlayerInfo>,
         is_creator: bool,
     },
@@ -242,7 +243,7 @@ impl LobbyManager {
         player_id: String,
         player_name: String,
         tx: mpsc::UnboundedSender<ServerMessage>,
-    ) -> Result<(Vec<PlayerInfo>, bool), String> {
+    ) -> Result<(Vec<PlayerInfo>, String, bool), String> {
         let mut lobbies = self.lobbies.write().await;
         let lobby = lobbies
             .get_mut(lobby_id)
@@ -261,6 +262,7 @@ impl LobbyManager {
         });
 
         let is_creator = lobby.creator_id == player_id;
+        let course_key = lobby.course_key.clone();
         lobby.add_player(player)?;
 
         let players = lobby.get_player_infos();
@@ -268,7 +270,7 @@ impl LobbyManager {
         let mut player_lobbies = self.player_lobbies.write().await;
         player_lobbies.insert(player_id, lobby_id.to_string());
 
-        Ok((players, is_creator))
+        Ok((players, course_key, is_creator))
     }
 
     pub async fn leave_lobby(&self, player_id: &str) {
@@ -490,10 +492,11 @@ async fn handle_client_message(
                 .join_lobby(&lobby_id, player_id.to_string(), player_name, tx.clone())
                 .await
             {
-                Ok((players, is_creator)) => {
+                Ok((players, course_key, is_creator)) => {
                     let _ = tx.send(ServerMessage::LobbyJoined {
                         lobby_id,
                         player_id: player_id.to_string(),
+                        course_key,
                         players,
                         is_creator,
                     });

@@ -4,11 +4,6 @@ import { tick } from "./tick";
 import { calculateTackTarget } from "./tack";
 import { toggleTWALock } from "./twa-lock";
 import { refreshWindReport } from "./wind-report";
-import { vg20 } from "./courses";
-
-const coursesByKey: Record<string, Course> = {
-  vg20,
-};
 
 export type AppState =
   | { tag: "Idle" }
@@ -59,13 +54,13 @@ export type AppAction =
       type: "LOBBY_CREATED";
       lobbyId: string;
       playerId: string;
-      courseKey: string;
+      course: Course;
     }
   | {
       type: "LOBBY_JOINED";
       lobbyId: string;
       playerId: string;
-      courseKey: string;
+      course: Course;
       isCreator: boolean;
       players: Map<string, PeerState>;
     }
@@ -183,15 +178,13 @@ export function appReducer(state: AppState, action: AppAction): AppState {
     // Multiplayer actions
     case "LOBBY_CREATED": {
       if (state.tag !== "Idle") return state;
-      const course = coursesByKey[action.courseKey];
-      if (!course) return { tag: "Idle" };
       return {
         tag: "Loading",
-        course,
+        course: action.course,
         reportsLoaded: false,
         lobby: {
           id: action.lobbyId,
-          courseKey: action.courseKey,
+          courseKey: action.course.key,
           myPlayerId: action.playerId,
           isCreator: true,
           players: new Map(),
@@ -204,19 +197,17 @@ export function appReducer(state: AppState, action: AppAction): AppState {
     case "LOBBY_JOINED": {
       // Allow joining from Idle or Loading (switching lobbies)
       if (state.tag !== "Idle" && state.tag !== "Loading") return state;
-      const course = coursesByKey[action.courseKey];
-      if (!course) return { tag: "Idle" };
       return {
         tag: "Loading",
-        course,
+        course: action.course,
         // Keep reportsLoaded if we already have them for the same course
         reportsLoaded:
-          state.tag === "Loading" && state.course.key === course.key
+          state.tag === "Loading" && state.course.key === action.course.key
             ? state.reportsLoaded
             : false,
         lobby: {
           id: action.lobbyId,
-          courseKey: action.courseKey,
+          courseKey: action.course.key,
           myPlayerId: action.playerId,
           isCreator: action.isCreator,
           players: action.players,

@@ -1,8 +1,8 @@
-import { useReducer, useEffect, useRef } from "react";
+import { useReducer, useEffect, useRef, useState } from "react";
 import { appReducer, initialState } from "./state";
 import { SphereView } from "../sphere";
 import InterpolatedWind from "../interpolated-wind";
-import { WindReport } from "../models";
+import { Course, WindReport } from "../models";
 import Hud from "./Hud";
 import CursorWind from "./CursorWind";
 import { initLandData } from "./land";
@@ -13,6 +13,7 @@ const serverUrl = import.meta.env.REWIND_SERVER_URL;
 
 export default function App() {
   const [state, dispatch] = useReducer(appReducer, initialState);
+  const [coursesLoaded, setCoursesLoaded] = useState(false);
 
   const sphereViewRef = useRef<SphereView | null>(null);
   const interpolatedWindRef = useRef<InterpolatedWind>(new InterpolatedWind());
@@ -26,14 +27,35 @@ export default function App() {
   const headingRef = useRef(
     state.tag === "Playing" ? state.session.heading : 0,
   );
-  const courseKeyRef = useRef<string>("vg20");
+  const coursesRef = useRef<Map<string, Course>>(new Map());
+  const selectedCourseRef = useRef<Course | null>(null);
   const reportsRef = useRef<WindReport[] | null>(null);
+
+  // Fetch courses on startup
+  useEffect(() => {
+    fetch(`${serverUrl}/courses`)
+      .then((res) => res.json())
+      .then((courses: Course[]) => {
+        const courseMap = new Map<string, Course>();
+        courses.forEach((c) => courseMap.set(c.key, c));
+        coursesRef.current = courseMap;
+        // Select first course by default
+        if (courses.length > 0) {
+          selectedCourseRef.current = courses[0];
+        }
+        setCoursesLoaded(true);
+      })
+      .catch((err) => {
+        console.error("Failed to fetch courses:", err);
+      });
+  }, []);
 
   // Custom hooks
   const [webrtcManagerRef, multiplayerCallbacks] = useMultiplayer(
     dispatch,
     sphereViewRef,
-    courseKeyRef,
+    selectedCourseRef,
+    coursesRef,
   );
 
   useKeyboardControls(state.tag === "Playing", dispatch);
@@ -189,7 +211,7 @@ export default function App() {
     <>
       <div ref={sphereNodeRef} id="sphere" className="fixed inset-0" />
       <div id="app" className="fixed inset-0 z-10 pointer-events-none">
-        {(state.tag === "Idle" || state.tag === "Loading") && (
+        {(state.tag === "Idle" || state.tag === "Loading") && coursesLoaded && (
           <div className="pointer-events-auto">
             <LobbyScreen
               lobbyId={state.tag === "Loading" ? state.lobby.id : null}

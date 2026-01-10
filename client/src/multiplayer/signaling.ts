@@ -63,6 +63,7 @@ export class SignalingClient {
           message.player_id,
           message.players,
           message.is_creator,
+          message.course_key,
         );
         break;
 

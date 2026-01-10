@@ -1,5 +1,6 @@
 import { useCallback, useRef } from "react";
 import { WebRTCManager } from "../../multiplayer/webrtc-manager";
+import { Course } from "../../models";
 import { PlayerInfo, PeerState } from "../../multiplayer/types";
 import { SphereView } from "../../sphere";
 import { AppAction } from "../state";
@@ -18,21 +19,26 @@ type MultiplayerCallbacks = {
 export function useMultiplayer(
   dispatch: React.Dispatch<AppAction>,
   sphereViewRef: React.RefObject<SphereView | null>,
-  courseKeyRef: React.RefObject<string>,
+  courseRef: React.RefObject<Course | null>,
+  coursesRef: React.RefObject<Map<string, Course>>,
 ): [React.RefObject<WebRTCManager | null>, MultiplayerCallbacks] {
   const webrtcManagerRef = useRef<WebRTCManager | null>(null);
 
   const createWebRTCManager = useCallback(() => {
     return new WebRTCManager({
       onLobbyCreated: (lobbyId, playerId) => {
+        const course = courseRef.current;
+        if (!course) return;
         dispatch({
           type: "LOBBY_CREATED",
           lobbyId,
           playerId,
-          courseKey: courseKeyRef.current!,
+          course,
         });
       },
-      onLobbyJoined: (lobbyId, playerId, players, isCreator) => {
+      onLobbyJoined: (lobbyId, playerId, players, isCreator, courseKey) => {
+        const course = coursesRef.current?.get(courseKey);
+        if (!course) return;
         const playerMap = new Map<string, PeerState>();
         players.forEach((p: PlayerInfo) => {
           if (p.id !== playerId) {
@@ -49,7 +55,7 @@ export function useMultiplayer(
           type: "LOBBY_JOINED",
           lobbyId,
           playerId,
-          courseKey: courseKeyRef.current!,
+          course,
           isCreator,
           players: playerMap,
         });
@@ -62,7 +68,12 @@ export function useMultiplayer(
         sphereViewRef.current?.removePeer(playerId);
       },
       onPeerPositionUpdate: (peerId, position, heading, name) => {
-        sphereViewRef.current?.updatePeerPosition(peerId, position, heading, name);
+        sphereViewRef.current?.updatePeerPosition(
+          peerId,
+          position,
+          heading,
+          name,
+        );
       },
       onCountdown: (seconds) => {
         dispatch({ type: "COUNTDOWN", seconds });
@@ -78,16 +89,18 @@ export function useMultiplayer(
         // by a new manager when switching lobbies
       },
     });
-  }, [dispatch, sphereViewRef, courseKeyRef]);
+  }, [dispatch, sphereViewRef, courseRef, coursesRef]);
 
   const handleCreateLobby = useCallback(
     async (playerName: string) => {
+      const course = courseRef.current;
+      if (!course) return;
       const manager = createWebRTCManager();
       webrtcManagerRef.current = manager;
       await manager.connect();
-      manager.createLobby(courseKeyRef.current!, playerName);
+      manager.createLobby(course.key, playerName);
     },
-    [createWebRTCManager, courseKeyRef],
+    [createWebRTCManager, courseRef],
   );
 
   const handleJoinLobby = useCallback(
