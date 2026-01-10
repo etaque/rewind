@@ -27,15 +27,17 @@ export default class Particles {
   running = false;
   wind?: InterpolatedWind;
   interpolationFactor: number = 0;
+  scene?: Scene;
 
   constructor(canvas: HTMLCanvasElement) {
     this.canvas = canvas;
   }
 
   show(scene: Scene, wind: InterpolatedWind, interpolationFactor: number) {
-    // Update wind reference (used by the animation loop)
+    // Update wind and scene references (used by the animation loop)
     this.wind = wind;
     this.interpolationFactor = interpolationFactor;
+    this.scene = scene;
 
     // Don't restart if already running
     if (this.running) return;
@@ -48,7 +50,7 @@ export default class Particles {
     let previous: number;
 
     const tick = (timestamp: number) => {
-      if (this.paused || !this.wind) return;
+      if (this.paused || !this.wind || !this.scene) return;
 
       if (previous) {
         const delta = timestamp - previous;
@@ -62,7 +64,7 @@ export default class Particles {
               p,
               delta,
               context,
-              scene,
+              this.scene!,
               this.wind!,
               this.interpolationFactor,
             ),
@@ -80,7 +82,7 @@ export default class Particles {
       } else {
         previous = timestamp;
       }
-      requestAnimationFrame(tick);
+      this.rafId = requestAnimationFrame(tick);
     };
     this.rafId = requestAnimationFrame(tick);
   }
@@ -91,6 +93,12 @@ export default class Particles {
     if (this.rafId) cancelAnimationFrame(this.rafId);
     const context = this.canvas.getContext("2d")!;
     context.clearRect(0, 0, this.canvas.width, this.canvas.height);
+  }
+
+  reset() {
+    this.hide();
+    this.particles = [];
+    this.scene = undefined;
   }
 }
 

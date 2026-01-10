@@ -181,6 +181,40 @@ export class SphereView {
     this.render();
   }
 
+  resize() {
+    const oldWidth = this.width;
+    const oldHeight = this.height;
+    const oldScale = this.projection.scale();
+
+    this.width = document.body.clientWidth;
+    this.height = document.body.clientHeight;
+
+    // Resize all canvases
+    const canvases = this.node.querySelectorAll("canvas");
+    canvases.forEach((canvas) => {
+      canvas.width = this.width;
+      canvas.height = this.height;
+    });
+
+    // Calculate what the default scale would be for the new size
+    this.projection.fitSize([this.width, this.height], sphere);
+    const newDefaultScale = this.projection.scale();
+
+    // Calculate what the default scale was for the old size
+    this.projection.fitSize([oldWidth, oldHeight], sphere);
+    const oldDefaultScale = this.projection.scale();
+
+    // Preserve zoom ratio and apply to new default scale
+    const zoomRatio = oldScale / oldDefaultScale;
+    this.projection.fitSize([this.width, this.height], sphere);
+    this.projection.scale(newDefaultScale * zoomRatio);
+
+    // Clear particles state since canvas was reset
+    this.particles.reset();
+
+    this.render();
+  }
+
   render() {
     const scene = {
       projection: this.projection,

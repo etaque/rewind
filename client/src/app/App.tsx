@@ -78,6 +78,16 @@ export default function App() {
     state.tag === "Loading" ? state.lobby.raceStarted : false,
   ]);
 
+  // Handle window resize
+  useEffect(() => {
+    const handleResize = () => {
+      sphereViewRef.current?.resize();
+    };
+
+    window.addEventListener("resize", handleResize);
+    return () => window.removeEventListener("resize", handleResize);
+  }, []);
+
   // Update interpolated wind when reports change
   useEffect(() => {
     if (state.tag !== "Playing") return;
