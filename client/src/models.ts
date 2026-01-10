@@ -1,24 +1,3 @@
-export type Request =
-  | { tag: "ShowMap"; course: Course }
-  | {
-      tag: "GetWindAt";
-      time: number;
-      position: LngLat;
-    }
-  | {
-      tag: "MoveTo";
-      position: LngLat;
-    }
-  | {
-      tag: "LoadReport";
-      windReport: WindReport;
-    };
-
-export type Response = {
-  tag: "WindIs";
-  windSpeed: WindSpeed;
-};
-
 export type LngLat = {
   lng: number;
   lat: number;
