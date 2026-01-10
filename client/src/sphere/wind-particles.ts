@@ -3,15 +3,13 @@ import { Scene } from "./scene";
 import InterpolatedWind from "../interpolated-wind";
 import * as utils from "../utils";
 
-const MAX_AGE = 1200; // 10..100
-const PARTICLES_COUNT = 1000; // 0..5000
-const ALPHA_DECAY = 0.95; // 0.8..1
-const TRAVEL_SPEED = 45; // 1500; // 0..4000
+const MAX_AGE = 1200;
+const PARTICLES_COUNT = 1000;
+const ALPHA_DECAY = 0.95;
+const TRAVEL_SPEED = 45;
 const FPS = 30;
 
 type Particle = {
-  pix0: Pixel;
-  coord0: LngLat;
   pix: Pixel;
   coord: LngLat;
   age: number;
@@ -34,12 +32,10 @@ export default class Particles {
   }
 
   show(scene: Scene, wind: InterpolatedWind, interpolationFactor: number) {
-    // Update wind and scene references (used by the animation loop)
     this.wind = wind;
     this.interpolationFactor = interpolationFactor;
     this.scene = scene;
 
-    // Don't restart if already running
     if (this.running) return;
 
     this.running = true;
@@ -102,49 +98,77 @@ export default class Particles {
   }
 }
 
-function generateParticles(scene: Scene) {
+/**
+ * Generate a random geo coordinate within the visible hemisphere.
+ * Uses the current projection center and generates points that will
+ * be visible on screen.
+ */
+function generateRandomVisibleCoord(scene: Scene): LngLat | null {
   const radius = scene.sphereRadius - 1;
   const { width, height } = scene;
-  let particles = [];
-  let pix0: Pixel, coord0: LngLat, pos: [number, number] | null;
+
+  // Generate random point within visible circle on screen
+  let pix: Pixel;
+  if (radius * 2 > 1.41421 * width) {
+    pix = {
+      x: Math.random() * (width - 1),
+      y: Math.random() * (height - 1),
+    };
+  } else {
+    const randomAngle = Math.random() * 2 * Math.PI;
+    const randomRadiusSqrt = Math.random() * radius ** 2;
+    pix = {
+      x: Math.sqrt(randomRadiusSqrt) * Math.cos(randomAngle) + width / 2,
+      y: Math.sqrt(randomRadiusSqrt) * Math.sin(randomAngle) + height / 2,
+    };
+  }
+
+  // Convert screen position to geo coordinate
+  const pos = scene.projection.invert
+    ? scene.projection.invert([pix.x, pix.y])
+    : null;
+
+  if (!pos) return null;
+
+  let coord: LngLat = { lng: pos[0], lat: pos[1] };
+  if (coord.lng > 180) coord.lng = -180 + (coord.lng - 180);
+
+  return coord;
+}
+
+/**
+ * Generate particles within the visible hemisphere.
+ * Particles store geo coordinates so they can be correctly
+ * repositioned when the projection rotates.
+ */
+function generateParticles(scene: Scene): Particle[] {
+  const particles: Particle[] = [];
 
   for (let i = 0; i < PARTICLES_COUNT; i++) {
-    if (radius * 2 > 1.41421 * width) {
-      pix0 = {
-        x: Math.random() * (width - 1),
-        y: Math.random() * (height - 1),
-      };
-    } else {
-      const randomAngle = Math.random() * 2 * Math.PI;
-      const randomRadiusSqrt = Math.random() * radius ** 2;
+    const coord = generateRandomVisibleCoord(scene);
+    if (!coord) continue;
 
-      pix0 = {
-        x: Math.sqrt(randomRadiusSqrt) * Math.cos(randomAngle) + width / 2,
-        y: Math.sqrt(randomRadiusSqrt) * Math.sin(randomAngle) + height / 2,
-      };
-    }
-
-    pos = scene.projection.invert
-      ? scene.projection.invert([pix0.x, pix0.y])
-      : null;
-
-    if (pos) {
-      coord0 = { lng: pos[0], lat: pos[1] };
-
-      if (coord0.lng > 180) coord0.lng = -180 + (coord0.lng - 180);
-
+    const xy = scene.projection([coord.lng, coord.lat]);
+    if (xy) {
       particles.push({
-        pix0,
-        coord0,
-        pix: pix0,
-        coord: coord0,
+        pix: { x: xy[0], y: xy[1] },
+        coord: coord,
         age: MAX_AGE * Math.random(),
         visible: true,
       });
     }
-    // Skip particles that can't be projected (edge of globe)
   }
+
   return particles;
+}
+
+/**
+ * Check if a screen position is within the visible globe.
+ */
+function isOnVisibleGlobe(pix: Pixel, scene: Scene): boolean {
+  const rx = pix.x - scene.sphereCenter.x;
+  const ry = pix.y - scene.sphereCenter.y;
+  return rx ** 2 + ry ** 2 < scene.sphereRadius ** 2;
 }
 
 function moveParticle(
@@ -156,58 +180,70 @@ function moveParticle(
   interpolationFactor: number,
 ) {
   p.age += delta;
+
   if (p.age > MAX_AGE) {
-    p.pix = p.pix0;
-    p.coord = p.coord0;
-    p.age = (MAX_AGE * Math.random()) / 4;
-    p.visible = true;
-  } else {
-    if (p.visible) {
-      let windSpeed = wind.speedAtWithFactor(p.coord, interpolationFactor);
-
-      if (windSpeed) {
-        let { u, v } = windSpeed;
-
-        const lngDeltaDist = u * delta * TRAVEL_SPEED;
-        const latDeltaDist = v * delta * TRAVEL_SPEED;
-
-        const lngDeltaDeg = lngDeltaDist / utils.lngOneDegToM(p.coord.lat);
-        const latDeltaDeg = latDeltaDist / utils.latOneDegToM;
-
-        p.coord = {
-          lng: utils.reframeLongitude(p.coord.lng + lngDeltaDeg),
-          lat: p.coord.lat + latDeltaDeg,
-        };
-
-        if (p.coord.lat > 90 || p.coord.lat < -90) {
-          p.visible = false;
-        }
-
-        const xy = scene.projection([p.coord.lng, p.coord.lat]);
-
-        if (xy) {
-          let [x, y] = xy;
-
-          const rx = x - scene.sphereCenter.x;
-          const ry = y - scene.sphereCenter.y;
-
-          if (
-            rx ** 2 + ry ** 2 >= scene.sphereRadius ** 2 ||
-            Math.abs(p.coord.lat) > 90 ||
-            Math.abs(p.coord.lng) > 180
-          ) {
-            p.visible = false;
-          }
-
-          if (p.visible) {
-            context.moveTo(p.pix.x, p.pix.y);
-            context.lineTo(x, y);
-            p.pix = { x, y };
-          }
-        }
-      } else {
-        p.visible = false;
-      }
+    // Respawn at a new random visible location
+    const newCoord = generateRandomVisibleCoord(scene);
+    if (!newCoord) {
+      p.visible = false;
+      return;
     }
+
+    p.coord = newCoord;
+    p.age = (MAX_AGE * Math.random()) / 4;
+
+    const xy = scene.projection([p.coord.lng, p.coord.lat]);
+    if (xy) {
+      p.pix = { x: xy[0], y: xy[1] };
+      p.visible = isOnVisibleGlobe(p.pix, scene);
+    } else {
+      p.visible = false;
+    }
+    return;
   }
+
+  if (!p.visible) return;
+
+  const windSpeed = wind.speedAtWithFactor(p.coord, interpolationFactor);
+  if (!windSpeed) {
+    p.visible = false;
+    return;
+  }
+
+  const { u, v } = windSpeed;
+
+  const lngDeltaDist = u * delta * TRAVEL_SPEED;
+  const latDeltaDist = v * delta * TRAVEL_SPEED;
+
+  const lngDeltaDeg = lngDeltaDist / utils.lngOneDegToM(p.coord.lat);
+  const latDeltaDeg = latDeltaDist / utils.latOneDegToM;
+
+  p.coord = {
+    lng: utils.reframeLongitude(p.coord.lng + lngDeltaDeg),
+    lat: p.coord.lat + latDeltaDeg,
+  };
+
+  // Check latitude bounds
+  if (p.coord.lat > 90 || p.coord.lat < -90) {
+    p.visible = false;
+    return;
+  }
+
+  const xy = scene.projection([p.coord.lng, p.coord.lat]);
+  if (!xy) {
+    p.visible = false;
+    return;
+  }
+
+  const newPix = { x: xy[0], y: xy[1] };
+
+  if (!isOnVisibleGlobe(newPix, scene)) {
+    p.visible = false;
+    return;
+  }
+
+  // Draw line from previous to new position
+  context.moveTo(p.pix.x, p.pix.y);
+  context.lineTo(newPix.x, newPix.y);
+  p.pix = newPix;
 }
