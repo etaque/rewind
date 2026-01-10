@@ -1,20 +1,41 @@
+import { useState, useEffect } from "react";
+
+const PLAYER_NAME_KEY = "rewind:player_name";
+
 type Props = {
-  onStart: () => void;
-  onMultiplayer: () => void;
+  onStart: (playerName: string) => void;
 };
 
-export default function StartScreen({ onStart, onMultiplayer }: Props) {
+export default function StartScreen({ onStart }: Props) {
+  const [playerName, setPlayerName] = useState("");
+
+  // Load player name from localStorage on mount
+  useEffect(() => {
+    const savedName = localStorage.getItem(PLAYER_NAME_KEY);
+    if (savedName) {
+      setPlayerName(savedName);
+    }
+  }, []);
+
+  const handleStart = () => {
+    const name = playerName.trim() || "Skipper";
+    localStorage.setItem(PLAYER_NAME_KEY, name);
+    onStart(name);
+  };
+
   return (
     <div className="fixed inset-0 flex flex-col space-y-4 items-center justify-center bg-black bg-opacity-10">
       <h1 className="logo">Re:wind</h1>
-      <button className="btn-start" onClick={onStart}>
+      <input
+        type="text"
+        value={playerName}
+        onChange={(e) => setPlayerName(e.target.value)}
+        placeholder="Skipper"
+        maxLength={20}
+        className="bg-slate-800 bg-opacity-80 text-white text-center px-4 py-2 rounded-lg border border-slate-700 focus:border-blue-500 focus:outline-none w-48"
+      />
+      <button className="btn-start" onClick={handleStart}>
         <RewindIcon />
-      </button>
-      <button
-        className="text-white text-sm hover:text-blue-400 transition-colors mt-4"
-        onClick={onMultiplayer}
-      >
-        Multiplayer
       </button>
     </div>
   );

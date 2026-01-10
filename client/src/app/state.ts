@@ -12,11 +12,13 @@ const coursesByKey: Record<string, Course> = {
 
 export type AppState =
   | { tag: "Idle" }
-  | { tag: "Multiplayer" }
-  | { tag: "InLobby"; lobby: LobbyState }
-  | { tag: "Loading"; course: Course; lobby?: LobbyState }
-  | { tag: "Ready"; session: Session }
-  | { tag: "Playing"; session: Session };
+  | {
+      tag: "Loading";
+      course: Course;
+      lobby: LobbyState;
+      reportsLoaded: boolean;
+    }
+  | { tag: "Playing"; session: Session; lobby: LobbyState };
 
 export type LobbyState = {
   id: string;
@@ -25,6 +27,7 @@ export type LobbyState = {
   isCreator: boolean;
   players: Map<string, PeerState>;
   countdown: number | null;
+  raceStarted: boolean;
 };
 
 export type Session = {
@@ -44,18 +47,14 @@ export type Session = {
 };
 
 export type AppAction =
-  | { type: "LOAD_COURSE"; course: Course }
   | { type: "REPORTS_LOADED"; reports: WindReport[] }
   | { type: "REPORTS_ERROR" }
-  | { type: "START_RACE" }
   | { type: "LOCAL_WIND_UPDATED"; windSpeed: WindSpeed }
   | { type: "TICK"; delta: number }
   | { type: "TURN"; direction: Turn }
   | { type: "TACK" }
   | { type: "TOGGLE_TWA_LOCK" }
   // Multiplayer actions
-  | { type: "OPEN_MULTIPLAYER" }
-  | { type: "CLOSE_MULTIPLAYER" }
   | {
       type: "LOBBY_CREATED";
       lobbyId: string;
@@ -73,50 +72,57 @@ export type AppAction =
   | { type: "PLAYER_JOINED"; playerId: string; playerName: string }
   | { type: "PLAYER_LEFT"; playerId: string }
   | { type: "COUNTDOWN"; seconds: number }
-  | { type: "MULTIPLAYER_RACE_STARTED"; courseKey: string }
+  | { type: "RACE_STARTED" }
+  | { type: "START_PLAYING"; reports: WindReport[] }
   | { type: "LEAVE_LOBBY" };
 
 export type Turn = "left" | "right" | null;
 
 export const initialState: AppState = { tag: "Idle" };
 
+// Helper to create a Playing state from Loading state with reports
+function createPlayingState(
+  state: Extract<AppState, { tag: "Loading" }>,
+  reports: WindReport[],
+): AppState {
+  const [currentReport, nextReports] = refreshWindReport(
+    state.course.startTime,
+    null,
+    reports,
+  );
+  return {
+    tag: "Playing",
+    lobby: state.lobby,
+    session: {
+      clock: 0,
+      lastWindRefresh: 0,
+      courseTime: state.course.startTime,
+      position: state.course.start,
+      turning: null,
+      heading: state.course.startHeading,
+      targetHeading: null,
+      lockedTWA: null,
+      boatSpeed: 0,
+      course: state.course,
+      currentReport,
+      nextReports,
+      windSpeed: { u: 0, v: 0 },
+    },
+  };
+}
+
 export function appReducer(state: AppState, action: AppAction): AppState {
   switch (action.type) {
-    case "LOAD_COURSE":
-      if (state.tag !== "Idle") return state;
-      return { tag: "Loading", course: action.course };
-
     case "REPORTS_LOADED":
       if (state.tag !== "Loading") return state;
-      const [currentReport, nextReports] = refreshWindReport(
-        state.course.startTime,
-        null,
-        action.reports,
-      );
+      // If race already started (countdown finished), go to Playing
+      if (state.lobby.raceStarted) {
+        return createPlayingState(state, action.reports);
+      }
+      // Otherwise, mark reports as loaded and wait for race start
       return {
-        tag: "Ready",
-        session: {
-          clock: 0,
-          lastWindRefresh: 0,
-          courseTime: state.course.startTime,
-          position: state.course.start,
-          turning: null,
-          heading: state.course.startHeading,
-          targetHeading: null,
-          lockedTWA: null,
-          boatSpeed: 0,
-          course: state.course,
-          currentReport,
-          nextReports,
-          windSpeed: { u: 0, v: 0 },
-        },
-      };
-
-    case "START_RACE":
-      if (state.tag !== "Ready") return state;
-      return {
-        tag: "Playing",
-        session: state.session,
+        ...state,
+        reportsLoaded: true,
       };
 
     case "REPORTS_ERROR":
@@ -175,18 +181,14 @@ export function appReducer(state: AppState, action: AppAction): AppState {
       };
 
     // Multiplayer actions
-    case "OPEN_MULTIPLAYER":
+    case "LOBBY_CREATED": {
       if (state.tag !== "Idle") return state;
-      return { tag: "Multiplayer" };
-
-    case "CLOSE_MULTIPLAYER":
-      if (state.tag !== "Multiplayer") return state;
-      return { tag: "Idle" };
-
-    case "LOBBY_CREATED":
-      if (state.tag !== "Multiplayer") return state;
+      const course = coursesByKey[action.courseKey];
+      if (!course) return { tag: "Idle" };
       return {
-        tag: "InLobby",
+        tag: "Loading",
+        course,
+        reportsLoaded: false,
         lobby: {
           id: action.lobbyId,
           courseKey: action.courseKey,
@@ -194,13 +196,24 @@ export function appReducer(state: AppState, action: AppAction): AppState {
           isCreator: true,
           players: new Map(),
           countdown: null,
+          raceStarted: false,
         },
       };
+    }
 
-    case "LOBBY_JOINED":
-      if (state.tag !== "Multiplayer") return state;
+    case "LOBBY_JOINED": {
+      // Allow joining from Idle or Loading (switching lobbies)
+      if (state.tag !== "Idle" && state.tag !== "Loading") return state;
+      const course = coursesByKey[action.courseKey];
+      if (!course) return { tag: "Idle" };
       return {
-        tag: "InLobby",
+        tag: "Loading",
+        course,
+        // Keep reportsLoaded if we already have them for the same course
+        reportsLoaded:
+          state.tag === "Loading" && state.course.key === course.key
+            ? state.reportsLoaded
+            : false,
         lobby: {
           id: action.lobbyId,
           courseKey: action.courseKey,
@@ -208,11 +221,13 @@ export function appReducer(state: AppState, action: AppAction): AppState {
           isCreator: action.isCreator,
           players: action.players,
           countdown: null,
+          raceStarted: false,
         },
       };
+    }
 
     case "PLAYER_JOINED":
-      if (state.tag !== "InLobby") return state;
+      if (state.tag !== "Loading") return state;
       const newPlayers = new Map(state.lobby.players);
       newPlayers.set(action.playerId, {
         id: action.playerId,
@@ -227,7 +242,7 @@ export function appReducer(state: AppState, action: AppAction): AppState {
       };
 
     case "PLAYER_LEFT":
-      if (state.tag !== "InLobby") return state;
+      if (state.tag !== "Loading") return state;
       const remainingPlayers = new Map(state.lobby.players);
       remainingPlayers.delete(action.playerId);
       return {
@@ -236,26 +251,27 @@ export function appReducer(state: AppState, action: AppAction): AppState {
       };
 
     case "COUNTDOWN":
-      if (state.tag !== "InLobby") return state;
+      if (state.tag !== "Loading") return state;
       return {
         ...state,
         lobby: { ...state.lobby, countdown: action.seconds },
       };
 
-    case "MULTIPLAYER_RACE_STARTED": {
-      if (state.tag !== "InLobby") return state;
-      const course = coursesByKey[action.courseKey];
-      if (!course) return { tag: "Idle" };
+    case "RACE_STARTED":
+      if (state.tag !== "Loading") return state;
+      // Mark race as started
       return {
-        tag: "Loading",
-        course,
-        lobby: state.lobby,
+        ...state,
+        lobby: { ...state.lobby, raceStarted: true },
       };
-    }
+
+    case "START_PLAYING":
+      if (state.tag !== "Loading") return state;
+      return createPlayingState(state, action.reports);
 
     case "LEAVE_LOBBY":
-      if (state.tag !== "InLobby") return state;
-      return { tag: "Multiplayer" };
+      if (state.tag !== "Loading") return state;
+      return { tag: "Idle" };
 
     default:
       return state;

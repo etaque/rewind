@@ -270,9 +270,13 @@ impl LobbyManager {
             let mut lobbies = self.lobbies.write().await;
             if let Some(lobby) = lobbies.get_mut(&lobby_id) {
                 lobby.remove_player(player_id);
-                lobby.broadcast_all(ServerMessage::PlayerLeft {
-                    player_id: player_id.to_string(),
-                });
+                if lobby.players.is_empty() {
+                    lobbies.remove(&lobby_id);
+                } else {
+                    lobby.broadcast_all(ServerMessage::PlayerLeft {
+                        player_id: player_id.to_string(),
+                    });
+                }
             }
         }
     }
@@ -327,10 +331,6 @@ impl LobbyManager {
                 return Err("Race has already started".to_string());
             }
 
-            if lobby.players.len() < 2 {
-                return Err("Need at least 2 players to start".to_string());
-            }
-
             lobby.race_started = true;
             lobby.course_key.clone()
         };
@@ -362,6 +362,33 @@ impl LobbyManager {
         }
 
         Ok(())
+    }
+}
+
+/// Public lobby info for listing
+#[derive(Debug, Clone, Serialize)]
+pub struct LobbyInfo {
+    pub id: String,
+    pub course_key: String,
+    pub player_count: usize,
+    pub max_players: usize,
+    pub race_started: bool,
+}
+
+impl LobbyManager {
+    pub async fn list_lobbies(&self) -> Vec<LobbyInfo> {
+        let lobbies = self.lobbies.read().await;
+        lobbies
+            .iter()
+            .filter(|(_, lobby)| !lobby.race_started) // Only show lobbies that haven't started
+            .map(|(id, lobby)| LobbyInfo {
+                id: id.clone(),
+                course_key: lobby.course_key.clone(),
+                player_count: lobby.players.len(),
+                max_players: lobby.max_players,
+                race_started: lobby.race_started,
+            })
+            .collect()
     }
 }
 

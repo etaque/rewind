@@ -4,7 +4,7 @@ import InterpolatedWind from "../interpolated-wind";
 import * as utils from "../utils";
 
 const MAX_AGE = 1200; // 10..100
-const PARTICLES_COUNT = 3000; // 0..5000
+const PARTICLES_COUNT = 1000; // 0..5000
 const ALPHA_DECAY = 0.95; // 0.8..1
 const TRAVEL_SPEED = 45; // 1500; // 0..4000
 const FPS = 30;

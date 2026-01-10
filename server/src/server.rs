@@ -11,7 +11,7 @@ use warp::{path, Filter, Rejection, Reply};
 use super::db;
 use super::messages;
 use super::models::RasterRenderingMode;
-use super::multiplayer::{handle_websocket, LobbyManager};
+use super::multiplayer::{handle_websocket, LobbyInfo, LobbyManager};
 use super::repos;
 
 pub async fn run(address: std::net::SocketAddr, database_url: &str) {
@@ -37,6 +37,12 @@ pub async fn run(address: std::net::SocketAddr, database_url: &str) {
         .and(with_db(pool.clone()))
         .and_then(raster_png);
 
+    // List available lobbies
+    let lobbies_list_route = path!("multiplayer" / "lobbies")
+        .and(warp::get())
+        .and(with_lobby_manager(lobby_manager.clone()))
+        .and_then(list_lobbies);
+
     // WebSocket route for multiplayer signaling
     let multiplayer_route = path!("multiplayer" / "lobby")
         .and(warp::ws())
@@ -49,6 +55,7 @@ pub async fn run(address: std::net::SocketAddr, database_url: &str) {
         .or(reports_since_route)
         .or(raster_png_route)
         .or(raster_wkb_route)
+        .or(lobbies_list_route)
         .or(multiplayer_route)
         .recover(rejection)
         .with(cors)
@@ -65,6 +72,11 @@ fn with_lobby_manager(
 
 fn with_db(db_pool: db::Pool) -> impl Filter<Extract = (db::Pool,), Error = Infallible> + Clone {
     warp::any().map(move || db_pool.clone())
+}
+
+pub async fn list_lobbies(manager: LobbyManager) -> Result<impl Reply, Rejection> {
+    let lobbies: Vec<LobbyInfo> = manager.list_lobbies().await;
+    Ok(warp::reply::json(&lobbies))
 }
 
 pub async fn health(pool: db::Pool) -> Result<impl Reply, Rejection> {

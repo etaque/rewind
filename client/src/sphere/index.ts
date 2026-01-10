@@ -166,8 +166,13 @@ export class SphereView {
     this.render();
   }
 
-  updatePeerPosition(peerId: string, position: LngLat, heading: number) {
-    this.ghostBoats.updatePeer(peerId, position, heading);
+  updatePeerPosition(
+    peerId: string,
+    position: LngLat,
+    heading: number,
+    name: string,
+  ) {
+    this.ghostBoats.updatePeer(peerId, position, heading, name);
     this.render();
   }
 

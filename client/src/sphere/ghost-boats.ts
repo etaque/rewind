@@ -21,7 +21,7 @@ export default class GhostBoats {
     this.canvas = canvas;
   }
 
-  updatePeer(peerId: string, position: LngLat, heading: number) {
+  updatePeer(peerId: string, position: LngLat, heading: number, name: string) {
     const peer = this.peers.get(peerId);
     if (peer) {
       peer.position = position;
@@ -30,7 +30,7 @@ export default class GhostBoats {
     } else {
       this.peers.set(peerId, {
         id: peerId,
-        name: "Player",
+        name,
         position,
         heading,
         lastUpdate: Date.now(),
@@ -40,10 +40,6 @@ export default class GhostBoats {
 
   removePeer(peerId: string) {
     this.peers.delete(peerId);
-  }
-
-  setPeers(peers: Map<string, PeerState>) {
-    this.peers = peers;
   }
 
   render(scene: Scene) {

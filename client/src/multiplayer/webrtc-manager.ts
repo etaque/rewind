@@ -215,7 +215,8 @@ export class WebRTCManager {
       peerState.lastUpdate = Date.now();
     }
 
-    this.callbacks.onPeerPositionUpdate(peerId, position, heading);
+    const name = this.peerStates.get(peerId)?.name || "Player";
+    this.callbacks.onPeerPositionUpdate(peerId, position, heading, name);
   }
 
   private async handleWebRTCSignaling(message: ServerMessage) {

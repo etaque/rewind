@@ -72,9 +72,10 @@ export type MultiplayerCallbacks = {
     peerId: string,
     position: LngLat,
     heading: number,
+    name: string,
   ) => void;
   onCountdown: (seconds: number) => void;
-  onRaceStarted: (startTime: number, courseKey: string) => void;
+  onRaceStarted: () => void;
   onError: (message: string) => void;
   onDisconnect: () => void;
 };

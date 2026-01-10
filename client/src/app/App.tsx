@@ -2,14 +2,11 @@ import { useReducer, useEffect, useRef, useCallback } from "react";
 import { appReducer, initialState } from "./state";
 import { SphereView } from "../sphere";
 import InterpolatedWind from "../interpolated-wind";
-import { Course, WindReport } from "../models";
-import { vg20 } from "./courses";
+import { WindReport } from "../models";
 import StartScreen from "./StartScreen";
-import StartRaceButton from "./StartRaceButton";
 import Hud from "./Hud";
 import CursorWind from "./CursorWind";
 import { initLandData } from "./land";
-import MultiplayerMenu from "./MultiplayerMenu";
 import LobbyScreen from "./LobbyScreen";
 import { WebRTCManager } from "../multiplayer/webrtc-manager";
 import { PlayerInfo, PeerState } from "../multiplayer/types";
@@ -34,12 +31,8 @@ export default function App() {
     state.tag === "Playing" ? state.session.heading : 0,
   );
   const webrtcManagerRef = useRef<WebRTCManager | null>(null);
-  const lobbyIdRef = useRef<string | null>(null);
   const courseKeyRef = useRef<string>("vg20");
-
-  const handleLoadCourse = useCallback((course: Course) => {
-    dispatch({ type: "LOAD_COURSE", course });
-  }, []);
+  const reportsRef = useRef<WindReport[] | null>(null);
 
   // Initialize SphereView and fetch reports when Loading
   useEffect(() => {
@@ -50,6 +43,8 @@ export default function App() {
     // Initialize SphereView
     if (sphereNodeRef.current && !sphereViewRef.current) {
       sphereViewRef.current = new SphereView(sphereNodeRef.current, course);
+      // Render initial state (land, graticule) immediately
+      sphereViewRef.current.render();
     }
 
     // Initialize land collision data
@@ -62,6 +57,7 @@ export default function App() {
     fetch(url)
       .then((res) => res.json())
       .then((reports: WindReport[]) => {
+        reportsRef.current = reports;
         dispatch({ type: "REPORTS_LOADED", reports });
       })
       .catch((err) => {
@@ -70,9 +66,21 @@ export default function App() {
       });
   }, [state.tag === "Loading" ? state.course.key : null]);
 
+  // Transition to Playing when both reports loaded and race started
+  useEffect(() => {
+    if (state.tag !== "Loading") return;
+    if (!state.reportsLoaded || !state.lobby.raceStarted) return;
+    if (!reportsRef.current) return;
+
+    dispatch({ type: "START_PLAYING", reports: reportsRef.current });
+  }, [
+    state.tag === "Loading" ? state.reportsLoaded : false,
+    state.tag === "Loading" ? state.lobby.raceStarted : false,
+  ]);
+
   // Update interpolated wind when reports change
   useEffect(() => {
-    if (state.tag !== "Playing" && state.tag !== "Ready") return;
+    if (state.tag !== "Playing") return;
 
     const { currentReport, nextReports, courseTime } = state.session;
     const interpolatedWind = interpolatedWindRef.current;
@@ -84,31 +92,15 @@ export default function App() {
       }
     });
   }, [
-    state.tag === "Playing" || state.tag === "Ready"
-      ? state.session.currentReport?.id
-      : null,
-    state.tag === "Playing" || state.tag === "Ready"
-      ? state.session.nextReports[0]?.id
-      : null,
+    state.tag === "Playing" ? state.session.currentReport?.id : null,
+    state.tag === "Playing" ? state.session.nextReports[0]?.id : null,
   ]);
 
-  const handleStartRace = useCallback(() => {
-    dispatch({ type: "START_RACE" });
-  }, []);
-
   // Multiplayer handlers
-  const handleOpenMultiplayer = useCallback(() => {
-    dispatch({ type: "OPEN_MULTIPLAYER" });
-  }, []);
 
-  const handleCloseMultiplayer = useCallback(() => {
-    dispatch({ type: "CLOSE_MULTIPLAYER" });
-  }, []);
-
-  const handleCreateLobby = useCallback(async (playerName: string) => {
-    const manager = new WebRTCManager({
+  const createWebRTCManager = useCallback(() => {
+    return new WebRTCManager({
       onLobbyCreated: (lobbyId, playerId) => {
-        lobbyIdRef.current = lobbyId;
         dispatch({
           type: "LOBBY_CREATED",
           lobbyId,
@@ -117,7 +109,6 @@ export default function App() {
         });
       },
       onLobbyJoined: (lobbyId, playerId, players, isCreator) => {
-        lobbyIdRef.current = lobbyId;
         const playerMap = new Map<string, PeerState>();
         players.forEach((p: PlayerInfo) => {
           if (p.id !== playerId) {
@@ -146,94 +137,54 @@ export default function App() {
         dispatch({ type: "PLAYER_LEFT", playerId });
         sphereViewRef.current?.removePeer(playerId);
       },
-      onPeerPositionUpdate: (peerId, position, heading) => {
-        sphereViewRef.current?.updatePeerPosition(peerId, position, heading);
+      onPeerPositionUpdate: (peerId, position, heading, name) => {
+        sphereViewRef.current?.updatePeerPosition(
+          peerId,
+          position,
+          heading,
+          name,
+        );
       },
       onCountdown: (seconds) => {
         dispatch({ type: "COUNTDOWN", seconds });
       },
-      onRaceStarted: (_startTime, courseKey) => {
-        dispatch({ type: "MULTIPLAYER_RACE_STARTED", courseKey });
+      onRaceStarted: () => {
+        dispatch({ type: "RACE_STARTED" });
       },
       onError: (message) => {
         console.error("Multiplayer error:", message);
       },
       onDisconnect: () => {
         webrtcManagerRef.current = null;
-        lobbyIdRef.current = null;
       },
     });
-
-    webrtcManagerRef.current = manager;
-    await manager.connect();
-    manager.createLobby(courseKeyRef.current, playerName);
   }, []);
+
+  const handleCreateLobby = useCallback(
+    async (playerName: string) => {
+      const manager = createWebRTCManager();
+      webrtcManagerRef.current = manager;
+      await manager.connect();
+      manager.createLobby(courseKeyRef.current, playerName);
+    },
+    [createWebRTCManager],
+  );
 
   const handleJoinLobby = useCallback(
     async (lobbyId: string, playerName: string) => {
-      const manager = new WebRTCManager({
-        onLobbyCreated: (lobbyId, playerId) => {
-          lobbyIdRef.current = lobbyId;
-          dispatch({
-            type: "LOBBY_CREATED",
-            lobbyId,
-            playerId,
-            courseKey: courseKeyRef.current,
-          });
-        },
-        onLobbyJoined: (lobbyId, playerId, players, isCreator) => {
-          lobbyIdRef.current = lobbyId;
-          const playerMap = new Map<string, PeerState>();
-          players.forEach((p: PlayerInfo) => {
-            if (p.id !== playerId) {
-              playerMap.set(p.id, {
-                id: p.id,
-                name: p.name,
-                position: null,
-                heading: null,
-                lastUpdate: 0,
-              });
-            }
-          });
-          dispatch({
-            type: "LOBBY_JOINED",
-            lobbyId,
-            playerId,
-            courseKey: courseKeyRef.current,
-            isCreator,
-            players: playerMap,
-          });
-        },
-        onPlayerJoined: (playerId, playerName) => {
-          dispatch({ type: "PLAYER_JOINED", playerId, playerName });
-        },
-        onPlayerLeft: (playerId) => {
-          dispatch({ type: "PLAYER_LEFT", playerId });
-          sphereViewRef.current?.removePeer(playerId);
-        },
-        onPeerPositionUpdate: (peerId, position, heading) => {
-          sphereViewRef.current?.updatePeerPosition(peerId, position, heading);
-        },
-        onCountdown: (seconds) => {
-          dispatch({ type: "COUNTDOWN", seconds });
-        },
-        onRaceStarted: (_startTime, courseKey) => {
-          dispatch({ type: "MULTIPLAYER_RACE_STARTED", courseKey });
-        },
-        onError: (message) => {
-          console.error("Multiplayer error:", message);
-        },
-        onDisconnect: () => {
-          webrtcManagerRef.current = null;
-          lobbyIdRef.current = null;
-        },
-      });
+      // Leave current lobby if we're in one
+      if (webrtcManagerRef.current) {
+        webrtcManagerRef.current.leaveLobby();
+        webrtcManagerRef.current.disconnect();
+        webrtcManagerRef.current = null;
+      }
 
+      const manager = createWebRTCManager();
       webrtcManagerRef.current = manager;
       await manager.connect();
       manager.joinLobby(lobbyId, playerName);
     },
-    [],
+    [createWebRTCManager],
   );
 
   const handleLobbyStartRace = useCallback(() => {
@@ -244,7 +195,6 @@ export default function App() {
     webrtcManagerRef.current?.leaveLobby();
     webrtcManagerRef.current?.disconnect();
     webrtcManagerRef.current = null;
-    lobbyIdRef.current = null;
     dispatch({ type: "LEAVE_LOBBY" });
   }, []);
 
@@ -366,22 +316,10 @@ export default function App() {
       <div id="app" className="fixed inset-0 z-10 pointer-events-none">
         {state.tag === "Idle" && (
           <div className="pointer-events-auto">
-            <StartScreen
-              onStart={() => handleLoadCourse(vg20)}
-              onMultiplayer={handleOpenMultiplayer}
-            />
+            <StartScreen onStart={handleCreateLobby} />
           </div>
         )}
-        {state.tag === "Multiplayer" && (
-          <div className="pointer-events-auto">
-            <MultiplayerMenu
-              onCreateLobby={handleCreateLobby}
-              onJoinLobby={handleJoinLobby}
-              onBack={handleCloseMultiplayer}
-            />
-          </div>
-        )}
-        {state.tag === "InLobby" && (
+        {state.tag === "Loading" && (
           <div className="pointer-events-auto">
             <LobbyScreen
               lobbyId={state.lobby.id}
@@ -391,25 +329,15 @@ export default function App() {
               countdown={state.lobby.countdown}
               onStartRace={handleLobbyStartRace}
               onLeaveLobby={handleLeaveLobby}
+              onJoinLobby={handleJoinLobby}
             />
           </div>
         )}
-        {state.tag === "Ready" && (
-          <div className="pointer-events-auto">
-            <StartRaceButton onStart={handleStartRace} />
-          </div>
-        )}
-        {(state.tag === "Ready" || state.tag === "Playing") && (
-          <Hud session={state.session} />
-        )}
+        {state.tag === "Playing" && <Hud session={state.session} />}
       </div>
       <CursorWind
         sphereView={sphereViewRef.current}
-        courseTime={
-          state.tag === "Playing" || state.tag === "Ready"
-            ? state.session.courseTime
-            : 0
-        }
+        courseTime={state.tag === "Playing" ? state.session.courseTime : 0}
       />
     </>
   );

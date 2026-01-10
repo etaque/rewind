@@ -85,7 +85,7 @@ export class SignalingClient {
         break;
 
       case "RaceStarted":
-        this.callbacks.onRaceStarted(message.start_time, message.course_key);
+        this.callbacks.onRaceStarted();
         break;
     }
   }

@@ -1,4 +1,16 @@
+import { useState, useEffect } from "react";
 import { PeerState } from "../multiplayer/types";
+
+const PLAYER_NAME_KEY = "rewind:player_name";
+const serverUrl = import.meta.env.REWIND_SERVER_URL;
+
+type LobbyInfo = {
+  id: string;
+  course_key: string;
+  player_count: number;
+  max_players: number;
+  race_started: boolean;
+};
 
 type Props = {
   lobbyId: string;
@@ -8,6 +20,7 @@ type Props = {
   countdown: number | null;
   onStartRace: () => void;
   onLeaveLobby: () => void;
+  onJoinLobby: (lobbyId: string, playerName: string) => void;
 };
 
 export default function LobbyScreen({
@@ -18,12 +31,48 @@ export default function LobbyScreen({
   countdown,
   onStartRace,
   onLeaveLobby,
+  onJoinLobby,
 }: Props) {
+  const [joinCode, setJoinCode] = useState("");
+  const [showJoinInput, setShowJoinInput] = useState(false);
+  const [availableLobbies, setAvailableLobbies] = useState<LobbyInfo[]>([]);
   const playerList = Array.from(players.values());
   const totalPlayers = playerList.length + 1; // +1 for self
 
+  // Fetch available lobbies periodically
+  useEffect(() => {
+    const fetchLobbies = async () => {
+      try {
+        const res = await fetch(`${serverUrl}/multiplayer/lobbies`);
+        const lobbies: LobbyInfo[] = await res.json();
+        // Filter out our own lobby
+        setAvailableLobbies(lobbies.filter((l) => l.id !== lobbyId));
+      } catch (err) {
+        console.error("Failed to fetch lobbies:", err);
+      }
+    };
+
+    fetchLobbies();
+    const interval = setInterval(fetchLobbies, 5000);
+    return () => clearInterval(interval);
+  }, [lobbyId]);
+
   const copyLobbyCode = () => {
-    navigator.clipboard.writeText(lobbyId);
+    if (navigator.clipboard) {
+      navigator.clipboard.writeText(lobbyId);
+    }
+  };
+
+  const handleJoin = () => {
+    if (joinCode.trim()) {
+      const playerName = localStorage.getItem(PLAYER_NAME_KEY) || "Skipper";
+      onJoinLobby(joinCode.trim().toUpperCase(), playerName);
+    }
+  };
+
+  const handleJoinLobby = (lobbyId: string) => {
+    const playerName = localStorage.getItem(PLAYER_NAME_KEY) || "Skipper";
+    onJoinLobby(lobbyId, playerName);
   };
 
   return (
@@ -44,11 +93,17 @@ export default function LobbyScreen({
               <button
                 onClick={copyLobbyCode}
                 className="block w-full bg-slate-800 hover:bg-slate-700 text-white px-4 py-3 rounded-lg text-3xl tracking-widest font-mono transition-all"
-                title="Click to copy"
+                title={
+                  navigator.clipboard
+                    ? "Click to copy"
+                    : "Clipboard not supported"
+                }
               >
                 {lobbyId}
               </button>
-              <p className="text-slate-500 text-xs">Click to copy</p>
+              {navigator.clipboard && (
+                <p className="text-slate-500 text-xs">Click to copy</p>
+              )}
             </div>
 
             {/* Player List */}
@@ -89,19 +144,81 @@ export default function LobbyScreen({
 
             {/* Actions */}
             <div className="space-y-4">
-              {isCreator ? (
+              {isCreator && (
                 <button
                   onClick={onStartRace}
-                  disabled={totalPlayers < 2}
-                  className="w-full bg-gradient-to-r from-green-400 to-blue-500 hover:from-green-500 hover:to-blue-600 disabled:from-slate-600 disabled:to-slate-600 text-white py-3 px-6 rounded-lg font-semibold transition-all disabled:cursor-not-allowed"
+                  className="w-full bg-gradient-to-r from-green-400 to-blue-500 hover:from-green-500 hover:to-blue-600 text-white py-3 px-6 rounded-lg font-semibold transition-all"
                 >
-                  {totalPlayers < 2 ? "Need at least 2 players" : "Start Race"}
+                  {totalPlayers < 2 ? "Start Solo" : "Start Race"}
                 </button>
-              ) : (
+              )}
+              {!isCreator && (
                 <div className="text-center text-slate-400 py-3">
                   Waiting for host to start the race...
                 </div>
               )}
+
+              {/* Available lobbies */}
+              {availableLobbies.length > 0 && (
+                <div className="space-y-2">
+                  <label className="text-slate-400 text-sm">
+                    Available Lobbies
+                  </label>
+                  <div className="bg-slate-800 rounded-lg divide-y divide-slate-700 max-h-40 overflow-y-auto">
+                    {availableLobbies.map((lobby) => (
+                      <button
+                        key={lobby.id}
+                        onClick={() => handleJoinLobby(lobby.id)}
+                        className="w-full px-4 py-3 flex items-center justify-between hover:bg-slate-700 transition-all"
+                      >
+                        <span className="text-white font-mono">{lobby.id}</span>
+                        <span className="text-slate-400 text-sm">
+                          {lobby.player_count}/{lobby.max_players} players
+                        </span>
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* Manual join with code */}
+              {showJoinInput ? (
+                <div className="space-y-2">
+                  <input
+                    type="text"
+                    value={joinCode}
+                    onChange={(e) => setJoinCode(e.target.value.toUpperCase())}
+                    placeholder="Enter lobby code"
+                    maxLength={6}
+                    className="w-full bg-slate-800 text-white px-4 py-3 rounded-lg border border-slate-700 focus:border-blue-500 focus:outline-none text-center text-xl tracking-widest font-mono"
+                  />
+                  <div className="flex space-x-2">
+                    <button
+                      onClick={handleJoin}
+                      disabled={!joinCode.trim()}
+                      className="flex-1 bg-blue-500 hover:bg-blue-600 disabled:bg-slate-600 text-white py-2 px-4 rounded-lg font-semibold transition-all disabled:cursor-not-allowed"
+                    >
+                      Join
+                    </button>
+                    <button
+                      onClick={() => setShowJoinInput(false)}
+                      className="flex-1 text-slate-400 hover:text-white py-2 transition-all"
+                    >
+                      Cancel
+                    </button>
+                  </div>
+                </div>
+              ) : (
+                <button
+                  onClick={() => setShowJoinInput(true)}
+                  className="w-full text-slate-400 hover:text-white py-2 transition-all"
+                >
+                  {availableLobbies.length > 0
+                    ? "Enter Code Manually"
+                    : "Join Different Lobby"}
+                </button>
+              )}
+
               <button
                 onClick={onLeaveLobby}
                 className="w-full text-slate-400 hover:text-white py-2 transition-all"
