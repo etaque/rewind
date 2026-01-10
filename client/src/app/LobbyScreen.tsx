@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { PeerState } from "../multiplayer/types";
+import { PeerState, PlayerInfo } from "../multiplayer/types";
 
 const PLAYER_NAME_KEY = "rewind:player_name";
 const serverUrl = import.meta.env.REWIND_SERVER_URL;
@@ -7,9 +7,10 @@ const serverUrl = import.meta.env.REWIND_SERVER_URL;
 type LobbyInfo = {
   id: string;
   course_key: string;
-  player_count: number;
+  players: PlayerInfo[];
   max_players: number;
   race_started: boolean;
+  creator_id: string;
 };
 
 type Props = {
@@ -36,8 +37,6 @@ export default function LobbyScreen({
   onLeaveLobby,
 }: Props) {
   const [playerName, setPlayerName] = useState("");
-  const [joinCode, setJoinCode] = useState("");
-  const [showJoinInput, setShowJoinInput] = useState(false);
   const [availableLobbies, setAvailableLobbies] = useState<LobbyInfo[]>([]);
 
   const playerList = Array.from(players.values());
@@ -88,22 +87,8 @@ export default function LobbyScreen({
     localStorage.setItem(PLAYER_NAME_KEY, newName);
   };
 
-  const handleJoin = () => {
-    if (joinCode.trim()) {
-      onJoinLobby(joinCode.trim().toUpperCase(), getPlayerName());
-      setJoinCode("");
-      setShowJoinInput(false);
-    }
-  };
-
   const handleJoinLobby = (targetLobbyId: string) => {
     onJoinLobby(targetLobbyId, getPlayerName());
-  };
-
-  const copyLobbyCode = () => {
-    if (navigator.clipboard && lobbyId) {
-      navigator.clipboard.writeText(lobbyId);
-    }
   };
 
   return (
@@ -135,27 +120,8 @@ export default function LobbyScreen({
                 onChange={(e) => handlePlayerNameChange(e.target.value)}
                 placeholder="Skipper"
                 maxLength={20}
-                className="w-full bg-slate-800 text-white text-center px-4 py-3 rounded-lg border border-slate-700 focus:border-blue-500 focus:outline-none"
+                className="w-full bg-slate-800 text-white px-4 py-3 rounded-lg border border-slate-700 focus:border-blue-500 focus:outline-none"
               />
-            </div>
-
-            {/* Lobby Code */}
-            <div className="text-center space-y-2">
-              <label className="text-slate-400 text-sm">Lobby Code</label>
-              <button
-                onClick={copyLobbyCode}
-                className="block w-full bg-slate-800 hover:bg-slate-700 text-white px-4 py-3 rounded-lg text-3xl tracking-widest font-mono transition-all"
-                title={
-                  navigator.clipboard
-                    ? "Click to copy"
-                    : "Clipboard not supported"
-                }
-              >
-                {lobbyId}
-              </button>
-              {navigator.clipboard && (
-                <p className="text-slate-500 text-xs">Click to copy</p>
-              )}
             </div>
 
             {/* Player List */}
@@ -223,52 +189,22 @@ export default function LobbyScreen({
                         onClick={() => handleJoinLobby(lobby.id)}
                         className="w-full px-4 py-3 flex items-center justify-between hover:bg-slate-700 transition-all"
                       >
-                        <span className="text-white font-mono">{lobby.id}</span>
+                        {lobby.players.map((playerInfo) => (
+                          <span
+                            key={playerInfo.id}
+                            className="text-white font-mono"
+                          >
+                            {playerInfo.name}{" "}
+                            {playerInfo.id === lobby.creator_id ? "(Host)" : ""}
+                          </span>
+                        ))}
                         <span className="text-slate-400 text-sm">
-                          {lobby.player_count}/{lobby.max_players} players
+                          {lobby.players.length}/{lobby.max_players} players
                         </span>
                       </button>
                     ))}
                   </div>
                 </div>
-              )}
-
-              {/* Manual join with code */}
-              {showJoinInput ? (
-                <div className="space-y-2">
-                  <input
-                    type="text"
-                    value={joinCode}
-                    onChange={(e) => setJoinCode(e.target.value.toUpperCase())}
-                    placeholder="Enter lobby code"
-                    maxLength={6}
-                    className="w-full bg-slate-800 text-white px-4 py-3 rounded-lg border border-slate-700 focus:border-blue-500 focus:outline-none text-center text-xl tracking-widest font-mono"
-                  />
-                  <div className="flex space-x-2">
-                    <button
-                      onClick={handleJoin}
-                      disabled={!joinCode.trim()}
-                      className="flex-1 bg-blue-500 hover:bg-blue-600 disabled:bg-slate-600 text-white py-2 px-4 rounded-lg font-semibold transition-all disabled:cursor-not-allowed"
-                    >
-                      Join
-                    </button>
-                    <button
-                      onClick={() => setShowJoinInput(false)}
-                      className="flex-1 text-slate-400 hover:text-white py-2 transition-all"
-                    >
-                      Cancel
-                    </button>
-                  </div>
-                </div>
-              ) : (
-                <button
-                  onClick={() => setShowJoinInput(true)}
-                  className="w-full text-slate-400 hover:text-white py-2 transition-all"
-                >
-                  {availableLobbies.length > 0
-                    ? "Enter Code Manually"
-                    : "Join with Code"}
-                </button>
               )}
 
               <button

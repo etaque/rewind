@@ -101,6 +101,15 @@ pub struct Player {
     pub tx: mpsc::UnboundedSender<ServerMessage>,
 }
 
+impl Player {
+    pub fn info(&self) -> PlayerInfo {
+        PlayerInfo {
+            id: self.id.clone(),
+            name: self.name.clone(),
+        }
+    }
+}
+
 #[derive(Debug)]
 pub struct Lobby {
     pub course_key: String,
@@ -370,9 +379,10 @@ impl LobbyManager {
 pub struct LobbyInfo {
     pub id: String,
     pub course_key: String,
-    pub player_count: usize,
+    pub players: Vec<PlayerInfo>,
     pub max_players: usize,
     pub race_started: bool,
+    pub creator_id: String,
 }
 
 impl LobbyManager {
@@ -384,11 +394,12 @@ impl LobbyManager {
             .map(|(id, lobby)| LobbyInfo {
                 id: id.clone(),
                 course_key: lobby.course_key.clone(),
-                player_count: lobby.players.len(),
                 max_players: lobby.max_players,
                 race_started: lobby.race_started,
+                creator_id: lobby.creator_id.clone(),
+                players: lobby.players.values().map(|player| player.info()).collect(),
             })
-            .collect()
+            .collect::<Vec<_>>()
     }
 }
 
