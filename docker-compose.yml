@@ -1,21 +1,4 @@
 services:
-  db:
-    image: postgres:16
-    ports:
-      - "25432:5432"
-    restart: unless-stopped
-    volumes:
-      - db-data:/var/lib/postgresql/data
-    environment:
-      POSTGRES_PASSWORD: rewind
-      POSTGRES_DB: rewind
-      POSTGRES_USER: rewind
-    healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U rewind -d rewind"]
-      interval: 5s
-      timeout: 5s
-      retries: 5
-
   server:
     build:
       context: ./server
@@ -24,12 +7,9 @@ services:
       - "3001:3001"
     restart: unless-stopped
     depends_on:
-      db:
-        condition: service_healthy
       minio-init:
         condition: service_completed_successfully
     environment:
-      REWIND_DATABASE_URL: postgresql://rewind:rewind@db:5432/rewind
       REWIND_SERVER_ADDRESS: 0.0.0.0:3001
       REWIND_S3_GRIB_BUCKET: grib-files
       REWIND_S3_RASTER_BUCKET: wind-rasters
@@ -83,5 +63,4 @@ services:
       "
 
 volumes:
-  db-data:
   minio-data:

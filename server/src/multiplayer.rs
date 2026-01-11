@@ -1,10 +1,10 @@
 use chrono::{DateTime, Utc};
 use futures::{SinkExt, StreamExt};
+use rand::Rng;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::sync::Arc;
 use tokio::sync::{mpsc, RwLock};
-use uuid::Uuid;
 use warp::ws::{Message, WebSocket};
 
 // ============================================================================
@@ -405,12 +405,13 @@ impl LobbyManager {
     }
 }
 
+fn generate_id() -> String {
+    let bytes: [u8; 8] = rand::rng().random();
+    bytes.iter().map(|b| format!("{:02X}", b)).collect()
+}
+
 fn generate_lobby_id() -> String {
-    // Generate a short, readable lobby ID (6 chars)
-    let uuid = Uuid::new_v4();
-    let bytes = uuid.as_bytes();
-    let id: String = bytes[..3].iter().map(|b| format!("{:02X}", b)).collect();
-    id
+    generate_id()[..6].to_string()
 }
 
 // ============================================================================
@@ -421,7 +422,7 @@ pub async fn handle_websocket(ws: WebSocket, manager: LobbyManager) {
     let (mut ws_tx, mut ws_rx) = ws.split();
     let (tx, mut rx) = mpsc::unbounded_channel::<ServerMessage>();
 
-    let player_id = Uuid::new_v4().to_string();
+    let player_id = generate_id();
 
     // Task to forward server messages to WebSocket
     let forward_task = tokio::spawn(async move {

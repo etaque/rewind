@@ -8,26 +8,18 @@ use warp::http::StatusCode;
 use warp::{path, Filter, Rejection, Reply};
 
 use super::courses;
-use super::db;
-use super::messages;
+use super::manifest::{self, Manifest};
 use super::multiplayer::{handle_websocket, LobbyInfo, LobbyManager};
-use super::repos;
 use super::s3;
 
-pub async fn run(address: std::net::SocketAddr, database_url: &str) {
-    let pool = db::pool(&database_url)
-        .await
-        .expect(format!("Failed to connect to DB: {}", &database_url).as_str());
-
+pub async fn run(address: std::net::SocketAddr) {
     let lobby_manager = LobbyManager::new();
 
     let cors = warp::cors().allow_any_origin().allow_methods(vec!["GET"]);
 
-    let health_route = path!("health").and(with_db(pool.clone())).and_then(health);
+    let health_route = path!("health").and_then(health);
 
-    let reports_since_route = path!("wind-reports" / "since" / i64)
-        .and(with_db(pool.clone()))
-        .and_then(reports_since);
+    let reports_since_route = path!("wind-reports" / "since" / i64).and_then(reports_since);
 
     // List available courses
     let courses_route = path!("courses")
@@ -66,40 +58,49 @@ fn with_lobby_manager(
     warp::any().map(move || manager.clone())
 }
 
-fn with_db(db_pool: db::Pool) -> impl Filter<Extract = (db::Pool,), Error = Infallible> + Clone {
-    warp::any().map(move || db_pool.clone())
-}
-
 pub async fn list_lobbies(manager: LobbyManager) -> Result<impl Reply, Rejection> {
     let lobbies: Vec<LobbyInfo> = manager.list_lobbies().await;
     Ok(warp::reply::json(&lobbies))
 }
 
-pub async fn health(pool: db::Pool) -> Result<impl Reply, Rejection> {
+pub async fn health() -> Result<impl Reply, Rejection> {
     let s3 = s3::grib_client();
     let health_path = Path::from("/healthcheck");
-    let (s3_health, db_health) =
-        tokio::join!(s3.put(&health_path, Bytes::new().into()), db::health(&pool));
-    match (s3_health, db_health) {
-        (Ok(_), Ok(_)) => Ok(warp::reply::with_status("OK", StatusCode::OK)),
-        (Err(e), _) => Err(warp::reject::custom(Error(e.into()))),
-        (_, Err(e)) => Err(warp::reject::custom(Error(e))),
+    match s3.put(&health_path, Bytes::new().into()).await {
+        Ok(_) => Ok(warp::reply::with_status("OK", StatusCode::OK)),
+        Err(e) => Err(warp::reject::custom(Error(e.into()))),
     }
 }
 
-pub async fn reports_since(since_ms: i64, pool: db::Pool) -> Result<impl Reply, Rejection> {
-    let client = pool
-        .get()
-        .await
-        .map_err(|e| warp::reject::custom(Error(e.into())))?;
+#[derive(Clone, Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+struct WindReportResponse {
+    #[serde(with = "chrono::serde::ts_milliseconds")]
+    time: DateTime<Utc>,
+    png_url: String,
+}
 
+impl From<&manifest::WindReport> for WindReportResponse {
+    fn from(report: &manifest::WindReport) -> Self {
+        WindReportResponse {
+            time: report.time,
+            png_url: report.png_url(),
+        }
+    }
+}
+
+pub async fn reports_since(since_ms: i64) -> Result<impl Reply, Rejection> {
     let since = DateTime::from_timestamp_millis(since_ms).unwrap_or_else(|| Utc::now());
 
-    let db_reports = repos::wind_reports::list_since(&client, &since, 100i64)
+    let manifest = Manifest::load()
         .await
-        .map_err(|e| warp::reject::custom(Error(e.into())))?;
+        .map_err(|e| warp::reject::custom(Error(e)))?;
 
-    let reports: Vec<messages::WindReport> = db_reports.into_iter().map(|r| r.into()).collect();
+    let reports: Vec<WindReportResponse> = manifest
+        .reports_since(since, 100)
+        .into_iter()
+        .map(|r| r.into())
+        .collect();
 
     Ok(warp::reply::json(&reports))
 }

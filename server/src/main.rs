@@ -4,13 +4,10 @@ use cli::{Cli, Command};
 mod cli;
 mod config;
 mod courses;
-mod db;
 mod grib_png;
 mod grib_store;
-mod messages;
-mod models;
+mod manifest;
 mod multiplayer;
-mod repos;
 mod s3;
 mod server;
 
@@ -22,19 +19,14 @@ async fn main() {
     let args = Cli::parse();
 
     match args.cmd {
-        Command::Http { address } => server::run(address, &args.database_url).await,
-        Command::Db(db_cmd) => match db_cmd.cmd {
-            cli::DbSubCommand::Migrate => {
-                db::migrate(&args.database_url).await.unwrap();
-            }
-            cli::DbSubCommand::Reset => {
-                db::reset(&args.database_url).await.unwrap();
-            }
-        },
+        Command::Http { address } => server::run(address).await,
         Command::ImportGribRange(range_args) => {
-            grib_store::import_grib_range(&args.database_url, range_args)
-                .await
-                .unwrap();
+            grib_store::import_grib_range(range_args).await.unwrap();
+        }
+        Command::RebuildManifest => {
+            let manifest = manifest::Manifest::rebuild_from_s3().await.unwrap();
+            manifest.save().await.unwrap();
+            println!("Manifest saved.");
         }
     }
 }

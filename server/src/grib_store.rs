@@ -1,15 +1,11 @@
 use crate::cli::GribRangeArgs;
-use crate::db;
 use crate::grib_png::grib_to_uv_png;
-use crate::models::WindReport;
-use crate::repos;
+use crate::manifest::{Manifest, WindReport};
 use crate::s3;
 use anyhow::anyhow;
 use bytes::Bytes;
-use chrono::{Days, NaiveDate, TimeDelta, Utc};
+use chrono::{Days, NaiveDate, TimeDelta};
 use object_store::{aws, ObjectStoreExt};
-use reqwest;
-use uuid::Uuid;
 
 // Hours of the day when GRIB files are generated (0, 6, 12, 18)
 const HOURS: [i16; 4] = [0, 6, 12, 18];
@@ -19,11 +15,13 @@ const FORECASTS: [i16; 2] = [3, 6];
 const BASE_URL: &str = "https://grib.v-l-m.org/archives";
 
 /// Import all GRIB files for a date range
-pub async fn import_grib_range(db_url: &str, args: GribRangeArgs) -> anyhow::Result<()> {
-    let pool = db::pool(db_url).await?;
-
+pub async fn import_grib_range(args: GribRangeArgs) -> anyhow::Result<()> {
     let grib_s3 = s3::grib_client();
     let raster_s3 = s3::raster_client();
+
+    // Load existing manifest
+    let mut manifest = Manifest::load().await?;
+    println!("Loaded manifest with {} reports", manifest.reports.len());
 
     let mut current_day = args.from;
     let end_day = args.to.checked_add_days(Days::new(1)).unwrap();
@@ -31,11 +29,23 @@ pub async fn import_grib_range(db_url: &str, args: GribRangeArgs) -> anyhow::Res
     while current_day < end_day {
         for hour in HOURS {
             for forecast in FORECASTS {
-                handle_grib(&pool, &grib_s3, &raster_s3, current_day, hour, forecast).await?;
+                handle_grib(
+                    &mut manifest,
+                    &grib_s3,
+                    &raster_s3,
+                    current_day,
+                    hour,
+                    forecast,
+                )
+                .await?;
             }
         }
         current_day = current_day.checked_add_days(Days::new(1)).unwrap();
     }
+
+    // Save updated manifest
+    manifest.save().await?;
+    println!("Saved manifest with {} reports", manifest.reports.len());
 
     println!("Finished.");
     Ok(())
@@ -46,32 +56,38 @@ fn raster_path(day: NaiveDate, hour: i16, forecast: i16) -> String {
     format!("{}/{}/{}/uv.png", day.format("%Y/%m%d"), hour, forecast)
 }
 
+/// GRIB path within the day folder
+fn grib_path(day: NaiveDate, hour: i16, forecast: i16) -> String {
+    format!(
+        "{}/gfs.t{:02}z.pgrb2full.0p50.f{:03}.grib2",
+        day.format("%Y/%m%d"),
+        hour,
+        forecast
+    )
+}
+
 async fn handle_grib(
-    pool: &db::Pool,
+    manifest: &mut Manifest,
     grib_s3: &aws::AmazonS3,
     raster_s3: &aws::AmazonS3,
     day: NaiveDate,
     hour: i16,
     forecast: i16,
 ) -> anyhow::Result<()> {
-    let client = pool.get().await?;
-    if repos::wind_reports::get_by_day_hour_forecast(&client, day, hour, forecast)
-        .await?
-        .is_some()
-    {
-        println!("skipped (already exists)");
+    let target_time =
+        day.and_hms_opt(hour as u32, 0, 0).unwrap().and_utc() + TimeDelta::hours(forecast.into());
+
+    // Check if already in manifest
+    if manifest.reports.iter().any(|r| r.time == target_time) {
+        println!(
+            "  {} ... skipped (already exists)",
+            grib_path(day, hour, forecast)
+        );
         return Ok(());
     }
 
-    let day_path = day.format("%Y/%m%d");
-
-    let grib_path = format!(
-        "{}/gfs.t{:02}z.pgrb2full.0p50.f{:03}.grib2",
-        day_path, hour, forecast
-    );
+    let grib_path = grib_path(day, hour, forecast);
     let url = format!("{}/{}", BASE_URL, grib_path);
-
-    let id = Uuid::new_v4();
 
     print!("  {} ... ", grib_path);
 
@@ -103,21 +119,13 @@ async fn handle_grib(
         .put(&png_path.as_str().into(), png_data.into())
         .await?;
 
-    let target_time =
-        day.and_hms_opt(hour as u32, 0, 0).unwrap().and_utc() + TimeDelta::hours(forecast.into());
-
     let report = WindReport {
-        id,
-        url,
+        time: target_time,
+        grib_path,
         png_path,
-        day,
-        hour,
-        forecast,
-        target_time,
-        creation_time: Utc::now(),
     };
 
-    repos::wind_reports::create(&client, &report).await?;
+    manifest.add_report(report);
 
     println!("ok");
     Ok(())

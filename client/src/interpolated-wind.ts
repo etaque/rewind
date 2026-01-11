@@ -10,7 +10,7 @@ export default class InterpolatedWind {
   private nextRaster: WindRaster | null = null;
   private currentReport: WindReport | null = null;
   private nextReport: WindReport | null = null;
-  private loadingReportId: string | null = null;
+  private loadingTime: number | null = null;
 
   /**
    * Update which reports should be active. Call this on every tick or when reports change.
@@ -24,15 +24,15 @@ export default class InterpolatedWind {
     let currentChanged = false;
 
     // Check if current report changed
-    if (currentReport?.id !== this.currentReport?.id) {
+    if (currentReport?.time !== this.currentReport?.time) {
       // If the new current was our pre-loaded next, swap it
-      if (this.nextRaster && currentReport?.id === this.nextReport?.id) {
+      if (this.nextRaster && currentReport?.time === this.nextReport?.time) {
         this.currentRaster = this.nextRaster;
         this.nextRaster = null;
       } else if (currentReport) {
         // Need to load the current report
         this.currentRaster = await WindRaster.load(
-          currentReport.id,
+          currentReport.time,
           currentReport.pngUrl,
         );
       } else {
@@ -45,18 +45,18 @@ export default class InterpolatedWind {
     // Pre-load next report if needed
     if (
       nextReport &&
-      nextReport.id !== this.nextReport?.id &&
-      nextReport.id !== this.loadingReportId
+      nextReport.time !== this.nextReport?.time &&
+      nextReport.time !== this.loadingTime
     ) {
-      this.loadingReportId = nextReport.id;
+      this.loadingTime = nextReport.time;
       this.nextReport = nextReport;
 
-      WindRaster.load(nextReport.id, nextReport.pngUrl).then((raster) => {
+      WindRaster.load(nextReport.time, nextReport.pngUrl).then((raster) => {
         // Only set if still relevant
-        if (this.nextReport?.id === raster.id) {
+        if (this.nextReport?.time === raster.time) {
           this.nextRaster = raster;
         }
-        this.loadingReportId = null;
+        this.loadingTime = null;
       });
     }
 

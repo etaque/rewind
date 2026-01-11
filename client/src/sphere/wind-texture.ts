@@ -17,12 +17,16 @@ export default class Texture {
   readonly init: (scene: Scene) => void;
 
   // Track what's currently rendered to avoid unnecessary regeneration
-  private renderedCurrentId?: string;
-  private renderedNextId?: string;
+  private renderedCurrentTime?: number;
+  private renderedNextTime?: number;
   private renderedFactor?: number;
 
   texture?: WebGLTexture;
-  pendingGeneration?: { currentId: string; nextId?: string; factor: number };
+  pendingGeneration?: {
+    currentTime: number;
+    nextTime?: number;
+    factor: number;
+  };
 
   // Callback to notify when texture is ready (for triggering re-render)
   onTextureReady?: () => void;
@@ -68,19 +72,19 @@ export default class Texture {
     const quantizedFactor = Math.round(interpolationFactor * 5) / 5;
 
     const needsNewTexture =
-      currentRaster.id !== this.renderedCurrentId ||
-      nextRaster?.id !== this.renderedNextId ||
+      currentRaster.time !== this.renderedCurrentTime ||
+      nextRaster?.time !== this.renderedNextTime ||
       quantizedFactor !== this.renderedFactor;
 
     const isAlreadyPending =
-      this.pendingGeneration?.currentId === currentRaster.id &&
-      this.pendingGeneration?.nextId === nextRaster?.id &&
+      this.pendingGeneration?.currentTime === currentRaster.time &&
+      this.pendingGeneration?.nextTime === nextRaster?.time &&
       this.pendingGeneration?.factor === quantizedFactor;
 
     if (needsNewTexture && !isAlreadyPending) {
       this.pendingGeneration = {
-        currentId: currentRaster.id,
-        nextId: nextRaster?.id,
+        currentTime: currentRaster.time,
+        nextTime: nextRaster?.time,
         factor: quantizedFactor,
       };
       this.generateTextureAsync(currentRaster, nextRaster, quantizedFactor);
@@ -109,8 +113,8 @@ export default class Texture {
         const data = new Uint8ClampedArray(e.data.data);
         const imageData = new ImageData(data, e.data.width, e.data.height);
         this.texture = shaders.createTexture(this.gl, imageData);
-        this.renderedCurrentId = expectedGeneration.currentId;
-        this.renderedNextId = expectedGeneration.nextId;
+        this.renderedCurrentTime = expectedGeneration.currentTime;
+        this.renderedNextTime = expectedGeneration.nextTime;
         this.renderedFactor = expectedGeneration.factor;
         this.pendingGeneration = undefined;
 

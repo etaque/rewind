@@ -176,8 +176,8 @@ export default function App() {
       }
     });
   }, [
-    state.tag === "Playing" ? state.session.currentReport?.id : null,
-    state.tag === "Playing" ? state.session.nextReports[0]?.id : null,
+    state.tag === "Playing" ? state.session.currentReport?.time : null,
+    state.tag === "Playing" ? state.session.nextReports[0]?.time : null,
   ]);
 
   // Sync position, heading, and courseTime to SphereView

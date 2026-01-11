@@ -16,17 +16,17 @@ type RasterData = {
 };
 
 export default class WindRaster {
-  readonly id: string;
+  readonly time: number;
   readonly raster: RasterData;
 
-  constructor(reportId: string, raster: RasterData) {
-    this.id = reportId;
+  constructor(time: number, raster: RasterData) {
+    this.time = time;
     this.raster = raster;
   }
 
-  static async load(reportId: string, pngUrl: string): Promise<WindRaster> {
+  static async load(time: number, pngUrl: string): Promise<WindRaster> {
     const raster = await loadImageData(pngUrl);
-    return new WindRaster(reportId, raster);
+    return new WindRaster(time, raster);
   }
 
   speedAt(position: LngLat): WindSpeed | null {

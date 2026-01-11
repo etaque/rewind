@@ -9,7 +9,6 @@ export type WindSpeed = {
 };
 
 export type WindReport = {
-  id: string;
   time: number;
   pngUrl: string;
 };

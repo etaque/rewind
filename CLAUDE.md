@@ -144,7 +144,7 @@ When a particle's age exceeds MAX_AGE, it respawns at a new random position with
 
 ### Server (`server/`)
 
-Rust with Tokio async runtime, Warp HTTP framework, PostgreSQL 16, and S3 for wind raster storage.
+Rust with Tokio async runtime, Warp HTTP framework, and S3 for all storage (no database).
 
 #### Directory Structure
 
@@ -152,20 +152,15 @@ Rust with Tokio async runtime, Warp HTTP framework, PostgreSQL 16, and S3 for wi
 server/
 ├── src/
 │   ├── main.rs             # CLI entry point (clap), dispatches to commands
-│   ├── cli.rs              # Command definitions (Http, Db, ImportGribRange)
+│   ├── cli.rs              # Command definitions (Http, ImportGribRange)
 │   ├── server.rs           # Warp routes and handlers
 │   ├── config.rs           # Environment configuration (S3, etc.)
 │   ├── courses.rs          # Race course definitions (start/finish, time factor)
-│   ├── db.rs               # Connection pooling (bb8 + tokio-postgres)
+│   ├── manifest.rs         # Wind report manifest (JSON in S3)
 │   ├── multiplayer.rs      # WebSocket signaling for multiplayer races
-│   ├── models.rs           # Domain types (WindReport)
-│   ├── messages.rs         # JSON-serializable API DTOs
+│   ├── s3.rs               # S3 client configuration
 │   ├── grib_store.rs       # GRIB file import and S3 storage
-│   ├── grib_png.rs         # GRIB to PNG conversion
-│   └── repos/              # Database repositories
-│       ├── mod.rs          # Generic from_rows() helper
-│       └── wind_reports.rs # Wind report CRUD operations
-├── migrations/             # Refinery SQL migrations
+│   └── grib_png.rs         # GRIB to PNG conversion
 ├── Cargo.toml              # Dependencies (warp, tokio, object_store, etc.)
 └── bin/                    # Shell scripts (container, dev-server)
 ```
@@ -174,9 +169,9 @@ server/
 
 | Method | Path | Description |
 |--------|------|-------------|
-| GET | `/health` | Database and S3 health check |
+| GET | `/health` | S3 health check |
 | GET | `/courses` | List available race courses |
-| GET | `/wind-reports/since/{timestamp_ms}` | List wind reports after timestamp (includes S3 PNG URLs) |
+| GET | `/wind-reports/since/{timestamp_ms}` | List wind reports after timestamp (reads from manifest.json in S3) |
 | GET | `/multiplayer/lobbies` | List active lobbies |
 | WS | `/multiplayer/lobby` | WebSocket for multiplayer signaling |
 
@@ -209,40 +204,46 @@ WebSocket-based lobby system for peer-to-peer racing:
 - Race locking (no joins after start)
 - 5-minute expiration for empty lobbies
 
-#### Database Schema
-
-**Tables:**
-- `wind_reports` - UUID PK, S3 PNG path, timestamps, GRIB metadata
-
 #### S3 Storage
 
-Wind data is stored in two S3 buckets:
-- `grib-files` - Raw GRIB files downloaded from NOAA (private, server cache)
-- `wind-rasters` - Processed UV PNG files (public read, served directly to client)
+All data is stored in S3 (no database required):
 
-PNG format: 720×360 pixels (0.5° resolution), RGB where R=u, G=v components encoded as `(value + 30) * 255 / 60`
+| Bucket | Purpose | Access |
+|--------|---------|--------|
+| `grib-files` | Raw GRIB files downloaded from NOAA | Private (server cache) |
+| `wind-rasters` | Processed UV PNG files + manifest.json | Public read (client access) |
+
+**Manifest file (`manifest.json`):**
+```json
+{
+  "reports": [
+    {"time": 1604210400000, "gribPath": "2020/1101/0/3/gfs...", "pngPath": "2020/1101/0/3/uv.png"},
+    ...
+  ]
+}
+```
+
+The manifest is updated on each GRIB import and read by the server to serve `/wind-reports/since/{time}`.
+
+**PNG format:** 720×360 pixels (0.5° resolution), RGB where R=u, G=v components encoded as `(value + 30) * 255 / 60`
 
 #### Key Dependencies
 
 - **tokio 1.x** - Async runtime with full features
 - **warp 0.3** - HTTP framework with WebSocket support
-- **tokio-postgres 0.7** - Async PostgreSQL driver
-- **bb8 0.8** - Connection pooling
 - **object_store** - S3 client (MinIO compatible)
 - **grib** - GRIB2 file parsing
 - **png** - PNG encoding
 - **serde/serde_json** - JSON serialization
 - **chrono** - Date/time handling
-- **uuid** - UUID generation and parsing
 
 ## Development Commands
 
 ### Docker (recommended)
 ```bash
-./server/bin/container up       # Start db and minio containers
+./server/bin/container up       # Start minio container
 ./server/bin/container down     # Stop containers
 ./server/bin/container logs     # Follow logs
-./server/bin/container psql     # PostgreSQL shell
 ./server/bin/container minio    # Open MinIO console in browser
 ./server/bin/container destroy  # Remove containers and volumes
 ```
@@ -270,19 +271,18 @@ cd client && npm run build      # Production build
 ### Server (manual)
 ```bash
 cd server && cargo run -- http              # Start server
-cd server && cargo run -- db migrate        # Run migrations
 cd server && ./bin/dev-server               # With cargo-watch auto-reload
 ```
 
 ### Data Import
 ```bash
-./server/scripts/vlm-vg20.sh    # Import Vendée Globe 2020 GRIB files
+cd server && cargo run -- import-grib-range --from 2020-11-01 --to 2021-01-27
 ```
 
 ## Key Data Flow
 
 1. Client loads → auto-creates multiplayer lobby via WebSocket
-2. Wind reports fetched from server, wind texture displayed during lobby
+2. Wind reports fetched from server (reads manifest.json from S3), wind texture displayed during lobby
 3. Host starts race → countdown → all players begin simultaneously
 4. Game loop ticks via `requestAnimationFrame`:
    - Query wind at boat position using interpolated wind data
