@@ -38,10 +38,23 @@ impl Manifest {
             Ok(result) => {
                 let bytes = result.bytes().await?;
                 let manifest: Manifest = serde_json::from_slice(&bytes)?;
+                log::info!(
+                    "Loaded manifest with {} wind reports",
+                    manifest.reports.len()
+                );
                 Ok(manifest)
             }
-            Err(object_store::Error::NotFound { .. }) => Ok(Manifest::default()),
-            Err(e) => Err(e.into()),
+            Err(object_store::Error::NotFound { .. }) => {
+                log::warn!(
+                    "Manifest file not found in S3, returning empty manifest. \
+                    Run 'rebuild-manifest' command to regenerate from existing PNG files."
+                );
+                Ok(Manifest::default())
+            }
+            Err(e) => {
+                log::error!("Failed to load manifest from S3: {}", e);
+                Err(e.into())
+            }
         }
     }
 
@@ -78,6 +91,7 @@ impl Manifest {
     pub async fn rebuild_from_s3() -> Result<Self> {
         let client = s3::raster_client();
         let mut reports = Vec::new();
+        let mut skipped_count = 0;
 
         // List all objects in the raster bucket
         let list = client.list(None);
@@ -92,13 +106,21 @@ impl Manifest {
             }
 
             // Parse path: YYYY/MMDD/hour/forecast/uv.png
-            if let Some(report) = parse_png_path(&path) {
-                reports.push(report);
+            match parse_png_path(&path) {
+                Some(report) => reports.push(report),
+                None => {
+                    log::warn!("Skipping PNG file with unexpected path format: {}", path);
+                    skipped_count += 1;
+                }
             }
         }
 
         reports.sort_by_key(|r| r.time);
-        println!("Found {} wind reports in S3", reports.len());
+        log::info!(
+            "Rebuilt manifest: found {} wind reports, skipped {} files",
+            reports.len(),
+            skipped_count
+        );
 
         Ok(Manifest { reports })
     }

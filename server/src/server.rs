@@ -64,12 +64,22 @@ pub async fn list_lobbies(manager: LobbyManager) -> Result<impl Reply, Rejection
 }
 
 pub async fn health() -> Result<impl Reply, Rejection> {
+    // Check GRIB bucket write access
     let s3 = s3::grib_client();
     let health_path = Path::from("/healthcheck");
-    match s3.put(&health_path, Bytes::new().into()).await {
-        Ok(_) => Ok(warp::reply::with_status("OK", StatusCode::OK)),
-        Err(e) => Err(warp::reject::custom(Error(e.into()))),
-    }
+    s3.put(&health_path, Bytes::new().into())
+        .await
+        .map_err(|e| warp::reject::custom(Error(anyhow::anyhow!("GRIB bucket error: {}", e))))?;
+
+    // Check manifest is readable from raster bucket
+    let manifest = Manifest::load()
+        .await
+        .map_err(|e| warp::reject::custom(Error(anyhow::anyhow!("Manifest error: {}", e))))?;
+
+    Ok(warp::reply::with_status(
+        format!("OK ({} wind reports)", manifest.reports.len()),
+        StatusCode::OK,
+    ))
 }
 
 #[derive(Clone, Debug, Serialize)]
