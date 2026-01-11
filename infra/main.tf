@@ -15,8 +15,6 @@ resource "aws_acm_certificate" "ssl" {
   domain_name       = "rewind.taque.fr"
   validation_method = "DNS"
 
-  subject_alternative_names = ["rewind-api.taque.fr"]
-
   lifecycle {
     create_before_destroy = true
   }
@@ -50,5 +48,4 @@ resource "aws_acm_certificate_validation" "ssl" {
 
 locals {
   frontend_domain = "rewind.taque.fr"
-  backend_domain  = "rewind-api.taque.fr"
 }

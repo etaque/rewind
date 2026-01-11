@@ -76,12 +76,80 @@ npm run dev
 **Server:**
 - Rust with Tokio async runtime
 - Warp web framework (HTTP + WebSocket)
-- PostgreSQL 16 + PostGIS 3.4 for wind raster data
+- S3 for wind raster storage
+
+## Infrastructure
+
+### Requirements
+
+- AWS account with credentials configured
+- Terraform
+- Fly.io CLI (`fly`) authenticated
+
+### Provisioning
+
+**AWS (S3 + CloudFront):**
+
+```bash
+cd infra
+terraform init
+terraform apply
+```
+
+This creates:
+- ACM certificate for `rewind.taque.fr`
+- S3 buckets for GRIB files and wind rasters
+- CloudFront distribution for the client
+
+After `terraform apply`, add DNS records in your DNS provider:
+- `rewind` CNAME → CloudFront domain (from `terraform output cloudfront_domain`)
+- ACM validation CNAMEs (from `terraform output acm_validation_records`)
+
+**Fly.io (Server):**
+
+```bash
+cd server
+fly launch --no-deploy
+
+# Set secrets
+fly secrets set \
+  RUST_LOG=info \
+  REWIND_S3_GRIB_BUCKET=rewind-gribs \
+  REWIND_S3_RASTER_BUCKET=rewind-wind-rasters \
+  REWIND_S3_ENDPOINT=https://s3.eu-west-3.amazonaws.com \
+  REWIND_S3_REGION=eu-west-3 \
+  REWIND_S3_ACCESS_KEY=<from terraform> \
+  REWIND_S3_SECRET_KEY=<from terraform>
+```
+
+## Deployment
+
+### Client
+
+Requires AWS CLI with profile `rewind-frontend-uploader` configured:
+
+```bash
+aws configure --profile rewind-frontend-uploader
+# Use access key from: terraform state show aws_iam_access_key.frontend_uploader
+# Use secret from: terraform output frontend_uploader_secret
+```
+
+Deploy:
+
+```bash
+./client/bin/deploy
+```
+
+### Server
+
+```bash
+./server/bin/deploy
+```
 
 ## Scripts
 
 Import Vendée Globe 2020 GRIB files:
 
 ```bash
-./server/scripts/vlm-vg20.sh
+cd server && cargo run -- import-grib-range --from 2020-11-01 --to 2021-01-27
 ```

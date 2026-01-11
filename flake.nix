@@ -35,6 +35,8 @@
       {
         devShells.default = pkgs.mkShell {
           buildInputs = with pkgs; [
+            flyctl
+
             # Rust
             rustToolchain
             cargo-watch
