@@ -1,20 +1,26 @@
+use crate::config::config;
 use crate::messages;
 use chrono::{DateTime, NaiveDate, Utc};
 use tokio_postgres::Row;
 use uuid::Uuid;
 
-pub const SRID: i32 = 4326; // WGS 84, used by GRIB and GPS
-
 #[derive(Clone, Debug)]
 pub struct WindReport {
     pub id: Uuid,
-    pub raster_id: Uuid,
     pub url: String,
+    pub png_path: String,
     pub day: NaiveDate,
     pub hour: i16,
     pub forecast: i16,
     pub target_time: DateTime<Utc>,
     pub creation_time: DateTime<Utc>,
+}
+
+impl WindReport {
+    /// Get the full URL to the UV PNG raster
+    pub fn png_url(&self) -> String {
+        config().s3.raster_url(&self.png_path)
+    }
 }
 
 impl TryFrom<&Row> for WindReport {
@@ -23,8 +29,8 @@ impl TryFrom<&Row> for WindReport {
     fn try_from(row: &Row) -> Result<Self, Self::Error> {
         Ok(WindReport {
             id: row.try_get("id")?,
-            raster_id: row.try_get("raster_id")?,
             url: row.try_get("url")?,
+            png_path: row.try_get("png_path")?,
             day: row.try_get("day")?,
             hour: row.try_get("hour")?,
             forecast: row.try_get("forecast")?,
@@ -39,16 +45,7 @@ impl From<WindReport> for messages::WindReport {
         messages::WindReport {
             id: report.id,
             time: report.target_time,
-            day: report.day.to_string(),
-            hour: report.hour as u32,
+            png_url: report.png_url(),
         }
     }
-}
-
-#[derive(Clone, Debug)]
-pub enum RasterRenderingMode {
-    U,
-    V,
-    UV,
-    Speed,
 }

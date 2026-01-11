@@ -1,30 +1,15 @@
 use crate::cli::GribRangeArgs;
-use crate::config::config;
 use crate::db;
+use crate::grib_png::grib_to_uv_png;
 use crate::models::WindReport;
 use crate::repos;
+use crate::s3;
 use anyhow::anyhow;
 use bytes::Bytes;
 use chrono::{Days, NaiveDate, TimeDelta, Utc};
 use object_store::{aws, ObjectStoreExt};
 use reqwest;
 use uuid::Uuid;
-
-pub fn s3_client() -> aws::AmazonS3 {
-    let s3 = &config().s3;
-    aws::AmazonS3Builder::new()
-        .with_region(&s3.region)
-        .with_endpoint(&s3.endpoint)
-        .with_bucket_name(&s3.bucket)
-        .with_access_key_id(&s3.access_key)
-        .with_secret_access_key(&s3.secret_key)
-        .with_allow_http(true)
-        // Use path-style URLs (http://localhost:9000/bucket/key) instead of
-        // virtual-hosted style (http://bucket.localhost:9000/key) for MinIO
-        .with_virtual_hosted_style_request(false)
-        .build()
-        .unwrap()
-}
 
 // Hours of the day when GRIB files are generated (0, 6, 12, 18)
 const HOURS: [i16; 4] = [0, 6, 12, 18];
@@ -37,7 +22,8 @@ const BASE_URL: &str = "https://grib.v-l-m.org/archives";
 pub async fn import_grib_range(db_url: &str, args: GribRangeArgs) -> anyhow::Result<()> {
     let pool = db::pool(db_url).await?;
 
-    let s3 = s3_client();
+    let grib_s3 = s3::grib_client();
+    let raster_s3 = s3::raster_client();
 
     let mut current_day = args.from;
     let end_day = args.to.checked_add_days(Days::new(1)).unwrap();
@@ -45,7 +31,7 @@ pub async fn import_grib_range(db_url: &str, args: GribRangeArgs) -> anyhow::Res
     while current_day < end_day {
         for hour in HOURS {
             for forecast in FORECASTS {
-                handle_grib(&pool, &s3, current_day, hour, forecast).await?;
+                handle_grib(&pool, &grib_s3, &raster_s3, current_day, hour, forecast).await?;
             }
         }
         current_day = current_day.checked_add_days(Days::new(1)).unwrap();
@@ -55,16 +41,23 @@ pub async fn import_grib_range(db_url: &str, args: GribRangeArgs) -> anyhow::Res
     Ok(())
 }
 
+/// S3 path for a UV PNG raster
+fn raster_path(day: NaiveDate, hour: i16, forecast: i16) -> String {
+    format!("{}/{}/{}/uv.png", day.format("%Y/%m%d"), hour, forecast)
+}
+
 async fn handle_grib(
     pool: &db::Pool,
-    s3: &aws::AmazonS3,
+    grib_s3: &aws::AmazonS3,
+    raster_s3: &aws::AmazonS3,
     day: NaiveDate,
     hour: i16,
     forecast: i16,
 ) -> anyhow::Result<()> {
     let client = pool.get().await?;
-    if let Some(_) =
-        repos::wind_reports::get_by_day_hour_forecast(&client, day, hour, forecast).await?
+    if repos::wind_reports::get_by_day_hour_forecast(&client, day, hour, forecast)
+        .await?
+        .is_some()
     {
         println!("skipped (already exists)");
         return Ok(());
@@ -82,15 +75,18 @@ async fn handle_grib(
 
     print!("  {} ... ", grib_path);
 
-    let grib_data = match read_grib(&s3, &grib_path).await {
-        Ok(data) => data,
+    // Try to read GRIB from S3 cache, otherwise download
+    let grib_data = match grib_s3.get(&grib_path.as_str().into()).await {
+        Ok(result) => result.bytes().await?,
         Err(_) => match download_grib(&url).await {
             Ok(data) if data.is_empty() => {
                 println!("skipped (not found)");
                 return Ok(());
             }
             Ok(data) => {
-                save_grib(&s3, &grib_path, data.clone()).await?;
+                grib_s3
+                    .put(&grib_path.as_str().into(), data.clone().into())
+                    .await?;
                 data
             }
             Err(e) => {
@@ -100,16 +96,20 @@ async fn handle_grib(
         },
     };
 
+    // Generate UV PNG from GRIB
+    let png_data = grib_to_uv_png(&grib_data)?;
+    let png_path = raster_path(day, hour, forecast);
+    raster_s3
+        .put(&png_path.as_str().into(), png_data.into())
+        .await?;
+
     let target_time =
         day.and_hms_opt(hour as u32, 0, 0).unwrap().and_utc() + TimeDelta::hours(forecast.into());
 
-    let raster_id = Uuid::new_v4();
-    repos::wind_rasters::create(&client, &raster_id, grib_data.into()).await?;
-
     let report = WindReport {
         id,
-        raster_id,
         url,
+        png_path,
         day,
         hour,
         forecast,
@@ -121,15 +121,6 @@ async fn handle_grib(
 
     println!("ok");
     Ok(())
-}
-
-async fn save_grib(s3: &aws::AmazonS3, filename: &str, grib_data: Bytes) -> anyhow::Result<()> {
-    s3.put(&filename.into(), grib_data.into()).await?;
-    Ok(())
-}
-
-async fn read_grib(s3: &aws::AmazonS3, filename: &str) -> anyhow::Result<Bytes> {
-    Ok(s3.get(&filename.into()).await?.bytes().await?)
 }
 
 async fn download_grib(url: &str) -> anyhow::Result<Bytes> {

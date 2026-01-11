@@ -5,11 +5,13 @@ mod cli;
 mod config;
 mod courses;
 mod db;
+mod grib_png;
 mod grib_store;
 mod messages;
 mod models;
 mod multiplayer;
 mod repos;
+mod s3;
 mod server;
 
 #[tokio::main]

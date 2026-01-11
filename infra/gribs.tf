@@ -1,3 +1,4 @@
+# GRIB files bucket (private, server-only access)
 resource "aws_s3_bucket" "gribs" {
   bucket = "rewind-gribs"
 
@@ -15,6 +16,54 @@ resource "aws_s3_bucket_public_access_block" "gribs" {
   restrict_public_buckets = true
 }
 
+# Wind rasters bucket (public read for client access)
+resource "aws_s3_bucket" "rasters" {
+  bucket = "rewind-wind-rasters"
+
+  tags = {
+    ManagedBy = "terraform"
+  }
+}
+
+resource "aws_s3_bucket_public_access_block" "rasters" {
+  bucket = aws_s3_bucket.rasters.id
+
+  block_public_acls       = false
+  block_public_policy     = false
+  ignore_public_acls      = false
+  restrict_public_buckets = false
+}
+
+resource "aws_s3_bucket_policy" "rasters_public_read" {
+  bucket = aws_s3_bucket.rasters.id
+
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Sid       = "PublicReadGetObject"
+        Effect    = "Allow"
+        Principal = "*"
+        Action    = "s3:GetObject"
+        Resource  = "${aws_s3_bucket.rasters.arn}/*"
+      }
+    ]
+  })
+}
+
+resource "aws_s3_bucket_cors_configuration" "rasters" {
+  bucket = aws_s3_bucket.rasters.id
+
+  cors_rule {
+    allowed_headers = ["*"]
+    allowed_methods = ["GET", "HEAD"]
+    allowed_origins = ["*"]
+    expose_headers  = ["ETag"]
+    max_age_seconds = 3600
+  }
+}
+
+# IAM user for server to access both buckets
 resource "aws_iam_user" "gribs_uploader" {
   name = "rewind-gribs-uploader"
 }
@@ -35,7 +84,9 @@ resource "aws_iam_user_policy" "gribs_uploader" {
         ]
         Resource = [
           aws_s3_bucket.gribs.arn,
-          "${aws_s3_bucket.gribs.arn}/*"
+          "${aws_s3_bucket.gribs.arn}/*",
+          aws_s3_bucket.rasters.arn,
+          "${aws_s3_bucket.rasters.arn}/*"
         ]
       }
     ]
@@ -49,4 +100,8 @@ resource "aws_iam_access_key" "gribs_uploader" {
 output "gribs_uploader_secret" {
   value     = aws_iam_access_key.gribs_uploader.secret
   sensitive = true
+}
+
+output "rasters_bucket_url" {
+  value = "https://${aws_s3_bucket.rasters.bucket_regional_domain_name}"
 }

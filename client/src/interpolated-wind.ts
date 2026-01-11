@@ -31,7 +31,10 @@ export default class InterpolatedWind {
         this.nextRaster = null;
       } else if (currentReport) {
         // Need to load the current report
-        this.currentRaster = await WindRaster.load(currentReport.id);
+        this.currentRaster = await WindRaster.load(
+          currentReport.id,
+          currentReport.pngUrl,
+        );
       } else {
         this.currentRaster = null;
       }
@@ -48,7 +51,7 @@ export default class InterpolatedWind {
       this.loadingReportId = nextReport.id;
       this.nextReport = nextReport;
 
-      WindRaster.load(nextReport.id).then((raster) => {
+      WindRaster.load(nextReport.id, nextReport.pngUrl).then((raster) => {
         // Only set if still relevant
         if (this.nextReport?.id === raster.id) {
           this.nextRaster = raster;

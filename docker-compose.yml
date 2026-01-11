@@ -1,17 +1,15 @@
 services:
   db:
-    image: imresamu/postgis:16-3.5
+    image: postgres:16
     ports:
       - "25432:5432"
     restart: unless-stopped
     volumes:
-      - ./config/setup-db.sql:/docker-entrypoint-initdb.d/setup-db.sql
       - db-data:/var/lib/postgresql/data
     environment:
       POSTGRES_PASSWORD: rewind
       POSTGRES_DB: rewind
       POSTGRES_USER: rewind
-      POSTGIS_GDAL_ENABLED_DRIVERS: ENABLE_ALL
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U rewind -d rewind"]
       interval: 5s
@@ -28,9 +26,17 @@ services:
     depends_on:
       db:
         condition: service_healthy
+      minio-init:
+        condition: service_completed_successfully
     environment:
       REWIND_DATABASE_URL: postgresql://rewind:rewind@db:5432/rewind
       REWIND_SERVER_ADDRESS: 0.0.0.0:3001
+      REWIND_S3_GRIB_BUCKET: grib-files
+      REWIND_S3_RASTER_BUCKET: wind-rasters
+      REWIND_S3_ENDPOINT: http://minio:9000
+      REWIND_S3_REGION: us-east-1
+      REWIND_S3_ACCESS_KEY: rewind
+      REWIND_S3_SECRET_KEY: rewindpass
       RUST_LOG: info
 
   minio:
@@ -60,6 +66,19 @@ services:
       /bin/sh -c "
       mc alias set local http://minio:9000 rewind rewindpass;
       mc mb local/grib-files --ignore-existing;
+      mc mb local/wind-rasters --ignore-existing;
+      mc anonymous set download local/wind-rasters;
+      cat > /tmp/cors.json << 'EOF'
+      {
+        \"Rules\": [{
+          \"AllowedHeaders\": [\"*\"],
+          \"AllowedMethods\": [\"GET\", \"HEAD\"],
+          \"AllowedOrigins\": [\"*\"],
+          \"ExposeHeaders\": [\"ETag\"]
+        }]
+      }
+      EOF
+      mc cors set /tmp/cors.json local/wind-rasters;
       exit 0;
       "
 

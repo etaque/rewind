@@ -22,7 +22,6 @@ client/
 │   │   ├── Hud.tsx             # In-game HUD (position, speed, wind)
 │   │   ├── CursorWind.tsx      # Wind info tooltip following cursor
 │   │   ├── LobbyScreen.tsx     # Multiplayer lobby UI
-│   │   ├── courses.ts          # Race course definitions (start/finish, time factor)
 │   │   ├── state.ts            # useReducer state management
 │   │   ├── tick.ts             # Game physics tick (boat movement, TWA)
 │   │   ├── tack.ts             # Tacking maneuver calculations
@@ -99,12 +98,12 @@ The `SphereView` class orchestrates all layers, handles D3 zoom/pan with quatern
 ```
 Page loads → fetch /wind-reports/since/{time} → REPORTS_LOADED
     → InterpolatedWind.update(currentReport, nextReports)
-    → WindRaster.load(reportId) → fetch /wind-reports/{id}/uv.png
-    → Decode RGBA to u,v components → SphereView.updateWind()
+    → WindRaster.load(pngUrl) → fetch directly from S3
+    → Decode RGB to u,v components → SphereView.updateWind()
     → Animation loop: query interpolatedWind.speedAt(position, time) every 100ms
 ```
 
-Wind PNG format: 720×360 pixels (0.5° resolution), RGBA encodes u/v as `(n/255 * 60) - 30` m/s
+Wind PNG format: 720×360 pixels (0.5° resolution), RGB encodes u/v as `(n/255 * 60) - 30` m/s
 
 #### Wind Particles System
 
@@ -145,7 +144,7 @@ When a particle's age exceeds MAX_AGE, it respawns at a new random position with
 
 ### Server (`server/`)
 
-Rust with Tokio async runtime, Warp HTTP framework, PostgreSQL 16 + PostGIS 3.4.
+Rust with Tokio async runtime, Warp HTTP framework, PostgreSQL 16, and S3 for wind raster storage.
 
 #### Directory Structure
 
@@ -155,17 +154,19 @@ server/
 │   ├── main.rs             # CLI entry point (clap), dispatches to commands
 │   ├── cli.rs              # Command definitions (Http, Db, ImportGribRange)
 │   ├── server.rs           # Warp routes and handlers
+│   ├── config.rs           # Environment configuration (S3, etc.)
+│   ├── courses.rs          # Race course definitions (start/finish, time factor)
 │   ├── db.rs               # Connection pooling (bb8 + tokio-postgres)
 │   ├── multiplayer.rs      # WebSocket signaling for multiplayer races
-│   ├── models.rs           # Domain types (WindReport, RasterRenderingMode)
+│   ├── models.rs           # Domain types (WindReport)
 │   ├── messages.rs         # JSON-serializable API DTOs
-│   ├── grib_store.rs       # GRIB file import logic
+│   ├── grib_store.rs       # GRIB file import and S3 storage
+│   ├── grib_png.rs         # GRIB to PNG conversion
 │   └── repos/              # Database repositories
 │       ├── mod.rs          # Generic from_rows() helper
-│       ├── wind_reports.rs # Wind report CRUD operations
-│       └── wind_rasters.rs # Raster rendering (PNG/WKB via PostGIS)
+│       └── wind_reports.rs # Wind report CRUD operations
 ├── migrations/             # Refinery SQL migrations
-├── Cargo.toml              # Dependencies (warp, tokio, postgis, etc.)
+├── Cargo.toml              # Dependencies (warp, tokio, object_store, etc.)
 └── bin/                    # Shell scripts (container, dev-server)
 ```
 
@@ -173,11 +174,10 @@ server/
 
 | Method | Path | Description |
 |--------|------|-------------|
-| GET | `/health` | Database health check |
-| GET | `/wind-reports/since/{timestamp_ms}` | List wind reports after timestamp |
-| GET | `/wind-reports/{uuid}/uv.png` | Wind UV components as PNG |
-| GET | `/wind-reports/{uuid}/speed.png` | Wind speed magnitude as PNG |
-| GET | `/wind-reports/{uuid}/raster.wkb` | Raw raster as WKB |
+| GET | `/health` | Database and S3 health check |
+| GET | `/courses` | List available race courses |
+| GET | `/wind-reports/since/{timestamp_ms}` | List wind reports after timestamp (includes S3 PNG URLs) |
+| GET | `/multiplayer/lobbies` | List active lobbies |
 | WS | `/multiplayer/lobby` | WebSocket for multiplayer signaling |
 
 #### Multiplayer Signaling (`multiplayer.rs`)
@@ -212,12 +212,15 @@ WebSocket-based lobby system for peer-to-peer racing:
 #### Database Schema
 
 **Tables:**
-- `wind_rasters` - UUID PK, PostGIS raster geometry (u/v bands)
-- `wind_reports` - UUID PK, FK to raster, timestamps, GRIB metadata
+- `wind_reports` - UUID PK, S3 PNG path, timestamps, GRIB metadata
 
-**PostGIS Functions:**
-- `ST_AsPNG()` - Raster to PNG conversion
-- `ST_Reclass()` - Reclassify raster values for rendering
+#### S3 Storage
+
+Wind data is stored in two S3 buckets:
+- `grib-files` - Raw GRIB files downloaded from NOAA (private, server cache)
+- `wind-rasters` - Processed UV PNG files (public read, served directly to client)
+
+PNG format: 720×360 pixels (0.5° resolution), RGB where R=u, G=v components encoded as `(value + 30) * 255 / 60`
 
 #### Key Dependencies
 
@@ -225,7 +228,9 @@ WebSocket-based lobby system for peer-to-peer racing:
 - **warp 0.3** - HTTP framework with WebSocket support
 - **tokio-postgres 0.7** - Async PostgreSQL driver
 - **bb8 0.8** - Connection pooling
-- **postgis 0.9** - PostGIS type support
+- **object_store** - S3 client (MinIO compatible)
+- **grib** - GRIB2 file parsing
+- **png** - PNG encoding
 - **serde/serde_json** - JSON serialization
 - **chrono** - Date/time handling
 - **uuid** - UUID generation and parsing
@@ -251,7 +256,9 @@ MinIO provides S3-compatible object storage for local development:
 | S3 API | http://localhost:9000 | rewind / rewindpass |
 | Web Console | http://localhost:9001 | rewind / rewindpass |
 
-A `grib-files` bucket is auto-created on startup.
+Two buckets are auto-created on startup:
+- `grib-files` - Private bucket for GRIB file cache
+- `wind-rasters` - Public bucket for processed PNG files (CORS enabled)
 
 ### Client
 ```bash

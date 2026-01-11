@@ -1,4 +1,3 @@
-pub mod wind_rasters;
 pub mod wind_reports;
 
 use tokio_postgres::Row;

@@ -3,8 +3,6 @@ import * as utils from "./utils";
 import type { WorkerResponse } from "./wind-raster.worker";
 import WindRasterWorker from "./wind-raster.worker?worker";
 
-const serverUrl = import.meta.env.REWIND_SERVER_URL;
-
 const pixelWidth = 720;
 const windScale = 30;
 const pixelSize = 0.5; // 1px == 0.5°
@@ -26,9 +24,8 @@ export default class WindRaster {
     this.raster = raster;
   }
 
-  static async load(reportId: string): Promise<WindRaster> {
-    const url = `${serverUrl}/wind-reports/${reportId}/uv.png`;
-    const raster = await loadImageData(url);
+  static async load(reportId: string, pngUrl: string): Promise<WindRaster> {
+    const raster = await loadImageData(pngUrl);
     return new WindRaster(reportId, raster);
   }
 
