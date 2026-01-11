@@ -9,7 +9,7 @@ WorkingDirectory=/home/ubuntu
 ExecStart=/home/ubuntu/rewind http
 Restart=on-failure
 RestartSec=5
-Environment=RUST_LOG=info
+EnvironmentFile=/home/ubuntu/rewind.env
 
 [Install]
 WantedBy=multi-user.target

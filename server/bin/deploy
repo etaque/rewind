@@ -6,12 +6,34 @@ cd "$(dirname "$0")/.."
 BACKEND_IP=$(cd ../infra && terraform output -raw backend_ip)
 SSH_USER="${SSH_USER:-ubuntu}"
 REMOTE_DIR="/home/$SSH_USER"
+ENV_FILE="$REMOTE_DIR/rewind.env"
 
-echo "Building server (release)..."
-cargo build --release
+# Get repo info
+REPO=$(gh repo view --json nameWithOwner -q .nameWithOwner)
+
+echo "Downloading latest build artifact..."
+gh run download --repo "$REPO" --name rewind-linux-x86_64 --dir /tmp/rewind-artifact
 
 echo "Uploading binary to $SSH_USER@$BACKEND_IP..."
-scp target/release/rewind "$SSH_USER@$BACKEND_IP:$REMOTE_DIR/"
+scp /tmp/rewind-artifact/rewind "$SSH_USER@$BACKEND_IP:$REMOTE_DIR/"
+ssh "$SSH_USER@$BACKEND_IP" "chmod +x $REMOTE_DIR/rewind"
+rm -rf /tmp/rewind-artifact
+
+# Generate and upload environment file
+echo "Uploading environment configuration..."
+S3_ACCESS_KEY=$(cd ../infra && terraform state show aws_iam_access_key.gribs_uploader | grep -E '^\s+id\s+=' | awk -F'"' '{print $2}')
+S3_SECRET_KEY=$(cd ../infra && terraform output -raw gribs_uploader_secret)
+
+ssh "$SSH_USER@$BACKEND_IP" "cat > $ENV_FILE" << EOF
+RUST_LOG=info
+REWIND_SERVER_ADDRESS=0.0.0.0:8080
+REWIND_S3_GRIB_BUCKET=rewind-gribs
+REWIND_S3_RASTER_BUCKET=rewind-wind-rasters
+REWIND_S3_ENDPOINT=https://s3.eu-west-3.amazonaws.com
+REWIND_S3_REGION=eu-west-3
+REWIND_S3_ACCESS_KEY=$S3_ACCESS_KEY
+REWIND_S3_SECRET_KEY=$S3_SECRET_KEY
+EOF
 
 echo "Restarting service..."
 ssh "$SSH_USER@$BACKEND_IP" "sudo systemctl restart rewind || $REMOTE_DIR/rewind http &"

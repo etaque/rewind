@@ -5,6 +5,9 @@ cd "$(dirname "$0")/.."
 
 AWS_PROFILE="${AWS_PROFILE:-rewind-frontend-uploader}"
 
+# Set production server URL for build
+export REWIND_SERVER_URL="https://rewind-api.taque.fr"
+
 echo "Building client..."
 npm run build
 
