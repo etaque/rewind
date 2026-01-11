@@ -37,6 +37,8 @@ resource "aws_s3_bucket_public_access_block" "rasters" {
 resource "aws_s3_bucket_policy" "rasters_public_read" {
   bucket = aws_s3_bucket.rasters.id
 
+  depends_on = [aws_s3_bucket_public_access_block.rasters]
+
   policy = jsonencode({
     Version = "2012-10-17"
     Statement = [

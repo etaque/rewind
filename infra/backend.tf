@@ -24,10 +24,8 @@ resource "aws_instance" "backend" {
   }
 }
 
-resource "aws_route53_record" "backend" {
-  zone_id = data.aws_route53_zone.zone.zone_id
-  name    = local.backend_domain
-  type    = "A"
-  ttl     = 300
-  records = [aws_instance.backend.public_ip]
+# Output backend IP for Gandi DNS configuration
+output "backend_ip" {
+  description = "Backend server IP to use as A record in Gandi for rewind-api.taque.fr"
+  value       = aws_instance.backend.public_ip
 }

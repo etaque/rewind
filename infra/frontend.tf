@@ -115,7 +115,7 @@ resource "aws_cloudfront_distribution" "frontend_cdn" {
   }
 
   viewer_certificate {
-    acm_certificate_arn      = data.aws_acm_certificate.ssl.arn
+    acm_certificate_arn      = aws_acm_certificate_validation.ssl.certificate_arn
     ssl_support_method       = "sni-only"
     minimum_protocol_version = "TLSv1.2_2021"
   }
@@ -132,16 +132,10 @@ resource "aws_cloudfront_distribution" "frontend_cdn" {
   }
 }
 
-resource "aws_route53_record" "cdn_record" {
-  zone_id = data.aws_route53_zone.zone.zone_id
-  name    = local.frontend_domain
-  type    = "A"
-
-  alias {
-    name                   = aws_cloudfront_distribution.frontend_cdn.domain_name
-    zone_id                = aws_cloudfront_distribution.frontend_cdn.hosted_zone_id
-    evaluate_target_health = false
-  }
+# Output CloudFront domain for Gandi CNAME configuration
+output "cloudfront_domain" {
+  description = "CloudFront domain to use as CNAME target in Gandi for rewind.taque.fr"
+  value       = aws_cloudfront_distribution.frontend_cdn.domain_name
 }
 
 resource "aws_iam_user" "frontend_uploader" {
