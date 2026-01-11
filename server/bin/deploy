@@ -1,0 +1,19 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+cd "$(dirname "$0")/.."
+
+BACKEND_IP=$(cd ../infra && terraform output -raw backend_ip)
+SSH_USER="${SSH_USER:-ubuntu}"
+REMOTE_DIR="/home/$SSH_USER"
+
+echo "Building server (release)..."
+cargo build --release
+
+echo "Uploading binary to $SSH_USER@$BACKEND_IP..."
+scp target/release/rewind "$SSH_USER@$BACKEND_IP:$REMOTE_DIR/"
+
+echo "Restarting service..."
+ssh "$SSH_USER@$BACKEND_IP" "sudo systemctl restart rewind || $REMOTE_DIR/rewind http &"
+
+echo "Done!"

@@ -1,0 +1,23 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+cd "$(dirname "$0")/.."
+
+AWS_PROFILE="${AWS_PROFILE:-rewind-frontend-uploader}"
+
+echo "Building client..."
+npm run build
+
+echo "Uploading to S3..."
+aws s3 sync dist/ s3://rewind.taque.fr --delete --profile "$AWS_PROFILE"
+
+DISTRIBUTION_ID=$(cd ../infra && terraform output -raw cloudfront_distribution_id)
+
+echo "Invalidating CloudFront cache..."
+aws cloudfront create-invalidation \
+  --distribution-id "$DISTRIBUTION_ID" \
+  --paths "/*" \
+  --profile rewind-terraform \
+  --output text
+
+echo "Done!"

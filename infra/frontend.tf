@@ -138,6 +138,11 @@ output "cloudfront_domain" {
   value       = aws_cloudfront_distribution.frontend_cdn.domain_name
 }
 
+output "cloudfront_distribution_id" {
+  description = "CloudFront distribution ID for cache invalidation"
+  value       = aws_cloudfront_distribution.frontend_cdn.id
+}
+
 resource "aws_iam_user" "frontend_uploader" {
   name = "rewind-frontend-uploader"
 }
