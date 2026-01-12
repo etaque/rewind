@@ -187,11 +187,9 @@ mod tests {
 
     #[test]
     fn test_normalize_wind_nan_handling() {
-        // NaN should clamp to boundary (implementation detail: NaN.clamp returns NaN,
-        // but (NaN * 255.0).round() as u8 = 0)
-        let result = normalize_wind(f32::NAN);
-        // Just verify it doesn't panic and returns a valid u8
-        assert!(result <= 255);
+        // NaN.clamp returns NaN, and (NaN * 255.0).round() as u8 = 0
+        // Just verify it doesn't panic - the result is a valid u8 by type definition
+        let _result = normalize_wind(f32::NAN);
     }
 
     #[test]
