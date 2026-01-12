@@ -156,3 +156,202 @@ fn parse_png_path(path: &str) -> Option<WindReport> {
         png_path: path.to_string(),
     })
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    // =========================================================================
+    // parse_png_path tests
+    // =========================================================================
+
+    #[test]
+    fn test_parse_png_path_valid() {
+        let report = parse_png_path("2020/1101/0/3/uv.png").unwrap();
+
+        assert_eq!(report.png_path, "2020/1101/0/3/uv.png");
+        assert_eq!(
+            report.grib_path,
+            "2020/1101/0/gfs.t00z.pgrb2full.0p50.f003.grib2"
+        );
+        // Nov 1, 2020 00:00 UTC + 3h forecast = Nov 1, 2020 03:00 UTC
+        assert_eq!(report.time.to_rfc3339(), "2020-11-01T03:00:00+00:00");
+    }
+
+    #[test]
+    fn test_parse_png_path_different_hour() {
+        let report = parse_png_path("2020/1115/12/6/uv.png").unwrap();
+
+        assert_eq!(
+            report.grib_path,
+            "2020/1115/12/gfs.t12z.pgrb2full.0p50.f006.grib2"
+        );
+        // Nov 15, 2020 12:00 UTC + 6h = Nov 15, 2020 18:00 UTC
+        assert_eq!(report.time.to_rfc3339(), "2020-11-15T18:00:00+00:00");
+    }
+
+    #[test]
+    fn test_parse_png_path_forecast_crosses_midnight() {
+        // Hour 18 + forecast 6 = next day 00:00
+        let report = parse_png_path("2020/1231/18/6/uv.png").unwrap();
+
+        // Dec 31, 2020 18:00 + 6h = Jan 1, 2021 00:00
+        assert_eq!(report.time.to_rfc3339(), "2021-01-01T00:00:00+00:00");
+    }
+
+    #[test]
+    fn test_parse_png_path_leap_year() {
+        let report = parse_png_path("2020/0229/6/3/uv.png").unwrap();
+
+        assert_eq!(report.time.to_rfc3339(), "2020-02-29T09:00:00+00:00");
+    }
+
+    #[test]
+    fn test_parse_png_path_invalid_leap_year() {
+        // 2021 is not a leap year
+        let result = parse_png_path("2021/0229/6/3/uv.png");
+        assert!(result.is_none());
+    }
+
+    #[test]
+    fn test_parse_png_path_wrong_segment_count() {
+        assert!(parse_png_path("2020/1101/0/uv.png").is_none()); // missing forecast
+        assert!(parse_png_path("2020/1101/0/3/extra/uv.png").is_none()); // too many
+        assert!(parse_png_path("uv.png").is_none()); // just filename
+    }
+
+    #[test]
+    fn test_parse_png_path_invalid_year() {
+        assert!(parse_png_path("abcd/1101/0/3/uv.png").is_none());
+    }
+
+    #[test]
+    fn test_parse_png_path_invalid_month() {
+        assert!(parse_png_path("2020/1301/0/3/uv.png").is_none()); // month 13
+        assert!(parse_png_path("2020/0001/0/3/uv.png").is_none()); // month 0
+    }
+
+    #[test]
+    fn test_parse_png_path_invalid_day() {
+        assert!(parse_png_path("2020/1132/0/3/uv.png").is_none()); // day 32
+        assert!(parse_png_path("2020/1100/0/3/uv.png").is_none()); // day 0
+    }
+
+    #[test]
+    fn test_parse_png_path_invalid_hour() {
+        assert!(parse_png_path("2020/1101/25/3/uv.png").is_none()); // hour 25
+    }
+
+    // =========================================================================
+    // Manifest::add_report tests
+    // =========================================================================
+
+    fn make_report(time_str: &str, png_path: &str) -> WindReport {
+        WindReport {
+            time: DateTime::parse_from_rfc3339(time_str).unwrap().into(),
+            grib_path: "test.grib2".to_string(),
+            png_path: png_path.to_string(),
+        }
+    }
+
+    #[test]
+    fn test_add_report_to_empty_manifest() {
+        let mut manifest = Manifest::default();
+        let report = make_report("2020-11-01T03:00:00Z", "a.png");
+
+        let added = manifest.add_report(report);
+
+        assert!(added);
+        assert_eq!(manifest.reports.len(), 1);
+    }
+
+    #[test]
+    fn test_add_report_maintains_sorted_order() {
+        let mut manifest = Manifest::default();
+
+        manifest.add_report(make_report("2020-11-01T12:00:00Z", "c.png"));
+        manifest.add_report(make_report("2020-11-01T03:00:00Z", "a.png"));
+        manifest.add_report(make_report("2020-11-01T06:00:00Z", "b.png"));
+
+        assert_eq!(manifest.reports.len(), 3);
+        assert_eq!(manifest.reports[0].png_path, "a.png");
+        assert_eq!(manifest.reports[1].png_path, "b.png");
+        assert_eq!(manifest.reports[2].png_path, "c.png");
+    }
+
+    #[test]
+    fn test_add_report_rejects_duplicate_time() {
+        let mut manifest = Manifest::default();
+
+        let added1 = manifest.add_report(make_report("2020-11-01T03:00:00Z", "a.png"));
+        let added2 = manifest.add_report(make_report("2020-11-01T03:00:00Z", "b.png"));
+
+        assert!(added1);
+        assert!(!added2);
+        assert_eq!(manifest.reports.len(), 1);
+        assert_eq!(manifest.reports[0].png_path, "a.png"); // first one kept
+    }
+
+    // =========================================================================
+    // Manifest::reports_since tests
+    // =========================================================================
+
+    #[test]
+    fn test_reports_since_filters_by_time() {
+        let mut manifest = Manifest::default();
+        manifest.add_report(make_report("2020-11-01T03:00:00Z", "a.png"));
+        manifest.add_report(make_report("2020-11-01T06:00:00Z", "b.png"));
+        manifest.add_report(make_report("2020-11-01T09:00:00Z", "c.png"));
+
+        let since = DateTime::parse_from_rfc3339("2020-11-01T05:00:00Z")
+            .unwrap()
+            .into();
+        let reports = manifest.reports_since(since, 100);
+
+        assert_eq!(reports.len(), 2);
+        assert_eq!(reports[0].png_path, "b.png");
+        assert_eq!(reports[1].png_path, "c.png");
+    }
+
+    #[test]
+    fn test_reports_since_respects_limit() {
+        let mut manifest = Manifest::default();
+        manifest.add_report(make_report("2020-11-01T03:00:00Z", "a.png"));
+        manifest.add_report(make_report("2020-11-01T06:00:00Z", "b.png"));
+        manifest.add_report(make_report("2020-11-01T09:00:00Z", "c.png"));
+
+        let since = DateTime::parse_from_rfc3339("2020-11-01T00:00:00Z")
+            .unwrap()
+            .into();
+        let reports = manifest.reports_since(since, 2);
+
+        assert_eq!(reports.len(), 2);
+        assert_eq!(reports[0].png_path, "a.png");
+        assert_eq!(reports[1].png_path, "b.png");
+    }
+
+    #[test]
+    fn test_reports_since_includes_exact_match() {
+        let mut manifest = Manifest::default();
+        manifest.add_report(make_report("2020-11-01T06:00:00Z", "a.png"));
+
+        let since = DateTime::parse_from_rfc3339("2020-11-01T06:00:00Z")
+            .unwrap()
+            .into();
+        let reports = manifest.reports_since(since, 100);
+
+        assert_eq!(reports.len(), 1);
+    }
+
+    #[test]
+    fn test_reports_since_empty_manifest() {
+        let manifest = Manifest::default();
+        let since = DateTime::parse_from_rfc3339("2020-11-01T00:00:00Z")
+            .unwrap()
+            .into();
+
+        let reports = manifest.reports_since(since, 100);
+
+        assert!(reports.is_empty());
+    }
+}

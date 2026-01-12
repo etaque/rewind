@@ -150,3 +150,110 @@ async fn download_grib(url: &str) -> anyhow::Result<Bytes> {
 
     Ok(bytes)
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    // =========================================================================
+    // raster_path tests
+    // =========================================================================
+
+    #[test]
+    fn test_raster_path_basic() {
+        let day = NaiveDate::from_ymd_opt(2020, 11, 1).unwrap();
+        let path = raster_path(day, 0, 3);
+        assert_eq!(path, "2020/1101/0/3/uv.png");
+    }
+
+    #[test]
+    fn test_raster_path_different_hours() {
+        let day = NaiveDate::from_ymd_opt(2020, 11, 15).unwrap();
+
+        assert_eq!(raster_path(day, 0, 3), "2020/1115/0/3/uv.png");
+        assert_eq!(raster_path(day, 6, 3), "2020/1115/6/3/uv.png");
+        assert_eq!(raster_path(day, 12, 6), "2020/1115/12/6/uv.png");
+        assert_eq!(raster_path(day, 18, 6), "2020/1115/18/6/uv.png");
+    }
+
+    #[test]
+    fn test_raster_path_single_digit_month() {
+        let day = NaiveDate::from_ymd_opt(2020, 1, 5).unwrap();
+        let path = raster_path(day, 0, 3);
+        // Month should be zero-padded to 2 digits
+        assert_eq!(path, "2020/0105/0/3/uv.png");
+    }
+
+    #[test]
+    fn test_raster_path_end_of_year() {
+        let day = NaiveDate::from_ymd_opt(2020, 12, 31).unwrap();
+        let path = raster_path(day, 18, 6);
+        assert_eq!(path, "2020/1231/18/6/uv.png");
+    }
+
+    // =========================================================================
+    // grib_path tests
+    // =========================================================================
+
+    #[test]
+    fn test_grib_path_basic() {
+        let day = NaiveDate::from_ymd_opt(2020, 11, 1).unwrap();
+        let path = grib_path(day, 0, 3);
+        // Note: grib_path doesn't include hour as separate segment (unlike raster_path)
+        assert_eq!(path, "2020/1101/gfs.t00z.pgrb2full.0p50.f003.grib2");
+    }
+
+    #[test]
+    fn test_grib_path_hour_padding() {
+        let day = NaiveDate::from_ymd_opt(2020, 11, 1).unwrap();
+
+        // Hour 0 should be padded to 00
+        assert!(grib_path(day, 0, 3).contains("t00z"));
+        // Hour 6 should be padded to 06
+        assert!(grib_path(day, 6, 3).contains("t06z"));
+        // Hour 12 stays as 12
+        assert!(grib_path(day, 12, 3).contains("t12z"));
+    }
+
+    #[test]
+    fn test_grib_path_forecast_padding() {
+        let day = NaiveDate::from_ymd_opt(2020, 11, 1).unwrap();
+
+        // Forecast 3 should be padded to 003
+        assert!(grib_path(day, 0, 3).contains("f003"));
+        // Forecast 6 should be padded to 006
+        assert!(grib_path(day, 0, 6).contains("f006"));
+    }
+
+    #[test]
+    fn test_grib_path_all_standard_hours() {
+        let day = NaiveDate::from_ymd_opt(2020, 11, 1).unwrap();
+
+        for hour in HOURS {
+            for forecast in FORECASTS {
+                let path = grib_path(day, hour, forecast);
+                // Verify path format is valid
+                assert!(path.starts_with("2020/1101/"));
+                assert!(path.ends_with(".grib2"));
+                assert!(path.contains("gfs.t"));
+                assert!(path.contains("z.pgrb2full.0p50.f"));
+            }
+        }
+    }
+
+    // =========================================================================
+    // Path consistency tests
+    // =========================================================================
+
+    #[test]
+    fn test_raster_and_grib_paths_share_prefix() {
+        let day = NaiveDate::from_ymd_opt(2020, 11, 15).unwrap();
+
+        let raster = raster_path(day, 12, 6);
+        let grib = grib_path(day, 12, 6);
+
+        // Both should start with same date prefix
+        assert!(raster.starts_with("2020/1115/"));
+        assert!(grib.starts_with("2020/1115/"));
+    }
+}

@@ -414,6 +414,338 @@ fn generate_lobby_id() -> String {
     generate_id()[..6].to_string()
 }
 
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    // =========================================================================
+    // generate_id / generate_lobby_id tests
+    // =========================================================================
+
+    #[test]
+    fn test_generate_id_format() {
+        let id = generate_id();
+        // Should be 16 hex characters (8 bytes * 2 chars each)
+        assert_eq!(id.len(), 16);
+        // Should be valid uppercase hex
+        assert!(id
+            .chars()
+            .all(|c| c.is_ascii_hexdigit() && !c.is_lowercase()));
+    }
+
+    #[test]
+    fn test_generate_id_uniqueness() {
+        let ids: Vec<String> = (0..100).map(|_| generate_id()).collect();
+        let unique: std::collections::HashSet<_> = ids.iter().collect();
+        // All IDs should be unique (with overwhelming probability)
+        assert_eq!(ids.len(), unique.len());
+    }
+
+    #[test]
+    fn test_generate_lobby_id_format() {
+        let id = generate_lobby_id();
+        // Should be 6 hex characters
+        assert_eq!(id.len(), 6);
+        assert!(id.chars().all(|c| c.is_ascii_hexdigit()));
+    }
+
+    // =========================================================================
+    // Lobby tests
+    // =========================================================================
+
+    fn make_test_player(id: &str, name: &str) -> Player {
+        let (tx, _rx) = mpsc::unbounded_channel();
+        Player {
+            id: id.to_string(),
+            name: name.to_string(),
+            tx,
+        }
+    }
+
+    #[test]
+    fn test_lobby_new() {
+        let lobby = Lobby::new("vendee-2020".to_string(), "creator-1".to_string());
+
+        assert_eq!(lobby.course_key, "vendee-2020");
+        assert_eq!(lobby.creator_id, "creator-1");
+        assert_eq!(lobby.max_players, 10);
+        assert!(!lobby.race_started);
+        assert!(lobby.players.is_empty());
+    }
+
+    #[test]
+    fn test_lobby_add_player() {
+        let mut lobby = Lobby::new("vendee-2020".to_string(), "creator-1".to_string());
+        let player = make_test_player("player-1", "Alice");
+
+        let result = lobby.add_player(player);
+
+        assert!(result.is_ok());
+        assert_eq!(lobby.players.len(), 1);
+        assert!(lobby.players.contains_key("player-1"));
+    }
+
+    #[test]
+    fn test_lobby_add_player_updates_activity() {
+        let mut lobby = Lobby::new("vendee-2020".to_string(), "creator-1".to_string());
+        let initial_activity = lobby.last_activity;
+
+        // Small delay to ensure time difference
+        std::thread::sleep(std::time::Duration::from_millis(10));
+
+        let player = make_test_player("player-1", "Alice");
+        lobby.add_player(player).unwrap();
+
+        assert!(lobby.last_activity > initial_activity);
+    }
+
+    #[test]
+    fn test_lobby_add_player_fails_when_race_started() {
+        let mut lobby = Lobby::new("vendee-2020".to_string(), "creator-1".to_string());
+        lobby.race_started = true;
+
+        let player = make_test_player("player-1", "Alice");
+        let result = lobby.add_player(player);
+
+        assert!(result.is_err());
+        assert_eq!(result.unwrap_err(), "Race has already started");
+    }
+
+    #[test]
+    fn test_lobby_add_player_fails_when_full() {
+        let mut lobby = Lobby::new("vendee-2020".to_string(), "creator-1".to_string());
+
+        // Add max_players
+        for i in 0..lobby.max_players {
+            let player = make_test_player(&format!("player-{}", i), &format!("Player {}", i));
+            lobby.add_player(player).unwrap();
+        }
+
+        // Next player should fail
+        let extra_player = make_test_player("extra", "Extra");
+        let result = lobby.add_player(extra_player);
+
+        assert!(result.is_err());
+        assert_eq!(result.unwrap_err(), "Lobby is full");
+    }
+
+    #[test]
+    fn test_lobby_remove_player() {
+        let mut lobby = Lobby::new("vendee-2020".to_string(), "creator-1".to_string());
+        let player = make_test_player("player-1", "Alice");
+        lobby.add_player(player).unwrap();
+
+        let removed = lobby.remove_player("player-1");
+
+        assert!(removed.is_some());
+        assert_eq!(removed.unwrap().name, "Alice");
+        assert!(lobby.players.is_empty());
+    }
+
+    #[test]
+    fn test_lobby_remove_nonexistent_player() {
+        let mut lobby = Lobby::new("vendee-2020".to_string(), "creator-1".to_string());
+
+        let removed = lobby.remove_player("nonexistent");
+
+        assert!(removed.is_none());
+    }
+
+    #[test]
+    fn test_lobby_is_expired_empty_and_old() {
+        let mut lobby = Lobby::new("vendee-2020".to_string(), "creator-1".to_string());
+        // Set last activity to 6 minutes ago
+        lobby.last_activity = Utc::now() - chrono::Duration::minutes(6);
+
+        assert!(lobby.is_expired());
+    }
+
+    #[test]
+    fn test_lobby_is_not_expired_with_players() {
+        let mut lobby = Lobby::new("vendee-2020".to_string(), "creator-1".to_string());
+        lobby.last_activity = Utc::now() - chrono::Duration::minutes(6);
+
+        // Add a player
+        let player = make_test_player("player-1", "Alice");
+        lobby.players.insert("player-1".to_string(), player);
+
+        // Should not be expired because it has players
+        assert!(!lobby.is_expired());
+    }
+
+    #[test]
+    fn test_lobby_is_not_expired_recent_activity() {
+        let lobby = Lobby::new("vendee-2020".to_string(), "creator-1".to_string());
+        // Fresh lobby with no players
+
+        // Should not be expired because activity is recent
+        assert!(!lobby.is_expired());
+    }
+
+    #[test]
+    fn test_lobby_get_player_infos() {
+        let mut lobby = Lobby::new("vendee-2020".to_string(), "creator-1".to_string());
+        lobby.add_player(make_test_player("p1", "Alice")).unwrap();
+        lobby.add_player(make_test_player("p2", "Bob")).unwrap();
+
+        let infos = lobby.get_player_infos();
+
+        assert_eq!(infos.len(), 2);
+        let names: Vec<&str> = infos.iter().map(|i| i.name.as_str()).collect();
+        assert!(names.contains(&"Alice"));
+        assert!(names.contains(&"Bob"));
+    }
+
+    // =========================================================================
+    // LobbyManager tests (async)
+    // =========================================================================
+
+    #[tokio::test]
+    async fn test_lobby_manager_create_lobby() {
+        let manager = LobbyManager::new();
+        let (tx, _rx) = mpsc::unbounded_channel();
+
+        let result = manager
+            .create_lobby(
+                "vendee-2020".to_string(),
+                "player-1".to_string(),
+                "Alice".to_string(),
+                tx,
+            )
+            .await;
+
+        assert!(result.is_ok());
+        let lobby_id = result.unwrap();
+        assert_eq!(lobby_id.len(), 6);
+
+        // Verify lobby exists
+        let lobbies = manager.lobbies.read().await;
+        assert!(lobbies.contains_key(&lobby_id));
+    }
+
+    #[tokio::test]
+    async fn test_lobby_manager_join_lobby() {
+        let manager = LobbyManager::new();
+        let (tx1, _rx1) = mpsc::unbounded_channel();
+        let (tx2, _rx2) = mpsc::unbounded_channel();
+
+        // Create lobby
+        let lobby_id = manager
+            .create_lobby(
+                "vendee-2020".to_string(),
+                "player-1".to_string(),
+                "Alice".to_string(),
+                tx1,
+            )
+            .await
+            .unwrap();
+
+        // Join lobby
+        let result = manager
+            .join_lobby(&lobby_id, "player-2".to_string(), "Bob".to_string(), tx2)
+            .await;
+
+        assert!(result.is_ok());
+        let (players, course_key, is_creator) = result.unwrap();
+        assert_eq!(course_key, "vendee-2020");
+        assert!(!is_creator);
+        assert_eq!(players.len(), 2); // Alice and Bob
+    }
+
+    #[tokio::test]
+    async fn test_lobby_manager_join_nonexistent_lobby() {
+        let manager = LobbyManager::new();
+        let (tx, _rx) = mpsc::unbounded_channel();
+
+        let result = manager
+            .join_lobby("AAAAAA", "player-1".to_string(), "Alice".to_string(), tx)
+            .await;
+
+        assert!(result.is_err());
+        assert_eq!(result.unwrap_err(), "Lobby not found");
+    }
+
+    #[tokio::test]
+    async fn test_lobby_manager_leave_lobby() {
+        let manager = LobbyManager::new();
+        let (tx, _rx) = mpsc::unbounded_channel();
+
+        let lobby_id = manager
+            .create_lobby(
+                "vendee-2020".to_string(),
+                "player-1".to_string(),
+                "Alice".to_string(),
+                tx,
+            )
+            .await
+            .unwrap();
+
+        // Leave lobby
+        manager.leave_lobby("player-1").await;
+
+        // Verify lobby is removed (empty lobby gets cleaned up)
+        let lobbies = manager.lobbies.read().await;
+        assert!(!lobbies.contains_key(&lobby_id));
+    }
+
+    #[tokio::test]
+    async fn test_lobby_manager_list_lobbies() {
+        let manager = LobbyManager::new();
+        let (tx1, _rx1) = mpsc::unbounded_channel();
+        let (tx2, _rx2) = mpsc::unbounded_channel();
+
+        manager
+            .create_lobby(
+                "vendee-2020".to_string(),
+                "player-1".to_string(),
+                "Alice".to_string(),
+                tx1,
+            )
+            .await
+            .unwrap();
+
+        manager
+            .create_lobby(
+                "vendee-2020".to_string(),
+                "player-2".to_string(),
+                "Bob".to_string(),
+                tx2,
+            )
+            .await
+            .unwrap();
+
+        let lobbies = manager.list_lobbies().await;
+
+        assert_eq!(lobbies.len(), 2);
+    }
+
+    #[tokio::test]
+    async fn test_lobby_manager_list_lobbies_excludes_started() {
+        let manager = LobbyManager::new();
+        let (tx, _rx) = mpsc::unbounded_channel();
+
+        let lobby_id = manager
+            .create_lobby(
+                "vendee-2020".to_string(),
+                "player-1".to_string(),
+                "Alice".to_string(),
+                tx,
+            )
+            .await
+            .unwrap();
+
+        // Mark race as started
+        {
+            let mut lobbies = manager.lobbies.write().await;
+            lobbies.get_mut(&lobby_id).unwrap().race_started = true;
+        }
+
+        let lobbies = manager.list_lobbies().await;
+
+        assert!(lobbies.is_empty());
+    }
+}
+
 // ============================================================================
 // WebSocket Handler
 // ============================================================================

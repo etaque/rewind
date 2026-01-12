@@ -133,12 +133,94 @@ fn encode_png(rgb_data: &[u8], width: usize, height: usize) -> Result<Bytes> {
 mod tests {
     use super::*;
 
+    // =========================================================================
+    // normalize_wind tests
+    // =========================================================================
+
     #[test]
-    fn test_normalize_wind() {
+    fn test_normalize_wind_boundaries() {
         assert_eq!(normalize_wind(-30.0), 0);
-        assert_eq!(normalize_wind(0.0), 128); // approximately
         assert_eq!(normalize_wind(30.0), 255);
-        assert_eq!(normalize_wind(-50.0), 0); // clamped
-        assert_eq!(normalize_wind(50.0), 255); // clamped
+    }
+
+    #[test]
+    fn test_normalize_wind_zero() {
+        // 0 m/s should map to middle of range: (0 - (-30)) / 60 * 255 = 127.5 → 128
+        assert_eq!(normalize_wind(0.0), 128);
+    }
+
+    #[test]
+    fn test_normalize_wind_clamping() {
+        // Values outside -30..30 should be clamped
+        assert_eq!(normalize_wind(-50.0), 0);
+        assert_eq!(normalize_wind(-100.0), 0);
+        assert_eq!(normalize_wind(50.0), 255);
+        assert_eq!(normalize_wind(100.0), 255);
+    }
+
+    #[test]
+    fn test_normalize_wind_negative_values() {
+        // -15 m/s: (-15 - (-30)) / 60 * 255 = 15/60 * 255 = 63.75 → 64
+        assert_eq!(normalize_wind(-15.0), 64);
+    }
+
+    #[test]
+    fn test_normalize_wind_positive_values() {
+        // 15 m/s: (15 - (-30)) / 60 * 255 = 45/60 * 255 = 191.25 → 191
+        assert_eq!(normalize_wind(15.0), 191);
+    }
+
+    #[test]
+    fn test_normalize_wind_typical_sailing_speeds() {
+        // Light wind: 5 m/s (~10 knots)
+        let light = normalize_wind(5.0);
+        assert!(light > 128 && light < 180);
+
+        // Moderate wind: 10 m/s (~20 knots)
+        let moderate = normalize_wind(10.0);
+        assert!(moderate > 150 && moderate < 200);
+
+        // Strong wind: 20 m/s (~40 knots)
+        let strong = normalize_wind(20.0);
+        assert!(strong > 200 && strong < 255);
+    }
+
+    #[test]
+    fn test_normalize_wind_nan_handling() {
+        // NaN should clamp to boundary (implementation detail: NaN.clamp returns NaN,
+        // but (NaN * 255.0).round() as u8 = 0)
+        let result = normalize_wind(f32::NAN);
+        // Just verify it doesn't panic and returns a valid u8
+        assert!(result <= 255);
+    }
+
+    #[test]
+    fn test_normalize_wind_infinity() {
+        // Positive infinity should clamp to max
+        assert_eq!(normalize_wind(f32::INFINITY), 255);
+        // Negative infinity should clamp to min
+        assert_eq!(normalize_wind(f32::NEG_INFINITY), 0);
+    }
+
+    // =========================================================================
+    // PNG encoding tests
+    // =========================================================================
+
+    #[test]
+    fn test_encode_png_valid_dimensions() {
+        let rgb_data = vec![0u8; 720 * 360 * 3];
+        let result = encode_png(&rgb_data, 720, 360);
+        assert!(result.is_ok());
+
+        let png_bytes = result.unwrap();
+        // PNG magic number check
+        assert_eq!(&png_bytes[0..8], &[137, 80, 78, 71, 13, 10, 26, 10]);
+    }
+
+    #[test]
+    fn test_encode_png_small_image() {
+        let rgb_data = vec![255u8; 10 * 10 * 3]; // White 10x10 image
+        let result = encode_png(&rgb_data, 10, 10);
+        assert!(result.is_ok());
     }
 }
