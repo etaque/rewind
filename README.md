@@ -24,17 +24,16 @@ cargo install cargo-watch
 
 ### Start Services
 
-Start database and tile server:
+Start Minio:
 
 ```bash
 ./server/bin/container up
 ```
 
-Run migrations and start the server:
+Start the server:
 
 ```bash
 cd server
-cargo run -- db migrate
 ./bin/dev-server
 ```
 
@@ -49,16 +48,14 @@ npm run dev
 **Ports:**
 - Client: http://localhost:3000
 - Server: http://localhost:3001
-- PostgreSQL: localhost:25432
 - Minio: http://localhost:9000
 
 ### Container Commands
 
 ```bash
-./server/bin/container up       # Start db and minio
+./server/bin/container up       # Start minio
 ./server/bin/container down     # Stop containers
 ./server/bin/container logs     # Follow logs
-./server/bin/container psql     # PostgreSQL shell
 ./server/bin/container migrate  # Run migrations
 ./server/bin/container destroy  # Remove containers and volumes
 ```
@@ -151,5 +148,6 @@ Deploy:
 Import Vendée Globe 2020 GRIB files:
 
 ```bash
-cd server && cargo run -- import-grib-range --from 2020-11-01 --to 2021-01-27
+fly ssh console
+rewind import-grib-range --from 2020-11-01 --to 2021-01-27
 ```

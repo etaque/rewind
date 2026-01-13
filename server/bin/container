@@ -6,15 +6,11 @@ cd $(dirname "$0")/../..
 case "$1" in
   up)
     echo "Starting containers..."
-    docker compose up -d db minio
-    echo "Waiting for database to be ready..."
-    sleep 2
-    docker compose exec db pg_isready -U rewind -d rewind
+    docker compose up -d minio
     echo "Initializing MinIO bucket..."
     docker compose up minio-init
     echo "Containers are ready."
     echo ""
-    echo "Run migrations with: cd server && cargo run -- db migrate"
     echo "Start server with:   cd server && ./bin/dev-server"
     echo ""
     echo "MinIO Console: http://localhost:9001 (rewind/rewindpass)"
@@ -30,20 +26,6 @@ case "$1" in
     docker compose logs -f "${@:2}"
     ;;
 
-  migrate)
-    echo "Running migrations..."
-    cd server && cargo run -- db migrate
-    ;;
-
-  reset)
-    echo "Resetting database..."
-    cd server && cargo run -- db reset
-    ;;
-
-  psql)
-    pgcli postgres://rewind:rewind@127.0.0.1:25432/rewind
-    ;;
-
   destroy)
     echo "Destroying containers and volumes..."
     docker compose down -v
@@ -55,15 +37,12 @@ case "$1" in
     ;;
 
   *)
-    echo "Usage: $0 {up|down|logs|migrate|reset|psql|minio|destroy}"
+    echo "Usage: $0 {up|down|logs|minio|destroy}"
     echo ""
     echo "Commands:"
-    echo "  up       Start database and minio containers"
+    echo "  up       Start minio container"
     echo "  down     Stop all containers"
     echo "  logs     Follow container logs (optionally specify service)"
-    echo "  migrate  Run database migrations"
-    echo "  reset    Reset database tables"
-    echo "  psql     Open PostgreSQL shell"
     echo "  minio    Open MinIO console in browser"
     echo "  destroy  Stop containers and remove volumes"
     exit 1

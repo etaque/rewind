@@ -41,33 +41,17 @@
             rustToolchain
             cargo-watch
 
-            # grib-rs
-            # cmake
-            # pkgconf
-            # proj
-            # sqlite
-
             # Node.js
             nodejs_22
-
-            # Database tools
-            postgresql_16
-            postgresql16Packages.postgis
-            osm2pgsql
-            pgcli
           ];
-          # ++ lib.optionals stdenv.isDarwin [
-          #   darwin.apple_sdk.frameworks.Security
-          #   darwin.apple_sdk.frameworks.SystemConfiguration
-          # ];
 
           shellHook = ''
             echo "Rewind development environment"
             echo ""
             echo "Commands:"
-            echo "  ./server/bin/container up  - Start database and minio"
+            echo "  ./server/bin/container up  - Start minio"
             echo "  cd server && ./bin/dev-server - Start server with auto-reload"
-            echo "  cd client && npm run dev   - Start client"
+            echo "  cd client && ./bin/dev-server - Start client"
           '';
         };
       }
