@@ -69,6 +69,7 @@ pub enum ServerMessage {
         lng: f32,
         lat: f32,
         heading: f32,
+        race_time: i64,
     },
 }
 
@@ -105,6 +106,7 @@ pub struct Lobby {
     pub players: HashMap<String, Player>,
     pub max_players: usize,
     pub race_started: bool,
+    pub race_start_time: Option<i64>,
     pub last_activity: DateTime<Utc>,
 }
 
@@ -116,6 +118,7 @@ impl Lobby {
             players: HashMap::new(),
             max_players: 10,
             race_started: false,
+            race_start_time: None,
             last_activity: Utc::now(),
         }
     }
@@ -290,6 +293,12 @@ impl LobbyManager {
             return;
         };
 
+        // Calculate race time (ms since race start)
+        let race_time = lobby
+            .race_start_time
+            .map(|start| Utc::now().timestamp_millis() - start)
+            .unwrap_or(0);
+
         // Broadcast to all players except sender
         lobby.broadcast(
             ServerMessage::PositionUpdate {
@@ -297,6 +306,7 @@ impl LobbyManager {
                 lng,
                 lat,
                 heading,
+                race_time,
             },
             Some(player_id),
         );
@@ -343,11 +353,12 @@ impl LobbyManager {
             tokio::time::sleep(tokio::time::Duration::from_secs(1)).await;
         }
 
-        // Send race started
+        // Send race started and store start time
         {
-            let lobbies = self.lobbies.read().await;
-            if let Some(lobby) = lobbies.get(&lobby_id) {
+            let mut lobbies = self.lobbies.write().await;
+            if let Some(lobby) = lobbies.get_mut(&lobby_id) {
                 let start_time = Utc::now().timestamp_millis();
+                lobby.race_start_time = Some(start_time);
                 lobby.broadcast_all(ServerMessage::RaceStarted {
                     start_time,
                     course_key,

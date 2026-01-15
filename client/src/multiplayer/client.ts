@@ -48,7 +48,7 @@ export class MultiplayerClient {
         this.peerStates.delete(playerId);
         callbacks.onPlayerLeft(playerId);
       },
-      onPeerPositionUpdate: (peerId, position, heading, _name) => {
+      onPeerPositionUpdate: (peerId, position, heading, _name, raceTime) => {
         // Update peer state
         const peerState = this.peerStates.get(peerId);
         if (peerState) {
@@ -61,6 +61,7 @@ export class MultiplayerClient {
             position,
             heading,
             peerState.name,
+            raceTime,
           );
         }
       },

@@ -69,7 +69,8 @@ export type AppAction =
   | { type: "COUNTDOWN"; seconds: number }
   | { type: "RACE_STARTED" }
   | { type: "START_PLAYING"; reports: WindReport[] }
-  | { type: "LEAVE_LOBBY" };
+  | { type: "LEAVE_LOBBY" }
+  | { type: "SYNC_RACE_TIME"; raceTime: number };
 
 export type Turn = "left" | "right" | null;
 
@@ -263,6 +264,17 @@ export function appReducer(state: AppState, action: AppAction): AppState {
     case "LEAVE_LOBBY":
       if (state.tag !== "Loading") return state;
       return { tag: "Idle" };
+
+    case "SYNC_RACE_TIME":
+      if (state.tag !== "Playing") return state;
+      // Sync courseTime from server's authoritative race time
+      return {
+        ...state,
+        session: {
+          ...state.session,
+          courseTime: state.session.course.startTime + action.raceTime,
+        },
+      };
 
     default:
       return state;

@@ -32,6 +32,7 @@ export type ServerMessage =
       lng: number;
       lat: number;
       heading: number;
+      race_time: number;
     };
 
 // ============================================================================
@@ -77,6 +78,7 @@ export type MultiplayerCallbacks = {
     position: LngLat,
     heading: number,
     name: string,
+    raceTime: number,
   ) => void;
   onCountdown: (seconds: number) => void;
   onRaceStarted: () => void;

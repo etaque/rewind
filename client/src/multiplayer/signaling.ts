@@ -83,7 +83,8 @@ export class SignalingClient {
           message.player_id,
           { lng: message.lng, lat: message.lat },
           message.heading,
-          "", // Name is resolved by the manager from peerStates
+          "", // Name is resolved by the client from peerStates
+          message.race_time,
         );
         break;
     }
