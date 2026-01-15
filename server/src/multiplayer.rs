@@ -24,19 +24,12 @@ pub enum ClientMessage {
         player_name: String,
     },
     LeaveLobby,
-    Offer {
-        target_player_id: String,
-        sdp: String,
-    },
-    Answer {
-        target_player_id: String,
-        sdp: String,
-    },
-    IceCandidate {
-        target_player_id: String,
-        candidate: String,
-    },
     StartRace,
+    PositionUpdate {
+        lng: f32,
+        lat: f32,
+        heading: f32,
+    },
 }
 
 /// Messages sent from server to client
@@ -64,24 +57,18 @@ pub enum ServerMessage {
     PlayerLeft {
         player_id: String,
     },
-    Offer {
-        from_player_id: String,
-        sdp: String,
-    },
-    Answer {
-        from_player_id: String,
-        sdp: String,
-    },
-    IceCandidate {
-        from_player_id: String,
-        candidate: String,
-    },
     RaceCountdown {
         seconds: i32,
     },
     RaceStarted {
         start_time: i64,
         course_key: String,
+    },
+    PositionUpdate {
+        player_id: String,
+        lng: f32,
+        lat: f32,
+        heading: f32,
     },
 }
 
@@ -292,31 +279,27 @@ impl LobbyManager {
         }
     }
 
-    pub async fn forward_to_player(
-        &self,
-        from_player_id: &str,
-        target_player_id: &str,
-        message: ServerMessage,
-    ) -> Result<(), String> {
+    pub async fn broadcast_position(&self, player_id: &str, lng: f32, lat: f32, heading: f32) {
         let player_lobbies = self.player_lobbies.read().await;
-        let lobby_id = player_lobbies
-            .get(from_player_id)
-            .ok_or_else(|| "Player not in a lobby".to_string())?;
+        let Some(lobby_id) = player_lobbies.get(player_id) else {
+            return;
+        };
 
         let lobbies = self.lobbies.read().await;
-        let lobby = lobbies
-            .get(lobby_id)
-            .ok_or_else(|| "Lobby not found".to_string())?;
+        let Some(lobby) = lobbies.get(lobby_id) else {
+            return;
+        };
 
-        let target = lobby
-            .players
-            .get(target_player_id)
-            .ok_or_else(|| "Target player not found".to_string())?;
-
-        target
-            .tx
-            .send(message)
-            .map_err(|_| "Failed to send message".to_string())
+        // Broadcast to all players except sender
+        lobby.broadcast(
+            ServerMessage::PositionUpdate {
+                player_id: player_id.to_string(),
+                lng,
+                lat,
+                heading,
+            },
+            Some(player_id),
+        );
     }
 
     pub async fn start_race(&self, player_id: &str) -> Result<(), String> {
@@ -841,55 +824,14 @@ async fn handle_client_message(
             Ok(())
         }
 
-        ClientMessage::Offer {
-            target_player_id,
-            sdp,
-        } => {
-            manager
-                .forward_to_player(
-                    player_id,
-                    &target_player_id,
-                    ServerMessage::Offer {
-                        from_player_id: player_id.to_string(),
-                        sdp,
-                    },
-                )
-                .await
-        }
-
-        ClientMessage::Answer {
-            target_player_id,
-            sdp,
-        } => {
-            manager
-                .forward_to_player(
-                    player_id,
-                    &target_player_id,
-                    ServerMessage::Answer {
-                        from_player_id: player_id.to_string(),
-                        sdp,
-                    },
-                )
-                .await
-        }
-
-        ClientMessage::IceCandidate {
-            target_player_id,
-            candidate,
-        } => {
-            manager
-                .forward_to_player(
-                    player_id,
-                    &target_player_id,
-                    ServerMessage::IceCandidate {
-                        from_player_id: player_id.to_string(),
-                        candidate,
-                    },
-                )
-                .await
-        }
-
         ClientMessage::StartRace => manager.start_race(player_id).await,
+
+        ClientMessage::PositionUpdate { lng, lat, heading } => {
+            manager
+                .broadcast_position(player_id, lng, lat, heading)
+                .await;
+            Ok(())
+        }
     };
 
     if let Err(error_message) = result {

@@ -1,5 +1,5 @@
 import { useCallback, useRef } from "react";
-import { WebRTCManager } from "../../multiplayer/webrtc-manager";
+import { MultiplayerClient } from "../../multiplayer/client";
 import { Course } from "../../models";
 import { PlayerInfo, PeerState } from "../../multiplayer/types";
 import { SphereView } from "../../sphere";
@@ -13,7 +13,7 @@ type MultiplayerCallbacks = {
 };
 
 /**
- * Hook to manage multiplayer WebRTC connections.
+ * Hook to manage multiplayer connections.
  * Returns handlers for lobby creation, joining, starting races, and leaving.
  */
 export function useMultiplayer(
@@ -21,11 +21,11 @@ export function useMultiplayer(
   sphereViewRef: React.RefObject<SphereView | null>,
   courseRef: React.RefObject<Course | null>,
   coursesRef: React.RefObject<Map<string, Course>>,
-): [React.RefObject<WebRTCManager | null>, MultiplayerCallbacks] {
-  const webrtcManagerRef = useRef<WebRTCManager | null>(null);
+): [React.RefObject<MultiplayerClient | null>, MultiplayerCallbacks] {
+  const multiplayerRef = useRef<MultiplayerClient | null>(null);
 
-  const createWebRTCManager = useCallback(() => {
-    return new WebRTCManager({
+  const createMultiplayerClient = useCallback(() => {
+    return new MultiplayerClient({
       onLobbyCreated: (lobbyId, playerId) => {
         const course = courseRef.current;
         if (!course) return;
@@ -95,44 +95,44 @@ export function useMultiplayer(
     async (playerName: string) => {
       const course = courseRef.current;
       if (!course) return;
-      const manager = createWebRTCManager();
-      webrtcManagerRef.current = manager;
-      await manager.connect();
-      manager.createLobby(course.key, playerName);
+      const client = createMultiplayerClient();
+      multiplayerRef.current = client;
+      await client.connect();
+      client.createLobby(course.key, playerName);
     },
-    [createWebRTCManager, courseRef],
+    [createMultiplayerClient, courseRef],
   );
 
   const handleJoinLobby = useCallback(
     async (lobbyId: string, playerName: string) => {
       // Leave current lobby if we're in one
-      if (webrtcManagerRef.current) {
-        webrtcManagerRef.current.leaveLobby();
-        webrtcManagerRef.current.disconnect();
-        webrtcManagerRef.current = null;
+      if (multiplayerRef.current) {
+        multiplayerRef.current.leaveLobby();
+        multiplayerRef.current.disconnect();
+        multiplayerRef.current = null;
       }
 
-      const manager = createWebRTCManager();
-      webrtcManagerRef.current = manager;
-      await manager.connect();
-      manager.joinLobby(lobbyId, playerName);
+      const client = createMultiplayerClient();
+      multiplayerRef.current = client;
+      await client.connect();
+      client.joinLobby(lobbyId, playerName);
     },
-    [createWebRTCManager],
+    [createMultiplayerClient],
   );
 
   const handleStartRace = useCallback(() => {
-    webrtcManagerRef.current?.startRace();
+    multiplayerRef.current?.startRace();
   }, []);
 
   const handleLeaveLobby = useCallback(() => {
-    webrtcManagerRef.current?.leaveLobby();
-    webrtcManagerRef.current?.disconnect();
-    webrtcManagerRef.current = null;
+    multiplayerRef.current?.leaveLobby();
+    multiplayerRef.current?.disconnect();
+    multiplayerRef.current = null;
     dispatch({ type: "LEAVE_LOBBY" });
   }, [dispatch]);
 
   return [
-    webrtcManagerRef,
+    multiplayerRef,
     {
       onCreateLobby: handleCreateLobby,
       onJoinLobby: handleJoinLobby,

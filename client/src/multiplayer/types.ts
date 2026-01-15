@@ -8,10 +8,8 @@ export type ClientMessage =
   | { type: "CreateLobby"; course_key: string; player_name: string }
   | { type: "JoinLobby"; lobby_id: string; player_name: string }
   | { type: "LeaveLobby" }
-  | { type: "Offer"; target_player_id: string; sdp: string }
-  | { type: "Answer"; target_player_id: string; sdp: string }
-  | { type: "IceCandidate"; target_player_id: string; candidate: string }
-  | { type: "StartRace" };
+  | { type: "StartRace" }
+  | { type: "PositionUpdate"; lng: number; lat: number; heading: number };
 
 export type ServerMessage =
   | { type: "Error"; message: string }
@@ -26,11 +24,15 @@ export type ServerMessage =
     }
   | { type: "PlayerJoined"; player_id: string; player_name: string }
   | { type: "PlayerLeft"; player_id: string }
-  | { type: "Offer"; from_player_id: string; sdp: string }
-  | { type: "Answer"; from_player_id: string; sdp: string }
-  | { type: "IceCandidate"; from_player_id: string; candidate: string }
   | { type: "RaceCountdown"; seconds: number }
-  | { type: "RaceStarted"; start_time: number; course_key: string };
+  | { type: "RaceStarted"; start_time: number; course_key: string }
+  | {
+      type: "PositionUpdate";
+      player_id: string;
+      lng: number;
+      lat: number;
+      heading: number;
+    };
 
 // ============================================================================
 // State Types

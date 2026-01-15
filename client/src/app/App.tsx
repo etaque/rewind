@@ -51,7 +51,7 @@ export default function App() {
   }, []);
 
   // Custom hooks
-  const [webrtcManagerRef, multiplayerCallbacks] = useMultiplayer(
+  const [multiplayerRef, multiplayerCallbacks] = useMultiplayer(
     dispatch,
     sphereViewRef,
     selectedCourseRef,
@@ -69,7 +69,7 @@ export default function App() {
       courseTime: courseTimeRef,
       heading: headingRef,
       interpolatedWind: interpolatedWindRef,
-      webrtcManager: webrtcManagerRef,
+      multiplayer: multiplayerRef,
     },
   );
 

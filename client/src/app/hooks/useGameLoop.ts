@@ -2,7 +2,7 @@ import { useEffect, useRef } from "react";
 import { LngLat } from "../../models";
 import { AppAction, Session } from "../state";
 import InterpolatedWind from "../../interpolated-wind";
-import { WebRTCManager } from "../../multiplayer/webrtc-manager";
+import { MultiplayerClient } from "../../multiplayer/client";
 
 const WIND_REFRESH_INTERVAL = 100;
 
@@ -11,7 +11,7 @@ type GameLoopRefs = {
   courseTime: React.MutableRefObject<number>;
   heading: React.MutableRefObject<number>;
   interpolatedWind: React.MutableRefObject<InterpolatedWind>;
-  webrtcManager: React.MutableRefObject<WebRTCManager | null>;
+  multiplayer: React.MutableRefObject<MultiplayerClient | null>;
 };
 
 /**
@@ -61,8 +61,8 @@ export function useGameLoop(
         }
 
         // Broadcast position to multiplayer peers
-        if (refs.webrtcManager.current && refs.position.current) {
-          refs.webrtcManager.current.broadcastPosition(
+        if (refs.multiplayer.current && refs.position.current) {
+          refs.multiplayer.current.broadcastPosition(
             refs.position.current,
             refs.heading.current,
           );

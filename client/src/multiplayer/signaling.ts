@@ -3,20 +3,15 @@ import { ClientMessage, ServerMessage, MultiplayerCallbacks } from "./types";
 const serverUrl = import.meta.env.REWIND_SERVER_URL;
 
 /**
- * WebSocket client for signaling server communication.
- * Handles lobby management and WebRTC signaling message forwarding.
+ * WebSocket client for multiplayer server communication.
+ * Handles lobby management and position updates.
  */
 export class SignalingClient {
   private ws: WebSocket | null = null;
   private callbacks: MultiplayerCallbacks;
-  private onWebRTCMessage: (message: ServerMessage) => void;
 
-  constructor(
-    callbacks: MultiplayerCallbacks,
-    onWebRTCMessage: (message: ServerMessage) => void,
-  ) {
+  constructor(callbacks: MultiplayerCallbacks) {
     this.callbacks = callbacks;
-    this.onWebRTCMessage = onWebRTCMessage;
   }
 
   connect(): Promise<void> {
@@ -75,18 +70,21 @@ export class SignalingClient {
         this.callbacks.onPlayerLeft(message.player_id);
         break;
 
-      case "Offer":
-      case "Answer":
-      case "IceCandidate":
-        this.onWebRTCMessage(message);
-        break;
-
       case "RaceCountdown":
         this.callbacks.onCountdown(message.seconds);
         break;
 
       case "RaceStarted":
         this.callbacks.onRaceStarted();
+        break;
+
+      case "PositionUpdate":
+        this.callbacks.onPeerPositionUpdate(
+          message.player_id,
+          { lng: message.lng, lat: message.lat },
+          message.heading,
+          "", // Name is resolved by the manager from peerStates
+        );
         break;
     }
   }
@@ -121,27 +119,12 @@ export class SignalingClient {
     this.send({ type: "StartRace" });
   }
 
-  sendOffer(targetPlayerId: string, sdp: string) {
+  sendPositionUpdate(lng: number, lat: number, heading: number) {
     this.send({
-      type: "Offer",
-      target_player_id: targetPlayerId,
-      sdp,
-    });
-  }
-
-  sendAnswer(targetPlayerId: string, sdp: string) {
-    this.send({
-      type: "Answer",
-      target_player_id: targetPlayerId,
-      sdp,
-    });
-  }
-
-  sendIceCandidate(targetPlayerId: string, candidate: string) {
-    this.send({
-      type: "IceCandidate",
-      target_player_id: targetPlayerId,
-      candidate,
+      type: "PositionUpdate",
+      lng,
+      lat,
+      heading,
     });
   }
 
