@@ -1,85 +1,96 @@
+use axum::{
+    extract::{ws::WebSocketUpgrade, Path, State},
+    http::{Method, StatusCode},
+    response::{IntoResponse, Response},
+    routing::{any, get},
+    Json, Router,
+};
 use bytes::Bytes;
 use chrono::{DateTime, Utc};
-use object_store::path::Path;
+use object_store::path::Path as S3Path;
 use object_store::ObjectStoreExt;
 use serde::Serialize;
-use std::convert::Infallible;
-use warp::http::StatusCode;
-use warp::{path, Filter, Rejection, Reply};
+use tower_http::{compression::CompressionLayer, cors::CorsLayer};
 
-use super::courses;
+use crate::{
+    courses,
+    multiplayer::{handle_websocket, LobbyManager},
+};
+
 use super::manifest::{self, Manifest};
-use super::multiplayer::{handle_websocket, LobbyInfo, LobbyManager};
 use super::s3;
+
+// Make our own error that wraps `anyhow::Error`.
+struct AppError(anyhow::Error);
+
+// Tell axum how to convert `AppError` into a response.
+impl IntoResponse for AppError {
+    fn into_response(self) -> Response {
+        (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            format!("Something went wrong: {}", self.0),
+        )
+            .into_response()
+    }
+}
+
+impl<E> From<E> for AppError
+where
+    E: Into<anyhow::Error>,
+{
+    fn from(err: E) -> Self {
+        Self(err.into())
+    }
+}
+
+async fn websocket_handler(
+    ws: WebSocketUpgrade,
+    State(lobby_manager): State<LobbyManager>,
+) -> Response {
+    ws.on_upgrade(move |socket| handle_websocket(socket, lobby_manager))
+}
 
 pub async fn run(address: std::net::SocketAddr) {
     let lobby_manager = LobbyManager::new();
 
-    let cors = warp::cors().allow_any_origin().allow_methods(vec!["GET"]);
+    let cors = CorsLayer::new()
+        .allow_origin(tower_http::cors::Any)
+        .allow_methods([Method::GET]);
 
-    let health_route = path!("health").and_then(health);
+    let app = Router::new()
+        .route("/health", get(health_handler))
+        .route("/courses", get(courses_handler))
+        .route("/wind-reports/since/{since_ms}", get(reports_since_handler))
+        .route("/multiplayer/lobbies", get(lobbies_handler))
+        .route("/multiplayer/lobby", any(websocket_handler))
+        .layer(CompressionLayer::new())
+        .layer(cors)
+        .with_state(lobby_manager);
 
-    let reports_since_route = path!("wind-reports" / "since" / i64).and_then(reports_since);
-
-    // List available courses
-    let courses_route = path!("courses")
-        .and(warp::get())
-        .map(|| warp::reply::json(&courses::all()));
-
-    // List available lobbies
-    let lobbies_list_route = path!("multiplayer" / "lobbies")
-        .and(warp::get())
-        .and(with_lobby_manager(lobby_manager.clone()))
-        .and_then(list_lobbies);
-
-    // WebSocket route for multiplayer signaling
-    let multiplayer_route = path!("multiplayer" / "lobby")
-        .and(warp::ws())
-        .and(with_lobby_manager(lobby_manager))
-        .map(|ws: warp::ws::Ws, manager: LobbyManager| {
-            ws.on_upgrade(move |socket| handle_websocket(socket, manager))
-        });
-
-    let routes = health_route
-        .or(courses_route)
-        .or(reports_since_route)
-        .or(lobbies_list_route)
-        .or(multiplayer_route)
-        .recover(rejection)
-        .with(cors)
-        .with(warp::compression::gzip());
-
-    warp::serve(routes).run(address).await
+    let listener = tokio::net::TcpListener::bind(address).await.unwrap();
+    log::info!("Server listening on {}", address);
+    axum::serve(listener, app).await.unwrap();
 }
 
-fn with_lobby_manager(
-    manager: LobbyManager,
-) -> impl Filter<Extract = (LobbyManager,), Error = Infallible> + Clone {
-    warp::any().map(move || manager.clone())
-}
-
-pub async fn list_lobbies(manager: LobbyManager) -> Result<impl Reply, Rejection> {
-    let lobbies: Vec<LobbyInfo> = manager.list_lobbies().await;
-    Ok(warp::reply::json(&lobbies))
-}
-
-pub async fn health() -> Result<impl Reply, Rejection> {
+async fn health_handler() -> Result<String, AppError> {
     // Check GRIB bucket write access
     let s3 = s3::grib_client();
-    let health_path = Path::from("/healthcheck");
-    s3.put(&health_path, Bytes::new().into())
-        .await
-        .map_err(|e| warp::reject::custom(Error(anyhow::anyhow!("GRIB bucket error: {}", e))))?;
+    let health_path = S3Path::from("/healthcheck");
+    s3.put(&health_path, Bytes::new().into()).await?;
 
     // Check manifest is readable from raster bucket
-    let manifest = Manifest::load()
-        .await
-        .map_err(|e| warp::reject::custom(Error(anyhow::anyhow!("Manifest error: {}", e))))?;
+    let manifest = Manifest::load().await?;
 
-    Ok(warp::reply::with_status(
-        format!("OK ({} wind reports)", manifest.reports.len()),
-        StatusCode::OK,
-    ))
+    Ok(format!("OK ({} wind reports)", manifest.reports.len()))
+}
+
+async fn courses_handler() -> impl IntoResponse {
+    Json(courses::all())
+}
+
+async fn lobbies_handler(State(lobby_manager): State<LobbyManager>) -> impl IntoResponse {
+    let lobbies = lobby_manager.list_lobbies().await;
+    Json(lobbies)
 }
 
 #[derive(Clone, Debug, Serialize)]
@@ -99,12 +110,10 @@ impl From<&manifest::WindReport> for WindReportResponse {
     }
 }
 
-pub async fn reports_since(since_ms: i64) -> Result<impl Reply, Rejection> {
-    let since = DateTime::from_timestamp_millis(since_ms).unwrap_or_else(|| Utc::now());
+async fn reports_since_handler(Path(since_ms): Path<i64>) -> Result<impl IntoResponse, AppError> {
+    let since = DateTime::from_timestamp_millis(since_ms).unwrap_or_else(Utc::now);
 
-    let manifest = Manifest::load()
-        .await
-        .map_err(|e| warp::reject::custom(Error(e)))?;
+    let manifest = Manifest::load().await?;
 
     let reports: Vec<WindReportResponse> = manifest
         .reports_since(since, 100)
@@ -112,46 +121,5 @@ pub async fn reports_since(since_ms: i64) -> Result<impl Reply, Rejection> {
         .map(|r| r.into())
         .collect();
 
-    Ok(warp::reply::json(&reports))
-}
-
-#[derive(Debug)]
-struct Error(anyhow::Error);
-impl warp::reject::Reject for Error {}
-
-#[derive(Serialize)]
-struct ErrorMessage {
-    code: u16,
-    message: String,
-}
-
-pub async fn rejection(err: warp::Rejection) -> Result<impl Reply, Infallible> {
-    let (code, message) = if err.is_not_found() {
-        (StatusCode::NOT_FOUND, "Not found".to_string())
-    } else if let Some(e) = err.find::<warp::reject::MethodNotAllowed>() {
-        (StatusCode::METHOD_NOT_ALLOWED, e.to_string())
-    } else if let Some(e) = err.find::<warp::reject::InvalidQuery>() {
-        (StatusCode::BAD_REQUEST, e.to_string())
-    } else if let Some(e) = err.find::<warp::reject::MissingHeader>() {
-        (StatusCode::BAD_REQUEST, e.to_string())
-    } else if let Some(Error(e)) = err.find::<Error>() {
-        log::error!("Internal error: {:?}", e);
-        (
-            StatusCode::INTERNAL_SERVER_ERROR,
-            "Internal server error".to_string(),
-        )
-    } else {
-        log::error!("Unhandled rejection: {:?}", err);
-        (
-            StatusCode::INTERNAL_SERVER_ERROR,
-            "Internal server error".to_string(),
-        )
-    };
-
-    let json = warp::reply::json(&ErrorMessage {
-        code: code.as_u16(),
-        message,
-    });
-
-    Ok(warp::reply::with_status(json, code))
+    Ok(Json(reports))
 }

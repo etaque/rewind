@@ -1,3 +1,4 @@
+use axum::extract::ws::{Message, WebSocket};
 use chrono::{DateTime, Utc};
 use futures::{SinkExt, StreamExt};
 use rand::Rng;
@@ -5,7 +6,6 @@ use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::sync::Arc;
 use tokio::sync::{mpsc, RwLock};
-use warp::ws::{Message, WebSocket};
 
 // ============================================================================
 // Message Types
@@ -760,7 +760,7 @@ pub async fn handle_websocket(ws: WebSocket, manager: LobbyManager) {
     let forward_task = tokio::spawn(async move {
         while let Some(msg) = rx.recv().await {
             if let Ok(json) = serde_json::to_string(&msg) {
-                if ws_tx.send(Message::text(json)).await.is_err() {
+                if ws_tx.send(Message::Text(json.into())).await.is_err() {
                     break;
                 }
             }
@@ -770,18 +770,15 @@ pub async fn handle_websocket(ws: WebSocket, manager: LobbyManager) {
     // Process incoming messages
     while let Some(result) = ws_rx.next().await {
         match result {
-            Ok(msg) => {
-                if msg.is_text() {
-                    if let Ok(text) = msg.to_str() {
-                        if let Ok(client_msg) = serde_json::from_str::<ClientMessage>(text) {
-                            handle_client_message(&manager, &player_id, tx.clone(), client_msg)
-                                .await;
-                        }
+            Ok(msg) => match msg {
+                Message::Text(text) => {
+                    if let Ok(client_msg) = serde_json::from_str::<ClientMessage>(&text) {
+                        handle_client_message(&manager, &player_id, tx.clone(), client_msg).await;
                     }
-                } else if msg.is_close() {
-                    break;
                 }
-            }
+                Message::Close(_) => break,
+                _ => {}
+            },
             Err(_) => break,
         }
     }
