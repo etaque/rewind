@@ -12,7 +12,7 @@ echo "Building client..."
 npm run build
 
 echo "Uploading to S3..."
-aws s3 sync dist/ s3://rewind.taque.fr --delete --profile "$AWS_PROFILE"
+aws s3 sync dist/ s3://rewind.tacoz.fr --delete --profile "$AWS_PROFILE"
 
 DISTRIBUTION_ID=$(cd ../infra && terraform output -raw cloudfront_distribution_id)
 

@@ -12,7 +12,7 @@ provider "aws" {
 # ACM certificate for CloudFront (must be in us-east-1)
 resource "aws_acm_certificate" "ssl" {
   provider          = aws.global
-  domain_name       = "rewind.taque.fr"
+  domain_name       = "rewind.tacoz.fr"
   validation_method = "DNS"
 
   lifecycle {
@@ -47,5 +47,5 @@ resource "aws_acm_certificate_validation" "ssl" {
 }
 
 locals {
-  frontend_domain = "rewind.taque.fr"
+  frontend_domain = "rewind.tacoz.fr"
 }
