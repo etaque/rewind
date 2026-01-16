@@ -5,6 +5,7 @@ import { AppAction } from "../state";
  * Hook to handle keyboard controls when playing.
  * - Arrow Left/Right: Turn boat
  * - Arrow Up: Toggle TWA lock
+ * - Arrow Down: Lock to optimal VMG heading
  * - Space: Tack
  */
 export function useKeyboardControls(
@@ -21,9 +22,15 @@ export function useKeyboardControls(
         dispatch({ type: "TURN", direction: "right" });
       } else if (e.key === "ArrowUp") {
         e.preventDefault();
+        e.stopPropagation();
         dispatch({ type: "TOGGLE_TWA_LOCK" });
+      } else if (e.key === "ArrowDown") {
+        e.preventDefault();
+        e.stopPropagation();
+        dispatch({ type: "VMG_LOCK" });
       } else if (e.key === " ") {
         e.preventDefault();
+        e.stopPropagation();
         dispatch({ type: "TACK" });
       }
     };

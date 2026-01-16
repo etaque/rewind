@@ -3,6 +3,7 @@ import { LeaderboardEntry, PeerState } from "../multiplayer/types";
 import { tick } from "./tick";
 import { calculateTackTarget } from "./tack";
 import { toggleTWALock } from "./twa-lock";
+import { calculateVMGLockHeading } from "./vmg-lock";
 import { refreshWindReport } from "./wind-report";
 
 export type AppState =
@@ -55,6 +56,7 @@ export type AppAction =
   | { type: "TURN"; direction: Turn }
   | { type: "TACK" }
   | { type: "TOGGLE_TWA_LOCK" }
+  | { type: "VMG_LOCK" }
   // Multiplayer actions
   | {
       type: "RACE_CREATED";
@@ -185,6 +187,20 @@ export function appReducer(state: AppState, action: AppAction): AppState {
           lockedTWA: toggleTWALock(state.session),
         },
       };
+
+    case "VMG_LOCK": {
+      if (state.tag !== "Playing") return state;
+      const vmgHeading = calculateVMGLockHeading(state.session);
+      if (vmgHeading === null) return state;
+      return {
+        ...state,
+        session: {
+          ...state.session,
+          targetHeading: vmgHeading,
+          lockedTWA: null, // Cancel any TWA lock
+        },
+      };
+    }
 
     // Multiplayer actions
     case "RACE_CREATED": {

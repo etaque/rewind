@@ -85,3 +85,97 @@ export function calculateTWA(heading: number, windDirection: number): number {
   while (twa < -180) twa += 360;
   return Math.abs(twa);
 }
+
+/**
+ * Calculate VMG (Velocity Made Good) - the component of boat speed
+ * in the upwind or downwind direction.
+ * @param boatSpeed Boat speed in knots
+ * @param twa True Wind Angle in degrees (0-180)
+ * @returns VMG in knots (positive = upwind progress, can be negative for downwind)
+ */
+export function calculateVMG(boatSpeed: number, twa: number): number {
+  const twaRad = (twa * Math.PI) / 180;
+  return boatSpeed * Math.cos(twaRad);
+}
+
+export type VMGMode = "upwind" | "downwind";
+
+/**
+ * Find the optimal TWA that maximizes VMG for the given wind speed.
+ * Scans the polar diagram to find the best angle.
+ * @param tws True Wind Speed in knots
+ * @param mode 'upwind' (TWA 0-90) or 'downwind' (TWA 90-180)
+ * @returns Optimal TWA in degrees
+ */
+export function getOptimalVMGAngle(tws: number, mode: VMGMode): number {
+  let bestVMG = -Infinity;
+  let bestTWA = mode === "upwind" ? 45 : 135; // sensible defaults
+
+  // Scan range based on mode
+  const minTWA = mode === "upwind" ? 20 : 90;
+  const maxTWA = mode === "upwind" ? 90 : 180;
+
+  // Scan in 1-degree increments for precision
+  for (let twa = minTWA; twa <= maxTWA; twa++) {
+    const boatSpeed = getBoatSpeed(tws, twa);
+    const vmg = Math.abs(calculateVMG(boatSpeed, twa));
+
+    if (vmg > bestVMG) {
+      bestVMG = vmg;
+      bestTWA = twa;
+    }
+  }
+
+  return bestTWA;
+}
+
+/**
+ * Calculate the optimal heading for VMG based on current wind and which tack we're on.
+ * @param windDirection Wind direction in degrees (where wind comes FROM)
+ * @param tws True Wind Speed in knots
+ * @param currentHeading Current boat heading to determine port/starboard tack
+ * @returns Optimal heading in degrees
+ */
+export function getOptimalVMGHeading(
+  windDirection: number,
+  tws: number,
+  currentHeading: number,
+): number {
+  // Determine if we're sailing upwind or downwind based on current TWA
+  const currentTWA = calculateTWA(currentHeading, windDirection);
+  const mode: VMGMode = currentTWA <= 90 ? "upwind" : "downwind";
+
+  // Get optimal TWA for this mode
+  const optimalTWA = getOptimalVMGAngle(tws, mode);
+
+  // Determine which side of the wind we're on (port or starboard tack)
+  // Normalize the angle difference to determine tack
+  let diff = currentHeading - windDirection;
+  while (diff > 180) diff -= 360;
+  while (diff < -180) diff += 360;
+
+  // If diff > 0, wind is coming from our left (port tack, wind on port side)
+  // If diff < 0, wind is coming from our right (starboard tack, wind on starboard side)
+  const onPortTack = diff > 0;
+
+  // Calculate heading: wind direction +/- optimal TWA depending on tack
+  let heading: number;
+  if (mode === "upwind") {
+    // Upwind: heading is windDirection +/- optimalTWA
+    heading = onPortTack
+      ? windDirection + optimalTWA
+      : windDirection - optimalTWA;
+  } else {
+    // Downwind: heading is windDirection + 180 +/- (180 - optimalTWA)
+    const downwindOffset = 180 - optimalTWA;
+    heading = onPortTack
+      ? windDirection + 180 - downwindOffset
+      : windDirection + 180 + downwindOffset;
+  }
+
+  // Normalize to 0-360
+  while (heading < 0) heading += 360;
+  while (heading >= 360) heading -= 360;
+
+  return heading;
+}

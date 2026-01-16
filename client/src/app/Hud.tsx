@@ -1,5 +1,5 @@
 import { Session } from "./state";
-import { calculateTWA } from "./polar";
+import { calculateTWA, calculateVMG } from "./polar";
 import { getWindDirection, getWindSpeedKnots } from "../utils";
 
 type Props = {
@@ -32,6 +32,11 @@ function formatCourseTime(timestamp: number): string {
 export default function Hud({ session }: Props) {
   const lat = formatCoord(session.position.lat, "N", "S");
   const lng = formatCoord(session.position.lng, "E", "W");
+  const twa = calculateTWA(
+    session.heading,
+    getWindDirection(session.windSpeed),
+  );
+  const vmg = calculateVMG(session.boatSpeed, twa);
 
   return (
     <div className="absolute top-4 right-4 bg-black/60 text-white px-4 py-3 rounded-lg font-mono text-sm">
@@ -63,17 +68,18 @@ export default function Hud({ session }: Props) {
           <span>{getWindDirection(session.windSpeed).toFixed(0)}°</span>
           <span className="text-gray-400 ml-2">TWS </span>
           <span>{getWindSpeedKnots(session.windSpeed).toFixed(1)}kts</span>
-          <span className="text-gray-400 ml-2">TWA </span>
-          <span>
-            {calculateTWA(
-              session.heading,
-              getWindDirection(session.windSpeed),
-            ).toFixed(0)}
-            °
-          </span>
+        </div>
+        <div>
+          <span className="text-gray-400">TWA </span>
+          <span>{twa.toFixed(0)}°</span>
           {session.lockedTWA !== null && (
             <span className="ml-1 text-green-400">[LOCK]</span>
           )}
+          <span className="text-gray-400 ml-2">VMG </span>
+          <span className={vmg >= 0 ? "text-green-400" : "text-orange-400"}>
+            {vmg >= 0 ? "+" : ""}
+            {vmg.toFixed(1)}kts
+          </span>
         </div>
       </div>
     </div>
