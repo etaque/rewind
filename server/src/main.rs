@@ -23,6 +23,9 @@ async fn main() {
         Command::ImportGribRange(range_args) => {
             grib_store::import_grib_range(range_args).await.unwrap();
         }
+        Command::ImportCoursesGribs => {
+            grib_store::import_courses_gribs().await.unwrap();
+        }
         Command::RebuildManifest => {
             let manifest = manifest::Manifest::rebuild_from_s3().await.unwrap();
             manifest.save().await.unwrap();

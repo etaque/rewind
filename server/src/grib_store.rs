@@ -1,10 +1,11 @@
 use crate::cli::GribRangeArgs;
+use crate::courses;
 use crate::grib_png::grib_to_uv_png;
 use crate::manifest::{Manifest, WindReport};
 use crate::s3;
 use anyhow::anyhow;
 use bytes::Bytes;
-use chrono::{Days, NaiveDate, TimeDelta};
+use chrono::{DateTime, Days, NaiveDate, TimeDelta, Utc};
 use object_store::{aws, ObjectStoreExt};
 
 // Hours of the day when GRIB files are generated (0, 6, 12, 18)
@@ -48,6 +49,28 @@ pub async fn import_grib_range(args: GribRangeArgs) -> anyhow::Result<()> {
     println!("Saved manifest with {} reports", manifest.reports.len());
 
     println!("Finished.");
+    Ok(())
+}
+
+/// Import GRIB files for all courses (1 day before start to max_days after)
+pub async fn import_courses_gribs() -> anyhow::Result<()> {
+    for course in courses::all() {
+        println!("Importing GRIBs for course: {}", course.name);
+
+        // Convert start_time (ms) to DateTime
+        let start_time = DateTime::<Utc>::from_timestamp_millis(course.start_time)
+            .ok_or_else(|| anyhow!("Invalid start_time for course {}", course.key))?;
+
+        // Start 1 day before, end at max_days after start
+        let from = start_time.date_naive() - Days::new(1);
+        let to = start_time.date_naive() + Days::new(course.max_days as u64);
+
+        println!("  Date range: {} to {}", from, to);
+
+        let args = GribRangeArgs { from, to };
+        import_grib_range(args).await?;
+    }
+
     Ok(())
 }
 

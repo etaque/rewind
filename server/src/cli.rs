@@ -15,6 +15,8 @@ pub enum Command {
         address: std::net::SocketAddr,
     },
     ImportGribRange(GribRangeArgs),
+    /// Import GRIB files for all courses (1 day before start to max_days after)
+    ImportCoursesGribs,
     /// Rebuild manifest.json from S3 listing
     RebuildManifest,
 }
