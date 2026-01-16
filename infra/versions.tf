@@ -6,6 +6,10 @@ terraform {
       source  = "hashicorp/aws"
       version = "~> 5.0"
     }
+    fly = {
+      source  = "fly-apps/fly"
+      version = "~> 0.1"
+    }
   }
 
   backend "remote" {
