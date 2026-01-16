@@ -1,4 +1,4 @@
-import polarData from "../static/imoca-foil.json";
+import polarData from "../static/vr-imoca-full-pack.json";
 
 type PolarTable = Record<string, Record<string, number>>;
 
