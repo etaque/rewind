@@ -138,6 +138,15 @@ export class SphereView {
 
     // @ts-ignore
     d3.select(this.node).call(zoom);
+
+    // Click handler to print lng/lat coordinates
+    d3.select(this.node).on("click", (e: MouseEvent) => {
+      const coords = this.projection.invert?.([e.clientX, e.clientY]);
+      if (coords) {
+        const [lng, lat] = coords;
+        console.log(`lng: ${lng.toFixed(4)}, lat: ${lat.toFixed(4)}`);
+      }
+    });
   }
 
   updateWind(interpolatedWind: InterpolatedWind, interpolationFactor: number) {

@@ -44,15 +44,15 @@ pub fn all() -> Vec<Course> {
             // 2022-11-09T13:15:00Z in milliseconds
             start_time: 1668002100000,
             start: LngLat {
-                lng: -2.0,
-                lat: 48.65,
+                lng: -1.9991,
+                lat: 48.7870,
             },
-            start_heading: 225.0,
+            start_heading: 300.0,
             finish: LngLat {
                 lng: -61.53,
                 lat: 16.23,
             },
-            time_factor: 180,
+            time_factor: 2000,
             max_days: 21,
         },
     ]
