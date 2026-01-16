@@ -37,8 +37,11 @@ export default function App() {
   // Sync selectedCourseRef when selectedCourseKey changes
   useEffect(() => {
     if (selectedCourseKey) {
-      selectedCourseRef.current =
-        coursesRef.current.get(selectedCourseKey) || null;
+      const course = coursesRef.current.get(selectedCourseKey) || null;
+      selectedCourseRef.current = course;
+      if (course && sphereViewRef.current) {
+        sphereViewRef.current.setCourse(course);
+      }
     }
   }, [selectedCourseKey]);
 

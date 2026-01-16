@@ -25,6 +25,10 @@ export default class Wake {
     this.canvas = canvas;
   }
 
+  clear() {
+    this.points = [];
+  }
+
   addPoint(position: LngLat, speed: number) {
     // Only add if far enough from last point
     if (this.points.length > 0) {
