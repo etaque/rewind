@@ -47,6 +47,13 @@ export default function App() {
     }
   }, [selectedCourseKey]);
 
+  // Sync course to SphereView when joining a race (course may differ from selectedCourseKey)
+  useEffect(() => {
+    if (state.tag === "Loading" && sphereViewRef.current) {
+      sphereViewRef.current.setCourse(state.course);
+    }
+  }, [state.tag === "Loading" ? state.course.key : null]);
+
   // Fetch courses on startup
   useEffect(() => {
     fetch(`${serverUrl}/courses`)
