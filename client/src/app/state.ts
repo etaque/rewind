@@ -291,16 +291,23 @@ export function appReducer(state: AppState, action: AppAction): AppState {
       if (state.tag !== "Loading") return state;
       return { tag: "Idle" };
 
-    case "SYNC_RACE_TIME":
+    case "SYNC_RACE_TIME": {
       if (state.tag !== "Playing") return state;
-      // Sync courseTime from server's authoritative race time
-      return {
-        ...state,
-        session: {
-          ...state.session,
-          courseTime: state.session.course.startTime + action.raceTime,
-        },
-      };
+      // Only sync if drift exceeds threshold (5 seconds of game time)
+      const DRIFT_THRESHOLD_MS = 5000;
+      const serverCourseTime = state.session.course.startTime + action.raceTime;
+      const drift = Math.abs(serverCourseTime - state.session.courseTime);
+      if (drift > DRIFT_THRESHOLD_MS) {
+        return {
+          ...state,
+          session: {
+            ...state.session,
+            courseTime: serverCourseTime,
+          },
+        };
+      }
+      return state;
+    }
 
     case "RACE_ENDED":
       if (state.tag !== "Playing") return state;
