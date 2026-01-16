@@ -9,6 +9,7 @@ import Leaderboard from "./Leaderboard";
 import { initLandData } from "./land";
 import RaceScreen from "./RaceScreen";
 import { useKeyboardControls, useGameLoop, useMultiplayer } from "./hooks";
+import { computeProjectedPath } from "./projected-path";
 
 const serverUrl = import.meta.env.REWIND_SERVER_URL;
 
@@ -241,10 +242,24 @@ export default function App() {
       state.session.courseTime,
     );
     sphereViewRef.current.updateWind(interpolatedWind, factor);
+
+    // Compute and update projected path
+    const projectedPath = computeProjectedPath(
+      state.session.position,
+      state.session.heading,
+      state.session.lockedTWA,
+      state.session.targetHeading,
+      state.session.courseTime,
+      state.session.course.timeFactor,
+      interpolatedWind,
+    );
+    sphereViewRef.current.updateProjectedPath(projectedPath);
   }, [
     state.tag === "Playing" ? state.session.position : null,
     state.tag === "Playing" ? state.session.heading : null,
     state.tag === "Playing" ? state.session.courseTime : null,
+    state.tag === "Playing" ? state.session.lockedTWA : null,
+    state.tag === "Playing" ? state.session.targetHeading : null,
   ]);
 
   return (
