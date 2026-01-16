@@ -5,7 +5,7 @@ import {
   AppState,
   AppAction,
   Session,
-  LobbyState,
+  RaceState,
 } from "./state";
 import { Course, WindReport } from "../models";
 
@@ -21,7 +21,7 @@ const testCourse: Course = {
   maxDays: 90,
 };
 
-const testLobby: LobbyState = {
+const testRace: RaceState = {
   id: "ABC123",
   courseKey: "test-course",
   myPlayerId: "player-1",
@@ -39,14 +39,14 @@ const testReports: WindReport[] = [
 function makeLoadingState(
   overrides: Partial<{
     course: Course;
-    lobby: LobbyState;
+    race: RaceState;
     reportsLoaded: boolean;
   }> = {},
 ): Extract<AppState, { tag: "Loading" }> {
   return {
     tag: "Loading",
     course: testCourse,
-    lobby: testLobby,
+    race: testRace,
     reportsLoaded: false,
     ...overrides,
   };
@@ -57,7 +57,7 @@ function makePlayingState(
 ): Extract<AppState, { tag: "Playing" }> {
   return {
     tag: "Playing",
-    lobby: { ...testLobby, raceStarted: true },
+    race: { ...testRace, raceStarted: true },
     raceEndedReason: null,
     session: {
       clock: 0,
@@ -85,11 +85,11 @@ describe("appReducer", () => {
     });
   });
 
-  describe("LOBBY_CREATED", () => {
+  describe("RACE_CREATED", () => {
     it("transitions from Idle to Loading", () => {
       const action: AppAction = {
-        type: "LOBBY_CREATED",
-        lobbyId: "ABC123",
+        type: "RACE_CREATED",
+        raceId: "ABC123",
         playerId: "player-1",
         course: testCourse,
       };
@@ -98,9 +98,9 @@ describe("appReducer", () => {
 
       expect(result.tag).toBe("Loading");
       if (result.tag === "Loading") {
-        expect(result.lobby.id).toBe("ABC123");
-        expect(result.lobby.myPlayerId).toBe("player-1");
-        expect(result.lobby.isCreator).toBe(true);
+        expect(result.race.id).toBe("ABC123");
+        expect(result.race.myPlayerId).toBe("player-1");
+        expect(result.race.isCreator).toBe(true);
         expect(result.course).toBe(testCourse);
         expect(result.reportsLoaded).toBe(false);
       }
@@ -109,8 +109,8 @@ describe("appReducer", () => {
     it("ignores action if not in Idle state", () => {
       const loadingState = makeLoadingState();
       const action: AppAction = {
-        type: "LOBBY_CREATED",
-        lobbyId: "NEW123",
+        type: "RACE_CREATED",
+        raceId: "NEW123",
         playerId: "player-2",
         course: testCourse,
       };
@@ -120,7 +120,7 @@ describe("appReducer", () => {
     });
   });
 
-  describe("LOBBY_JOINED", () => {
+  describe("RACE_JOINED", () => {
     it("transitions from Idle to Loading", () => {
       const players = new Map([
         [
@@ -135,8 +135,8 @@ describe("appReducer", () => {
         ],
       ]);
       const action: AppAction = {
-        type: "LOBBY_JOINED",
-        lobbyId: "ABC123",
+        type: "RACE_JOINED",
+        raceId: "ABC123",
         playerId: "player-2",
         course: testCourse,
         isCreator: false,
@@ -147,14 +147,14 @@ describe("appReducer", () => {
 
       expect(result.tag).toBe("Loading");
       if (result.tag === "Loading") {
-        expect(result.lobby.isCreator).toBe(false);
-        expect(result.lobby.players.size).toBe(1);
+        expect(result.race.isCreator).toBe(false);
+        expect(result.race.players.size).toBe(1);
       }
     });
   });
 
   describe("PLAYER_JOINED", () => {
-    it("adds player to lobby", () => {
+    it("adds player to race", () => {
       const state = makeLoadingState();
       const action: AppAction = {
         type: "PLAYER_JOINED",
@@ -166,8 +166,8 @@ describe("appReducer", () => {
 
       expect(result.tag).toBe("Loading");
       if (result.tag === "Loading") {
-        expect(result.lobby.players.size).toBe(1);
-        expect(result.lobby.players.get("player-2")?.name).toBe("Alice");
+        expect(result.race.players.size).toBe(1);
+        expect(result.race.players.get("player-2")?.name).toBe("Alice");
       }
     });
 
@@ -184,7 +184,7 @@ describe("appReducer", () => {
   });
 
   describe("PLAYER_LEFT", () => {
-    it("removes player from lobby", () => {
+    it("removes player from race", () => {
       const players = new Map([
         [
           "player-2",
@@ -197,20 +197,20 @@ describe("appReducer", () => {
           },
         ],
       ]);
-      const state = makeLoadingState({ lobby: { ...testLobby, players } });
+      const state = makeLoadingState({ race: { ...testRace, players } });
       const action: AppAction = { type: "PLAYER_LEFT", playerId: "player-2" };
 
       const result = appReducer(state, action);
 
       expect(result.tag).toBe("Loading");
       if (result.tag === "Loading") {
-        expect(result.lobby.players.size).toBe(0);
+        expect(result.race.players.size).toBe(0);
       }
     });
   });
 
   describe("COUNTDOWN", () => {
-    it("updates countdown in lobby", () => {
+    it("updates countdown in race", () => {
       const state = makeLoadingState();
       const action: AppAction = { type: "COUNTDOWN", seconds: 3 };
 
@@ -218,7 +218,7 @@ describe("appReducer", () => {
 
       expect(result.tag).toBe("Loading");
       if (result.tag === "Loading") {
-        expect(result.lobby.countdown).toBe(3);
+        expect(result.race.countdown).toBe(3);
       }
     });
   });
@@ -232,7 +232,7 @@ describe("appReducer", () => {
 
       expect(result.tag).toBe("Loading");
       if (result.tag === "Loading") {
-        expect(result.lobby.raceStarted).toBe(true);
+        expect(result.race.raceStarted).toBe(true);
       }
     });
   });
@@ -255,7 +255,7 @@ describe("appReducer", () => {
 
     it("transitions to Playing if race already started", () => {
       const state = makeLoadingState({
-        lobby: { ...testLobby, raceStarted: true },
+        race: { ...testRace, raceStarted: true },
       });
       const action: AppAction = {
         type: "REPORTS_LOADED",
@@ -279,10 +279,10 @@ describe("appReducer", () => {
     });
   });
 
-  describe("LEAVE_LOBBY", () => {
+  describe("LEAVE_RACE", () => {
     it("returns to Idle state", () => {
       const state = makeLoadingState();
-      const action: AppAction = { type: "LEAVE_LOBBY" };
+      const action: AppAction = { type: "LEAVE_RACE" };
 
       const result = appReducer(state, action);
 

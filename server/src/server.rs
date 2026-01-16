@@ -14,7 +14,7 @@ use tower_http::{compression::CompressionLayer, cors::CorsLayer};
 
 use crate::{
     courses,
-    multiplayer::{handle_websocket, LobbyManager},
+    multiplayer::{handle_websocket, RaceManager},
 };
 
 use super::manifest::{self, Manifest};
@@ -45,13 +45,13 @@ where
 
 async fn websocket_handler(
     ws: WebSocketUpgrade,
-    State(lobby_manager): State<LobbyManager>,
+    State(race_manager): State<RaceManager>,
 ) -> Response {
-    ws.on_upgrade(move |socket| handle_websocket(socket, lobby_manager))
+    ws.on_upgrade(move |socket| handle_websocket(socket, race_manager))
 }
 
 pub async fn run(address: std::net::SocketAddr) {
-    let lobby_manager = LobbyManager::new();
+    let race_manager = RaceManager::new();
 
     let cors = CorsLayer::new()
         .allow_origin(tower_http::cors::Any)
@@ -61,11 +61,11 @@ pub async fn run(address: std::net::SocketAddr) {
         .route("/health", get(health_handler))
         .route("/courses", get(courses_handler))
         .route("/wind-reports/since/{since_ms}", get(reports_since_handler))
-        .route("/multiplayer/lobbies", get(lobbies_handler))
-        .route("/multiplayer/lobby", any(websocket_handler))
+        .route("/multiplayer/races", get(races_handler))
+        .route("/multiplayer/race", any(websocket_handler))
         .layer(CompressionLayer::new())
         .layer(cors)
-        .with_state(lobby_manager);
+        .with_state(race_manager);
 
     let listener = tokio::net::TcpListener::bind(address).await.unwrap();
     log::info!("Server listening on {}", address);
@@ -88,9 +88,9 @@ async fn courses_handler() -> impl IntoResponse {
     Json(courses::all())
 }
 
-async fn lobbies_handler(State(lobby_manager): State<LobbyManager>) -> impl IntoResponse {
-    let lobbies = lobby_manager.list_lobbies().await;
-    Json(lobbies)
+async fn races_handler(State(race_manager): State<RaceManager>) -> impl IntoResponse {
+    let races = race_manager.list_races().await;
+    Json(races)
 }
 
 #[derive(Clone, Debug, Serialize)]

@@ -1,4 +1,4 @@
-import { useReducer, useEffect, useRef, useState } from "react";
+import { useReducer, useEffect, useRef, useState, useCallback } from "react";
 import { appReducer, initialState } from "./state";
 import { SphereView } from "../sphere";
 import InterpolatedWind from "../interpolated-wind";
@@ -6,14 +6,17 @@ import { Course, WindReport } from "../models";
 import Hud from "./Hud";
 import CursorWind from "./CursorWind";
 import { initLandData } from "./land";
-import LobbyScreen from "./LobbyScreen";
+import RaceScreen from "./RaceScreen";
 import { useKeyboardControls, useGameLoop, useMultiplayer } from "./hooks";
 
 const serverUrl = import.meta.env.REWIND_SERVER_URL;
 
 export default function App() {
   const [state, dispatch] = useReducer(appReducer, initialState);
-  const [coursesLoaded, setCoursesLoaded] = useState(false);
+  const [courses, setCourses] = useState<Course[]>([]);
+  const [selectedCourseKey, setSelectedCourseKey] = useState<string | null>(
+    null,
+  );
 
   const sphereViewRef = useRef<SphereView | null>(null);
   const interpolatedWindRef = useRef<InterpolatedWind>(new InterpolatedWind());
@@ -31,19 +34,28 @@ export default function App() {
   const selectedCourseRef = useRef<Course | null>(null);
   const reportsRef = useRef<WindReport[] | null>(null);
 
+  // Sync selectedCourseRef when selectedCourseKey changes
+  useEffect(() => {
+    if (selectedCourseKey) {
+      selectedCourseRef.current =
+        coursesRef.current.get(selectedCourseKey) || null;
+    }
+  }, [selectedCourseKey]);
+
   // Fetch courses on startup
   useEffect(() => {
     fetch(`${serverUrl}/courses`)
       .then((res) => res.json())
-      .then((courses: Course[]) => {
+      .then((fetchedCourses: Course[]) => {
         const courseMap = new Map<string, Course>();
-        courses.forEach((c) => courseMap.set(c.key, c));
+        fetchedCourses.forEach((c) => courseMap.set(c.key, c));
         coursesRef.current = courseMap;
+        setCourses(fetchedCourses);
         // Select first course by default
-        if (courses.length > 0) {
-          selectedCourseRef.current = courses[0];
+        if (fetchedCourses.length > 0) {
+          selectedCourseRef.current = fetchedCourses[0];
+          setSelectedCourseKey(fetchedCourses[0].key);
         }
-        setCoursesLoaded(true);
       })
       .catch((err) => {
         console.error("Failed to fetch courses:", err);
@@ -56,6 +68,30 @@ export default function App() {
     sphereViewRef,
     selectedCourseRef,
     coursesRef,
+  );
+
+  // Handle course change - need to leave current race and create new one
+  const handleCourseChange = useCallback(
+    async (courseKey: string) => {
+      // Update selected course
+      setSelectedCourseKey(courseKey);
+      selectedCourseRef.current = coursesRef.current.get(courseKey) || null;
+
+      // Leave current race and create new one with new course
+      if (multiplayerRef.current) {
+        multiplayerRef.current.leaveRace();
+        multiplayerRef.current.disconnect();
+      }
+      dispatch({ type: "LEAVE_RACE" });
+
+      // Small delay to ensure state is updated before creating new race
+      setTimeout(() => {
+        const savedName =
+          localStorage.getItem("rewind:player_name") || "Skipper";
+        multiplayerCallbacks.onCreateRace(savedName);
+      }, 100);
+    },
+    [multiplayerCallbacks, dispatch],
   );
 
   useKeyboardControls(state.tag === "Playing", dispatch);
@@ -143,13 +179,13 @@ export default function App() {
   // Transition to Playing when both reports loaded and race started
   useEffect(() => {
     if (state.tag !== "Loading") return;
-    if (!state.reportsLoaded || !state.lobby.raceStarted) return;
+    if (!state.reportsLoaded || !state.race.raceStarted) return;
     if (!reportsRef.current) return;
 
     dispatch({ type: "START_PLAYING", reports: reportsRef.current });
   }, [
     state.tag === "Loading" ? state.reportsLoaded : false,
-    state.tag === "Loading" ? state.lobby.raceStarted : false,
+    state.tag === "Loading" ? state.race.raceStarted : false,
   ]);
 
   // Handle window resize
@@ -211,27 +247,33 @@ export default function App() {
     <>
       <div ref={sphereNodeRef} id="sphere" className="fixed inset-0" />
       <div id="app" className="fixed inset-0 z-10 pointer-events-none">
-        {(state.tag === "Idle" || state.tag === "Loading") && coursesLoaded && (
-          <div className="pointer-events-auto">
-            <LobbyScreen
-              lobbyId={state.tag === "Loading" ? state.lobby.id : null}
-              myPlayerId={
-                state.tag === "Loading" ? state.lobby.myPlayerId : null
-              }
-              isCreator={
-                state.tag === "Loading" ? state.lobby.isCreator : false
-              }
-              players={
-                state.tag === "Loading" ? state.lobby.players : new Map()
-              }
-              countdown={state.tag === "Loading" ? state.lobby.countdown : null}
-              onCreateLobby={multiplayerCallbacks.onCreateLobby}
-              onJoinLobby={multiplayerCallbacks.onJoinLobby}
-              onStartRace={multiplayerCallbacks.onStartRace}
-              onLeaveLobby={multiplayerCallbacks.onLeaveLobby}
-            />
-          </div>
-        )}
+        {(state.tag === "Idle" || state.tag === "Loading") &&
+          courses.length > 0 && (
+            <div className="pointer-events-auto">
+              <RaceScreen
+                raceId={state.tag === "Loading" ? state.race.id : null}
+                myPlayerId={
+                  state.tag === "Loading" ? state.race.myPlayerId : null
+                }
+                isCreator={
+                  state.tag === "Loading" ? state.race.isCreator : false
+                }
+                players={
+                  state.tag === "Loading" ? state.race.players : new Map()
+                }
+                countdown={
+                  state.tag === "Loading" ? state.race.countdown : null
+                }
+                courses={courses}
+                selectedCourseKey={selectedCourseKey}
+                onCourseChange={handleCourseChange}
+                onCreateRace={multiplayerCallbacks.onCreateRace}
+                onJoinRace={multiplayerCallbacks.onJoinRace}
+                onStartRace={multiplayerCallbacks.onStartRace}
+                onLeaveRace={multiplayerCallbacks.onLeaveRace}
+              />
+            </div>
+          )}
         {state.tag === "Playing" && <Hud session={state.session} />}
       </div>
       <CursorWind

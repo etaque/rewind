@@ -1,77 +1,84 @@
 import { useState, useEffect } from "react";
 import { PeerState } from "../multiplayer/types";
+import { Course } from "../models";
 import {
   PlayerList,
-  AvailableLobbies,
+  AvailableRaces,
   CountdownDisplay,
   PlayerNameInput,
-  LobbyInfo,
-} from "./lobby";
+  RaceInfo,
+} from "./race";
 
 const PLAYER_NAME_KEY = "rewind:player_name";
 const serverUrl = import.meta.env.REWIND_SERVER_URL;
 
 type Props = {
-  lobbyId: string | null;
+  raceId: string | null;
   myPlayerId: string | null;
   isCreator: boolean;
   players: Map<string, PeerState>;
   countdown: number | null;
-  onCreateLobby: (playerName: string) => void;
-  onJoinLobby: (lobbyId: string, playerName: string) => void;
+  courses: Course[];
+  selectedCourseKey: string | null;
+  onCourseChange: (courseKey: string) => void;
+  onCreateRace: (playerName: string) => void;
+  onJoinRace: (raceId: string, playerName: string) => void;
   onStartRace: () => void;
-  onLeaveLobby: () => void;
+  onLeaveRace: () => void;
 };
 
-export default function LobbyScreen({
-  lobbyId,
+export default function RaceScreen({
+  raceId,
   myPlayerId,
   isCreator,
   players,
   countdown,
-  onCreateLobby,
-  onJoinLobby,
+  courses,
+  selectedCourseKey,
+  onCourseChange,
+  onCreateRace,
+  onJoinRace,
   onStartRace,
-  onLeaveLobby,
+  onLeaveRace,
 }: Props) {
   const [playerName, setPlayerName] = useState("");
-  const [availableLobbies, setAvailableLobbies] = useState<LobbyInfo[]>([]);
+  const [availableRaces, setAvailableRaces] = useState<RaceInfo[]>([]);
 
   const playerList = Array.from(players.values());
   const totalPlayers = playerList.length + 1; // +1 for self
-  const inLobby = lobbyId !== null;
+  const inRace = raceId !== null;
 
-  // Load player name from localStorage on mount and auto-create lobby
+  // Load player name from localStorage on mount and auto-create race
   useEffect(() => {
     const savedName = localStorage.getItem(PLAYER_NAME_KEY);
     if (savedName) {
       setPlayerName(savedName);
     }
-    // Auto-create lobby when not in one
-    if (!inLobby) {
+    // Auto-create race when not in one
+    if (!inRace) {
       const name = savedName || "Skipper";
-      onCreateLobby(name);
+      onCreateRace(name);
     }
   }, []);
 
-  // Fetch available lobbies periodically
+  // Fetch available races periodically
   useEffect(() => {
-    const fetchLobbies = async () => {
+    const fetchRaces = async () => {
       try {
-        const res = await fetch(`${serverUrl}/multiplayer/lobbies`);
-        const lobbies: LobbyInfo[] = await res.json();
-        setAvailableLobbies(
-          lobbyId ? lobbies.filter((l) => l.id !== lobbyId) : lobbies,
+        const res = await fetch(`${serverUrl}/multiplayer/races`);
+        const races: RaceInfo[] = await res.json();
+        setAvailableRaces(
+          raceId ? races.filter((r) => r.id !== raceId) : races,
         );
       } catch (err) {
-        console.error("Failed to fetch lobbies:", err);
+        console.error("Failed to fetch races:", err);
       }
     };
 
-    fetchLobbies();
-    const interval = setInterval(fetchLobbies, 5000);
+    fetchRaces();
+    const interval = setInterval(fetchRaces, 5000);
     return () => clearInterval(interval);
-  }, [lobbyId]);
+  }, [raceId]);
 
   const getPlayerName = () => {
     const name = playerName.trim() || "Skipper";
@@ -84,8 +91,8 @@ export default function LobbyScreen({
     localStorage.setItem(PLAYER_NAME_KEY, newName);
   };
 
-  const handleJoinLobby = (targetLobbyId: string) => {
-    onJoinLobby(targetLobbyId, getPlayerName());
+  const handleJoinRace = (targetRaceId: string) => {
+    onJoinRace(targetRaceId, getPlayerName());
   };
 
   return (
@@ -95,7 +102,7 @@ export default function LobbyScreen({
       <div className="bg-slate-900 bg-opacity-90 rounded-lg p-8 max-w-md w-full mx-4 space-y-6">
         {countdown !== null ? (
           <CountdownDisplay countdown={countdown} />
-        ) : !inLobby ? (
+        ) : !inRace ? (
           <div className="text-center text-slate-400 py-4">Connecting...</div>
         ) : (
           <>
@@ -103,6 +110,23 @@ export default function LobbyScreen({
               value={playerName}
               onChange={handlePlayerNameChange}
             />
+
+            {isCreator && courses.length > 1 && (
+              <div className="space-y-2">
+                <label className="text-slate-400 text-sm">Course</label>
+                <select
+                  value={selectedCourseKey || ""}
+                  onChange={(e) => onCourseChange(e.target.value)}
+                  className="w-full bg-slate-800 text-white rounded-lg px-4 py-3 border border-slate-700 focus:border-blue-500 focus:outline-none"
+                >
+                  {courses.map((course) => (
+                    <option key={course.key} value={course.key}>
+                      {course.name}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            )}
 
             <PlayerList
               players={playerList}
@@ -126,16 +150,16 @@ export default function LobbyScreen({
                 </div>
               )}
 
-              <AvailableLobbies
-                lobbies={availableLobbies}
-                onJoinLobby={handleJoinLobby}
+              <AvailableRaces
+                races={availableRaces}
+                onJoinRace={handleJoinRace}
               />
 
               <button
-                onClick={onLeaveLobby}
+                onClick={onLeaveRace}
                 className="w-full text-slate-400 hover:text-white py-2 transition-all"
               >
-                Leave Lobby
+                Leave Race
               </button>
             </div>
           </>

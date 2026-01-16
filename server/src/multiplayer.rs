@@ -15,15 +15,15 @@ use tokio::sync::{mpsc, RwLock};
 #[derive(Debug, Clone, Deserialize)]
 #[serde(tag = "type")]
 pub enum ClientMessage {
-    CreateLobby {
+    CreateRace {
         course_key: String,
         player_name: String,
     },
-    JoinLobby {
-        lobby_id: String,
+    JoinRace {
+        race_id: String,
         player_name: String,
     },
-    LeaveLobby,
+    LeaveRace,
     StartRace,
     PositionUpdate {
         lng: f32,
@@ -39,12 +39,12 @@ pub enum ServerMessage {
     Error {
         message: String,
     },
-    LobbyCreated {
-        lobby_id: String,
+    RaceCreated {
+        race_id: String,
         player_id: String,
     },
-    LobbyJoined {
-        lobby_id: String,
+    RaceJoined {
+        race_id: String,
         player_id: String,
         course_key: String,
         players: Vec<PlayerInfo>,
@@ -103,7 +103,7 @@ impl Player {
 }
 
 #[derive(Debug)]
-pub struct Lobby {
+pub struct Race {
     pub course_key: String,
     pub creator_id: String,
     pub players: HashMap<String, Player>,
@@ -115,9 +115,9 @@ pub struct Lobby {
     pub last_activity: DateTime<Utc>,
 }
 
-impl Lobby {
+impl Race {
     fn new(course_key: String, creator_id: String, max_race_time: i64) -> Self {
-        Lobby {
+        Race {
             course_key,
             creator_id,
             players: HashMap::new(),
@@ -135,7 +135,7 @@ impl Lobby {
             return Err("Race has already started".to_string());
         }
         if self.players.len() >= self.max_players {
-            return Err("Lobby is full".to_string());
+            return Err("Race is full".to_string());
         }
         self.players.insert(player.id.clone(), player);
         self.last_activity = Utc::now();
@@ -176,39 +176,39 @@ impl Lobby {
 }
 
 // ============================================================================
-// Lobby Manager
+// Race Manager
 // ============================================================================
 
-pub type Lobbies = Arc<RwLock<HashMap<String, Lobby>>>;
-pub type PlayerLobbyMap = Arc<RwLock<HashMap<String, String>>>;
+pub type Races = Arc<RwLock<HashMap<String, Race>>>;
+pub type PlayerRaceMap = Arc<RwLock<HashMap<String, String>>>;
 
 #[derive(Clone)]
-pub struct LobbyManager {
-    lobbies: Lobbies,
-    player_lobbies: PlayerLobbyMap,
+pub struct RaceManager {
+    races: Races,
+    player_races: PlayerRaceMap,
 }
 
-impl LobbyManager {
+impl RaceManager {
     pub fn new() -> Self {
-        let manager = LobbyManager {
-            lobbies: Arc::new(RwLock::new(HashMap::new())),
-            player_lobbies: Arc::new(RwLock::new(HashMap::new())),
+        let manager = RaceManager {
+            races: Arc::new(RwLock::new(HashMap::new())),
+            player_races: Arc::new(RwLock::new(HashMap::new())),
         };
 
         // Spawn cleanup task
-        let lobbies_clone = manager.lobbies.clone();
+        let races_clone = manager.races.clone();
         tokio::spawn(async move {
             loop {
                 tokio::time::sleep(tokio::time::Duration::from_secs(60)).await;
-                let mut lobbies = lobbies_clone.write().await;
-                lobbies.retain(|_, lobby| !lobby.is_expired());
+                let mut races = races_clone.write().await;
+                races.retain(|_, race| !race.is_expired());
             }
         });
 
         manager
     }
 
-    pub async fn create_lobby(
+    pub async fn create_race(
         &self,
         course_key: String,
         player_id: String,
@@ -224,36 +224,36 @@ impl LobbyManager {
         // Convert max_days to milliseconds
         let max_race_time = course.max_days as i64 * 24 * 60 * 60 * 1000;
 
-        let lobby_id = generate_lobby_id();
-        let mut lobby = Lobby::new(course_key, player_id.clone(), max_race_time);
+        let race_id = generate_race_id();
+        let mut race = Race::new(course_key, player_id.clone(), max_race_time);
 
         let player = Player {
             id: player_id.clone(),
             name: player_name,
             tx,
         };
-        lobby.add_player(player)?;
+        race.add_player(player)?;
 
-        let mut lobbies = self.lobbies.write().await;
-        lobbies.insert(lobby_id.clone(), lobby);
+        let mut races = self.races.write().await;
+        races.insert(race_id.clone(), race);
 
-        let mut player_lobbies = self.player_lobbies.write().await;
-        player_lobbies.insert(player_id, lobby_id.clone());
+        let mut player_races = self.player_races.write().await;
+        player_races.insert(player_id, race_id.clone());
 
-        Ok(lobby_id)
+        Ok(race_id)
     }
 
-    pub async fn join_lobby(
+    pub async fn join_race(
         &self,
-        lobby_id: &str,
+        race_id: &str,
         player_id: String,
         player_name: String,
         tx: mpsc::UnboundedSender<ServerMessage>,
     ) -> Result<(Vec<PlayerInfo>, String, bool), String> {
-        let mut lobbies = self.lobbies.write().await;
-        let lobby = lobbies
-            .get_mut(lobby_id)
-            .ok_or_else(|| "Lobby not found".to_string())?;
+        let mut races = self.races.write().await;
+        let race = races
+            .get_mut(race_id)
+            .ok_or_else(|| "Race not found".to_string())?;
 
         let player = Player {
             id: player_id.clone(),
@@ -262,35 +262,35 @@ impl LobbyManager {
         };
 
         // Notify existing players before adding new one
-        lobby.broadcast_all(ServerMessage::PlayerJoined {
+        race.broadcast_all(ServerMessage::PlayerJoined {
             player_id: player_id.clone(),
             player_name,
         });
 
-        let is_creator = lobby.creator_id == player_id;
-        let course_key = lobby.course_key.clone();
-        lobby.add_player(player)?;
+        let is_creator = race.creator_id == player_id;
+        let course_key = race.course_key.clone();
+        race.add_player(player)?;
 
-        let players = lobby.get_player_infos();
+        let players = race.get_player_infos();
 
-        let mut player_lobbies = self.player_lobbies.write().await;
-        player_lobbies.insert(player_id, lobby_id.to_string());
+        let mut player_races = self.player_races.write().await;
+        player_races.insert(player_id, race_id.to_string());
 
         Ok((players, course_key, is_creator))
     }
 
-    pub async fn leave_lobby(&self, player_id: &str) {
-        let mut player_lobbies = self.player_lobbies.write().await;
-        if let Some(lobby_id) = player_lobbies.remove(player_id) {
-            drop(player_lobbies);
+    pub async fn leave_race(&self, player_id: &str) {
+        let mut player_races = self.player_races.write().await;
+        if let Some(race_id) = player_races.remove(player_id) {
+            drop(player_races);
 
-            let mut lobbies = self.lobbies.write().await;
-            if let Some(lobby) = lobbies.get_mut(&lobby_id) {
-                lobby.remove_player(player_id);
-                if lobby.players.is_empty() {
-                    lobbies.remove(&lobby_id);
+            let mut races = self.races.write().await;
+            if let Some(race) = races.get_mut(&race_id) {
+                race.remove_player(player_id);
+                if race.players.is_empty() {
+                    races.remove(&race_id);
                 } else {
-                    lobby.broadcast_all(ServerMessage::PlayerLeft {
+                    race.broadcast_all(ServerMessage::PlayerLeft {
                         player_id: player_id.to_string(),
                     });
                 }
@@ -299,46 +299,46 @@ impl LobbyManager {
     }
 
     pub async fn broadcast_position(&self, player_id: &str, lng: f32, lat: f32, heading: f32) {
-        let player_lobbies = self.player_lobbies.read().await;
-        let Some(lobby_id) = player_lobbies.get(player_id).cloned() else {
+        let player_races = self.player_races.read().await;
+        let Some(race_id) = player_races.get(player_id).cloned() else {
             return;
         };
-        drop(player_lobbies);
+        drop(player_races);
 
         // First check with read lock if race has ended
         {
-            let lobbies = self.lobbies.read().await;
-            let Some(lobby) = lobbies.get(&lobby_id) else {
+            let races = self.races.read().await;
+            let Some(race) = races.get(&race_id) else {
                 return;
             };
-            if lobby.race_ended {
+            if race.race_ended {
                 return;
             }
         }
 
         // Now get write lock to potentially end the race
-        let mut lobbies = self.lobbies.write().await;
-        let Some(lobby) = lobbies.get_mut(&lobby_id) else {
+        let mut races = self.races.write().await;
+        let Some(race) = races.get_mut(&race_id) else {
             return;
         };
 
         // Calculate race time (ms since race start)
-        let race_time = lobby
+        let race_time = race
             .race_start_time
             .map(|start| Utc::now().timestamp_millis() - start)
             .unwrap_or(0);
 
         // Check if race time exceeded max
-        if race_time >= lobby.max_race_time {
-            lobby.race_ended = true;
-            lobby.broadcast_all(ServerMessage::RaceEnded {
+        if race_time >= race.max_race_time {
+            race.race_ended = true;
+            race.broadcast_all(ServerMessage::RaceEnded {
                 reason: "Time limit reached".to_string(),
             });
             return;
         }
 
         // Broadcast to all players except sender
-        lobby.broadcast(
+        race.broadcast(
             ServerMessage::PositionUpdate {
                 player_id: player_id.to_string(),
                 lng,
@@ -351,41 +351,41 @@ impl LobbyManager {
     }
 
     pub async fn start_race(&self, player_id: &str) -> Result<(), String> {
-        let player_lobbies = self.player_lobbies.read().await;
-        let lobby_id = player_lobbies
+        let player_races = self.player_races.read().await;
+        let race_id = player_races
             .get(player_id)
-            .ok_or_else(|| "Player not in a lobby".to_string())?
+            .ok_or_else(|| "Player not in a race".to_string())?
             .clone();
-        drop(player_lobbies);
+        drop(player_races);
 
         // Validate and mark race as started
         let course_key = {
-            let mut lobbies = self.lobbies.write().await;
-            let lobby = lobbies
-                .get_mut(&lobby_id)
-                .ok_or_else(|| "Lobby not found".to_string())?;
+            let mut races = self.races.write().await;
+            let race = races
+                .get_mut(&race_id)
+                .ok_or_else(|| "Race not found".to_string())?;
 
-            if lobby.creator_id != player_id {
-                return Err("Only the lobby creator can start the race".to_string());
+            if race.creator_id != player_id {
+                return Err("Only the race creator can start the race".to_string());
             }
 
-            if lobby.race_started {
+            if race.race_started {
                 return Err("Race has already started".to_string());
             }
 
-            lobby.race_started = true;
-            lobby.course_key.clone()
+            race.race_started = true;
+            race.course_key.clone()
         };
 
         // Countdown (release lock between each second)
         for seconds in (1..=3).rev() {
             {
-                let lobbies = self.lobbies.read().await;
-                if let Some(lobby) = lobbies.get(&lobby_id) {
-                    if lobby.players.is_empty() {
+                let races = self.races.read().await;
+                if let Some(race) = races.get(&race_id) {
+                    if race.players.is_empty() {
                         return Err("All players left".to_string());
                     }
-                    lobby.broadcast_all(ServerMessage::RaceCountdown { seconds });
+                    race.broadcast_all(ServerMessage::RaceCountdown { seconds });
                 }
             }
             tokio::time::sleep(tokio::time::Duration::from_secs(1)).await;
@@ -393,11 +393,11 @@ impl LobbyManager {
 
         // Send race started and store start time
         {
-            let mut lobbies = self.lobbies.write().await;
-            if let Some(lobby) = lobbies.get_mut(&lobby_id) {
+            let mut races = self.races.write().await;
+            if let Some(race) = races.get_mut(&race_id) {
                 let start_time = Utc::now().timestamp_millis();
-                lobby.race_start_time = Some(start_time);
-                lobby.broadcast_all(ServerMessage::RaceStarted {
+                race.race_start_time = Some(start_time);
+                race.broadcast_all(ServerMessage::RaceStarted {
                     start_time,
                     course_key,
                 });
@@ -408,9 +408,9 @@ impl LobbyManager {
     }
 }
 
-/// Public lobby info for listing
+/// Public race info for listing
 #[derive(Debug, Clone, Serialize)]
-pub struct LobbyInfo {
+pub struct RaceInfo {
     pub id: String,
     pub course_key: String,
     pub players: Vec<PlayerInfo>,
@@ -419,19 +419,19 @@ pub struct LobbyInfo {
     pub creator_id: String,
 }
 
-impl LobbyManager {
-    pub async fn list_lobbies(&self) -> Vec<LobbyInfo> {
-        let lobbies = self.lobbies.read().await;
-        lobbies
+impl RaceManager {
+    pub async fn list_races(&self) -> Vec<RaceInfo> {
+        let races = self.races.read().await;
+        races
             .iter()
-            .filter(|(_, lobby)| !lobby.race_started) // Only show lobbies that haven't started
-            .map(|(id, lobby)| LobbyInfo {
+            .filter(|(_, race)| !race.race_started) // Only show races that haven't started
+            .map(|(id, race)| RaceInfo {
                 id: id.clone(),
-                course_key: lobby.course_key.clone(),
-                max_players: lobby.max_players,
-                race_started: lobby.race_started,
-                creator_id: lobby.creator_id.clone(),
-                players: lobby.players.values().map(|player| player.info()).collect(),
+                course_key: race.course_key.clone(),
+                max_players: race.max_players,
+                race_started: race.race_started,
+                creator_id: race.creator_id.clone(),
+                players: race.players.values().map(|player| player.info()).collect(),
             })
             .collect::<Vec<_>>()
     }
@@ -442,7 +442,7 @@ fn generate_id() -> String {
     bytes.iter().map(|b| format!("{:02X}", b)).collect()
 }
 
-fn generate_lobby_id() -> String {
+fn generate_race_id() -> String {
     generate_id()[..6].to_string()
 }
 
@@ -474,15 +474,15 @@ mod tests {
     }
 
     #[test]
-    fn test_generate_lobby_id_format() {
-        let id = generate_lobby_id();
+    fn test_generate_race_id_format() {
+        let id = generate_race_id();
         // Should be 6 hex characters
         assert_eq!(id.len(), 6);
         assert!(id.chars().all(|c| c.is_ascii_hexdigit()));
     }
 
     // =========================================================================
-    // Lobby tests
+    // Race tests
     // =========================================================================
 
     fn make_test_player(id: &str, name: &str) -> Player {
@@ -495,176 +495,176 @@ mod tests {
     }
 
     #[test]
-    fn test_lobby_new() {
-        let lobby = Lobby::new(
+    fn test_race_new() {
+        let race = Race::new(
             "vg20".to_string(),
             "creator-1".to_string(),
             90 * 24 * 60 * 60 * 1000,
         );
 
-        assert_eq!(lobby.course_key, "vg20");
-        assert_eq!(lobby.creator_id, "creator-1");
-        assert_eq!(lobby.max_players, 10);
-        assert!(!lobby.race_started);
-        assert!(lobby.players.is_empty());
+        assert_eq!(race.course_key, "vg20");
+        assert_eq!(race.creator_id, "creator-1");
+        assert_eq!(race.max_players, 10);
+        assert!(!race.race_started);
+        assert!(race.players.is_empty());
     }
 
     #[test]
-    fn test_lobby_add_player() {
-        let mut lobby = Lobby::new(
+    fn test_race_add_player() {
+        let mut race = Race::new(
             "vg20".to_string(),
             "creator-1".to_string(),
             90 * 24 * 60 * 60 * 1000,
         );
         let player = make_test_player("player-1", "Alice");
 
-        let result = lobby.add_player(player);
+        let result = race.add_player(player);
 
         assert!(result.is_ok());
-        assert_eq!(lobby.players.len(), 1);
-        assert!(lobby.players.contains_key("player-1"));
+        assert_eq!(race.players.len(), 1);
+        assert!(race.players.contains_key("player-1"));
     }
 
     #[test]
-    fn test_lobby_add_player_updates_activity() {
-        let mut lobby = Lobby::new(
+    fn test_race_add_player_updates_activity() {
+        let mut race = Race::new(
             "vg20".to_string(),
             "creator-1".to_string(),
             90 * 24 * 60 * 60 * 1000,
         );
-        let initial_activity = lobby.last_activity;
+        let initial_activity = race.last_activity;
 
         // Small delay to ensure time difference
         std::thread::sleep(std::time::Duration::from_millis(10));
 
         let player = make_test_player("player-1", "Alice");
-        lobby.add_player(player).unwrap();
+        race.add_player(player).unwrap();
 
-        assert!(lobby.last_activity > initial_activity);
+        assert!(race.last_activity > initial_activity);
     }
 
     #[test]
-    fn test_lobby_add_player_fails_when_race_started() {
-        let mut lobby = Lobby::new(
+    fn test_race_add_player_fails_when_race_started() {
+        let mut race = Race::new(
             "vg20".to_string(),
             "creator-1".to_string(),
             90 * 24 * 60 * 60 * 1000,
         );
-        lobby.race_started = true;
+        race.race_started = true;
 
         let player = make_test_player("player-1", "Alice");
-        let result = lobby.add_player(player);
+        let result = race.add_player(player);
 
         assert!(result.is_err());
         assert_eq!(result.unwrap_err(), "Race has already started");
     }
 
     #[test]
-    fn test_lobby_add_player_fails_when_full() {
-        let mut lobby = Lobby::new(
+    fn test_race_add_player_fails_when_full() {
+        let mut race = Race::new(
             "vg20".to_string(),
             "creator-1".to_string(),
             90 * 24 * 60 * 60 * 1000,
         );
 
         // Add max_players
-        for i in 0..lobby.max_players {
+        for i in 0..race.max_players {
             let player = make_test_player(&format!("player-{}", i), &format!("Player {}", i));
-            lobby.add_player(player).unwrap();
+            race.add_player(player).unwrap();
         }
 
         // Next player should fail
         let extra_player = make_test_player("extra", "Extra");
-        let result = lobby.add_player(extra_player);
+        let result = race.add_player(extra_player);
 
         assert!(result.is_err());
-        assert_eq!(result.unwrap_err(), "Lobby is full");
+        assert_eq!(result.unwrap_err(), "Race is full");
     }
 
     #[test]
-    fn test_lobby_remove_player() {
-        let mut lobby = Lobby::new(
+    fn test_race_remove_player() {
+        let mut race = Race::new(
             "vg20".to_string(),
             "creator-1".to_string(),
             90 * 24 * 60 * 60 * 1000,
         );
         let player = make_test_player("player-1", "Alice");
-        lobby.add_player(player).unwrap();
+        race.add_player(player).unwrap();
 
-        let removed = lobby.remove_player("player-1");
+        let removed = race.remove_player("player-1");
 
         assert!(removed.is_some());
         assert_eq!(removed.unwrap().name, "Alice");
-        assert!(lobby.players.is_empty());
+        assert!(race.players.is_empty());
     }
 
     #[test]
-    fn test_lobby_remove_nonexistent_player() {
-        let mut lobby = Lobby::new(
+    fn test_race_remove_nonexistent_player() {
+        let mut race = Race::new(
             "vg20".to_string(),
             "creator-1".to_string(),
             90 * 24 * 60 * 60 * 1000,
         );
 
-        let removed = lobby.remove_player("nonexistent");
+        let removed = race.remove_player("nonexistent");
 
         assert!(removed.is_none());
     }
 
     #[test]
-    fn test_lobby_is_expired_empty_and_old() {
-        let mut lobby = Lobby::new(
+    fn test_race_is_expired_empty_and_old() {
+        let mut race = Race::new(
             "vg20".to_string(),
             "creator-1".to_string(),
             90 * 24 * 60 * 60 * 1000,
         );
         // Set last activity to 6 minutes ago
-        lobby.last_activity = Utc::now() - chrono::Duration::minutes(6);
+        race.last_activity = Utc::now() - chrono::Duration::minutes(6);
 
-        assert!(lobby.is_expired());
+        assert!(race.is_expired());
     }
 
     #[test]
-    fn test_lobby_is_not_expired_with_players() {
-        let mut lobby = Lobby::new(
+    fn test_race_is_not_expired_with_players() {
+        let mut race = Race::new(
             "vg20".to_string(),
             "creator-1".to_string(),
             90 * 24 * 60 * 60 * 1000,
         );
-        lobby.last_activity = Utc::now() - chrono::Duration::minutes(6);
+        race.last_activity = Utc::now() - chrono::Duration::minutes(6);
 
         // Add a player
         let player = make_test_player("player-1", "Alice");
-        lobby.players.insert("player-1".to_string(), player);
+        race.players.insert("player-1".to_string(), player);
 
         // Should not be expired because it has players
-        assert!(!lobby.is_expired());
+        assert!(!race.is_expired());
     }
 
     #[test]
-    fn test_lobby_is_not_expired_recent_activity() {
-        let lobby = Lobby::new(
+    fn test_race_is_not_expired_recent_activity() {
+        let race = Race::new(
             "vg20".to_string(),
             "creator-1".to_string(),
             90 * 24 * 60 * 60 * 1000,
         );
-        // Fresh lobby with no players
+        // Fresh race with no players
 
         // Should not be expired because activity is recent
-        assert!(!lobby.is_expired());
+        assert!(!race.is_expired());
     }
 
     #[test]
-    fn test_lobby_get_player_infos() {
-        let mut lobby = Lobby::new(
+    fn test_race_get_player_infos() {
+        let mut race = Race::new(
             "vg20".to_string(),
             "creator-1".to_string(),
             90 * 24 * 60 * 60 * 1000,
         );
-        lobby.add_player(make_test_player("p1", "Alice")).unwrap();
-        lobby.add_player(make_test_player("p2", "Bob")).unwrap();
+        race.add_player(make_test_player("p1", "Alice")).unwrap();
+        race.add_player(make_test_player("p2", "Bob")).unwrap();
 
-        let infos = lobby.get_player_infos();
+        let infos = race.get_player_infos();
 
         assert_eq!(infos.len(), 2);
         let names: Vec<&str> = infos.iter().map(|i| i.name.as_str()).collect();
@@ -673,16 +673,16 @@ mod tests {
     }
 
     // =========================================================================
-    // LobbyManager tests (async)
+    // RaceManager tests (async)
     // =========================================================================
 
     #[tokio::test]
-    async fn test_lobby_manager_create_lobby() {
-        let manager = LobbyManager::new();
+    async fn test_race_manager_create_race() {
+        let manager = RaceManager::new();
         let (tx, _rx) = mpsc::unbounded_channel();
 
         let result = manager
-            .create_lobby(
+            .create_race(
                 "vg20".to_string(),
                 "player-1".to_string(),
                 "Alice".to_string(),
@@ -691,23 +691,23 @@ mod tests {
             .await;
 
         assert!(result.is_ok());
-        let lobby_id = result.unwrap();
-        assert_eq!(lobby_id.len(), 6);
+        let race_id = result.unwrap();
+        assert_eq!(race_id.len(), 6);
 
-        // Verify lobby exists
-        let lobbies = manager.lobbies.read().await;
-        assert!(lobbies.contains_key(&lobby_id));
+        // Verify race exists
+        let races = manager.races.read().await;
+        assert!(races.contains_key(&race_id));
     }
 
     #[tokio::test]
-    async fn test_lobby_manager_join_lobby() {
-        let manager = LobbyManager::new();
+    async fn test_race_manager_join_race() {
+        let manager = RaceManager::new();
         let (tx1, _rx1) = mpsc::unbounded_channel();
         let (tx2, _rx2) = mpsc::unbounded_channel();
 
-        // Create lobby
-        let lobby_id = manager
-            .create_lobby(
+        // Create race
+        let race_id = manager
+            .create_race(
                 "vg20".to_string(),
                 "player-1".to_string(),
                 "Alice".to_string(),
@@ -716,9 +716,9 @@ mod tests {
             .await
             .unwrap();
 
-        // Join lobby
+        // Join race
         let result = manager
-            .join_lobby(&lobby_id, "player-2".to_string(), "Bob".to_string(), tx2)
+            .join_race(&race_id, "player-2".to_string(), "Bob".to_string(), tx2)
             .await;
 
         assert!(result.is_ok());
@@ -729,25 +729,25 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn test_lobby_manager_join_nonexistent_lobby() {
-        let manager = LobbyManager::new();
+    async fn test_race_manager_join_nonexistent_race() {
+        let manager = RaceManager::new();
         let (tx, _rx) = mpsc::unbounded_channel();
 
         let result = manager
-            .join_lobby("AAAAAA", "player-1".to_string(), "Alice".to_string(), tx)
+            .join_race("AAAAAA", "player-1".to_string(), "Alice".to_string(), tx)
             .await;
 
         assert!(result.is_err());
-        assert_eq!(result.unwrap_err(), "Lobby not found");
+        assert_eq!(result.unwrap_err(), "Race not found");
     }
 
     #[tokio::test]
-    async fn test_lobby_manager_leave_lobby() {
-        let manager = LobbyManager::new();
+    async fn test_race_manager_leave_race() {
+        let manager = RaceManager::new();
         let (tx, _rx) = mpsc::unbounded_channel();
 
-        let lobby_id = manager
-            .create_lobby(
+        let race_id = manager
+            .create_race(
                 "vg20".to_string(),
                 "player-1".to_string(),
                 "Alice".to_string(),
@@ -756,22 +756,22 @@ mod tests {
             .await
             .unwrap();
 
-        // Leave lobby
-        manager.leave_lobby("player-1").await;
+        // Leave race
+        manager.leave_race("player-1").await;
 
-        // Verify lobby is removed (empty lobby gets cleaned up)
-        let lobbies = manager.lobbies.read().await;
-        assert!(!lobbies.contains_key(&lobby_id));
+        // Verify race is removed (empty race gets cleaned up)
+        let races = manager.races.read().await;
+        assert!(!races.contains_key(&race_id));
     }
 
     #[tokio::test]
-    async fn test_lobby_manager_list_lobbies() {
-        let manager = LobbyManager::new();
+    async fn test_race_manager_list_races() {
+        let manager = RaceManager::new();
         let (tx1, _rx1) = mpsc::unbounded_channel();
         let (tx2, _rx2) = mpsc::unbounded_channel();
 
         manager
-            .create_lobby(
+            .create_race(
                 "vg20".to_string(),
                 "player-1".to_string(),
                 "Alice".to_string(),
@@ -781,7 +781,7 @@ mod tests {
             .unwrap();
 
         manager
-            .create_lobby(
+            .create_race(
                 "vg20".to_string(),
                 "player-2".to_string(),
                 "Bob".to_string(),
@@ -790,18 +790,18 @@ mod tests {
             .await
             .unwrap();
 
-        let lobbies = manager.list_lobbies().await;
+        let races = manager.list_races().await;
 
-        assert_eq!(lobbies.len(), 2);
+        assert_eq!(races.len(), 2);
     }
 
     #[tokio::test]
-    async fn test_lobby_manager_list_lobbies_excludes_started() {
-        let manager = LobbyManager::new();
+    async fn test_race_manager_list_races_excludes_started() {
+        let manager = RaceManager::new();
         let (tx, _rx) = mpsc::unbounded_channel();
 
-        let lobby_id = manager
-            .create_lobby(
+        let race_id = manager
+            .create_race(
                 "vg20".to_string(),
                 "player-1".to_string(),
                 "Alice".to_string(),
@@ -812,13 +812,13 @@ mod tests {
 
         // Mark race as started
         {
-            let mut lobbies = manager.lobbies.write().await;
-            lobbies.get_mut(&lobby_id).unwrap().race_started = true;
+            let mut races = manager.races.write().await;
+            races.get_mut(&race_id).unwrap().race_started = true;
         }
 
-        let lobbies = manager.list_lobbies().await;
+        let races = manager.list_races().await;
 
-        assert!(lobbies.is_empty());
+        assert!(races.is_empty());
     }
 }
 
@@ -826,7 +826,7 @@ mod tests {
 // WebSocket Handler
 // ============================================================================
 
-pub async fn handle_websocket(ws: WebSocket, manager: LobbyManager) {
+pub async fn handle_websocket(ws: WebSocket, manager: RaceManager) {
     let (mut ws_tx, mut ws_rx) = ws.split();
     let (tx, mut rx) = mpsc::unbounded_channel::<ServerMessage>();
 
@@ -860,28 +860,28 @@ pub async fn handle_websocket(ws: WebSocket, manager: LobbyManager) {
     }
 
     // Cleanup on disconnect
-    manager.leave_lobby(&player_id).await;
+    manager.leave_race(&player_id).await;
     forward_task.abort();
 }
 
 async fn handle_client_message(
-    manager: &LobbyManager,
+    manager: &RaceManager,
     player_id: &str,
     tx: mpsc::UnboundedSender<ServerMessage>,
     message: ClientMessage,
 ) {
     let result: Result<(), String> = match message {
-        ClientMessage::CreateLobby {
+        ClientMessage::CreateRace {
             course_key,
             player_name,
         } => {
             match manager
-                .create_lobby(course_key, player_id.to_string(), player_name, tx.clone())
+                .create_race(course_key, player_id.to_string(), player_name, tx.clone())
                 .await
             {
-                Ok(lobby_id) => {
-                    let _ = tx.send(ServerMessage::LobbyCreated {
-                        lobby_id,
+                Ok(race_id) => {
+                    let _ = tx.send(ServerMessage::RaceCreated {
+                        race_id,
                         player_id: player_id.to_string(),
                     });
                     Ok(())
@@ -890,17 +890,17 @@ async fn handle_client_message(
             }
         }
 
-        ClientMessage::JoinLobby {
-            lobby_id,
+        ClientMessage::JoinRace {
+            race_id,
             player_name,
         } => {
             match manager
-                .join_lobby(&lobby_id, player_id.to_string(), player_name, tx.clone())
+                .join_race(&race_id, player_id.to_string(), player_name, tx.clone())
                 .await
             {
                 Ok((players, course_key, is_creator)) => {
-                    let _ = tx.send(ServerMessage::LobbyJoined {
-                        lobby_id,
+                    let _ = tx.send(ServerMessage::RaceJoined {
+                        race_id,
                         player_id: player_id.to_string(),
                         course_key,
                         players,
@@ -912,8 +912,8 @@ async fn handle_client_message(
             }
         }
 
-        ClientMessage::LeaveLobby => {
-            manager.leave_lobby(player_id).await;
+        ClientMessage::LeaveRace => {
+            manager.leave_race(player_id).await;
             Ok(())
         }
 

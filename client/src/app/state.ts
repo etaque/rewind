@@ -10,17 +10,17 @@ export type AppState =
   | {
       tag: "Loading";
       course: Course;
-      lobby: LobbyState;
+      race: RaceState;
       reportsLoaded: boolean;
     }
   | {
       tag: "Playing";
       session: Session;
-      lobby: LobbyState;
+      race: RaceState;
       raceEndedReason: string | null;
     };
 
-export type LobbyState = {
+export type RaceState = {
   id: string;
   courseKey: string;
   myPlayerId: string;
@@ -56,14 +56,14 @@ export type AppAction =
   | { type: "TOGGLE_TWA_LOCK" }
   // Multiplayer actions
   | {
-      type: "LOBBY_CREATED";
-      lobbyId: string;
+      type: "RACE_CREATED";
+      raceId: string;
       playerId: string;
       course: Course;
     }
   | {
-      type: "LOBBY_JOINED";
-      lobbyId: string;
+      type: "RACE_JOINED";
+      raceId: string;
       playerId: string;
       course: Course;
       isCreator: boolean;
@@ -74,7 +74,7 @@ export type AppAction =
   | { type: "COUNTDOWN"; seconds: number }
   | { type: "RACE_STARTED" }
   | { type: "START_PLAYING"; reports: WindReport[] }
-  | { type: "LEAVE_LOBBY" }
+  | { type: "LEAVE_RACE" }
   | { type: "SYNC_RACE_TIME"; raceTime: number }
   | { type: "RACE_ENDED"; reason: string };
 
@@ -94,7 +94,7 @@ function createPlayingState(
   );
   return {
     tag: "Playing",
-    lobby: state.lobby,
+    race: state.race,
     raceEndedReason: null,
     session: {
       clock: 0,
@@ -119,7 +119,7 @@ export function appReducer(state: AppState, action: AppAction): AppState {
     case "REPORTS_LOADED":
       if (state.tag !== "Loading") return state;
       // If race already started (countdown finished), go to Playing
-      if (state.lobby.raceStarted) {
+      if (state.race.raceStarted) {
         return createPlayingState(state, action.reports);
       }
       // Otherwise, mark reports as loaded and wait for race start
@@ -184,14 +184,14 @@ export function appReducer(state: AppState, action: AppAction): AppState {
       };
 
     // Multiplayer actions
-    case "LOBBY_CREATED": {
+    case "RACE_CREATED": {
       if (state.tag !== "Idle") return state;
       return {
         tag: "Loading",
         course: action.course,
         reportsLoaded: false,
-        lobby: {
-          id: action.lobbyId,
+        race: {
+          id: action.raceId,
           courseKey: action.course.key,
           myPlayerId: action.playerId,
           isCreator: true,
@@ -202,8 +202,8 @@ export function appReducer(state: AppState, action: AppAction): AppState {
       };
     }
 
-    case "LOBBY_JOINED": {
-      // Allow joining from Idle or Loading (switching lobbies)
+    case "RACE_JOINED": {
+      // Allow joining from Idle or Loading (switching races)
       if (state.tag !== "Idle" && state.tag !== "Loading") return state;
       return {
         tag: "Loading",
@@ -213,8 +213,8 @@ export function appReducer(state: AppState, action: AppAction): AppState {
           state.tag === "Loading" && state.course.key === action.course.key
             ? state.reportsLoaded
             : false,
-        lobby: {
-          id: action.lobbyId,
+        race: {
+          id: action.raceId,
           courseKey: action.course.key,
           myPlayerId: action.playerId,
           isCreator: action.isCreator,
@@ -227,7 +227,7 @@ export function appReducer(state: AppState, action: AppAction): AppState {
 
     case "PLAYER_JOINED":
       if (state.tag !== "Loading") return state;
-      const newPlayers = new Map(state.lobby.players);
+      const newPlayers = new Map(state.race.players);
       newPlayers.set(action.playerId, {
         id: action.playerId,
         name: action.playerName,
@@ -237,23 +237,23 @@ export function appReducer(state: AppState, action: AppAction): AppState {
       });
       return {
         ...state,
-        lobby: { ...state.lobby, players: newPlayers },
+        race: { ...state.race, players: newPlayers },
       };
 
     case "PLAYER_LEFT":
       if (state.tag !== "Loading") return state;
-      const remainingPlayers = new Map(state.lobby.players);
+      const remainingPlayers = new Map(state.race.players);
       remainingPlayers.delete(action.playerId);
       return {
         ...state,
-        lobby: { ...state.lobby, players: remainingPlayers },
+        race: { ...state.race, players: remainingPlayers },
       };
 
     case "COUNTDOWN":
       if (state.tag !== "Loading") return state;
       return {
         ...state,
-        lobby: { ...state.lobby, countdown: action.seconds },
+        race: { ...state.race, countdown: action.seconds },
       };
 
     case "RACE_STARTED":
@@ -261,14 +261,14 @@ export function appReducer(state: AppState, action: AppAction): AppState {
       // Mark race as started
       return {
         ...state,
-        lobby: { ...state.lobby, raceStarted: true },
+        race: { ...state.race, raceStarted: true },
       };
 
     case "START_PLAYING":
       if (state.tag !== "Loading") return state;
       return createPlayingState(state, action.reports);
 
-    case "LEAVE_LOBBY":
+    case "LEAVE_RACE":
       if (state.tag !== "Loading") return state;
       return { tag: "Idle" };
 

@@ -1,6 +1,6 @@
 import { PlayerInfo } from "../../multiplayer/types";
 
-type LobbyInfo = {
+type RaceInfo = {
   id: string;
   course_key: string;
   players: PlayerInfo[];
@@ -10,31 +10,31 @@ type LobbyInfo = {
 };
 
 type Props = {
-  lobbies: LobbyInfo[];
-  onJoinLobby: (lobbyId: string) => void;
+  races: RaceInfo[];
+  onJoinRace: (raceId: string) => void;
 };
 
-export default function AvailableLobbies({ lobbies, onJoinLobby }: Props) {
-  if (lobbies.length === 0) return null;
+export default function AvailableRaces({ races, onJoinRace }: Props) {
+  if (races.length === 0) return null;
 
   return (
     <div className="space-y-2">
-      <label className="text-slate-400 text-sm">Available Lobbies</label>
+      <label className="text-slate-400 text-sm">Available Races</label>
       <div className="bg-slate-800 rounded-lg divide-y divide-slate-700 max-h-40 overflow-y-auto">
-        {lobbies.map((lobby) => (
+        {races.map((race) => (
           <button
-            key={lobby.id}
-            onClick={() => onJoinLobby(lobby.id)}
+            key={race.id}
+            onClick={() => onJoinRace(race.id)}
             className="w-full px-4 py-3 flex items-center justify-between hover:bg-slate-700 transition-all"
           >
-            {lobby.players.map((playerInfo) => (
+            {race.players.map((playerInfo) => (
               <span key={playerInfo.id} className="text-white font-mono">
                 {playerInfo.name}{" "}
-                {playerInfo.id === lobby.creator_id ? "(Host)" : ""}
+                {playerInfo.id === race.creator_id ? "(Host)" : ""}
               </span>
             ))}
             <span className="text-slate-400 text-sm">
-              {lobby.players.length}/{lobby.max_players} players
+              {race.players.length}/{race.max_players} players
             </span>
           </button>
         ))}
@@ -43,4 +43,4 @@ export default function AvailableLobbies({ lobbies, onJoinLobby }: Props) {
   );
 }
 
-export type { LobbyInfo };
+export type { RaceInfo };

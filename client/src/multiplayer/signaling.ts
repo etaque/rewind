@@ -16,7 +16,7 @@ export class SignalingClient {
 
   connect(): Promise<void> {
     return new Promise((resolve, reject) => {
-      const wsUrl = serverUrl.replace(/^http/, "ws") + "/multiplayer/lobby";
+      const wsUrl = serverUrl.replace(/^http/, "ws") + "/multiplayer/race";
       this.ws = new WebSocket(wsUrl);
 
       this.ws.onopen = () => {
@@ -48,13 +48,13 @@ export class SignalingClient {
         this.callbacks.onError(message.message);
         break;
 
-      case "LobbyCreated":
-        this.callbacks.onLobbyCreated(message.lobby_id, message.player_id);
+      case "RaceCreated":
+        this.callbacks.onRaceCreated(message.race_id, message.player_id);
         break;
 
-      case "LobbyJoined":
-        this.callbacks.onLobbyJoined(
-          message.lobby_id,
+      case "RaceJoined":
+        this.callbacks.onRaceJoined(
+          message.race_id,
           message.player_id,
           message.players,
           message.is_creator,
@@ -100,24 +100,24 @@ export class SignalingClient {
     }
   }
 
-  createLobby(courseKey: string, playerName: string) {
+  createRace(courseKey: string, playerName: string) {
     this.send({
-      type: "CreateLobby",
+      type: "CreateRace",
       course_key: courseKey,
       player_name: playerName,
     });
   }
 
-  joinLobby(lobbyId: string, playerName: string) {
+  joinRace(raceId: string, playerName: string) {
     this.send({
-      type: "JoinLobby",
-      lobby_id: lobbyId,
+      type: "JoinRace",
+      race_id: raceId,
       player_name: playerName,
     });
   }
 
-  leaveLobby() {
-    this.send({ type: "LeaveLobby" });
+  leaveRace() {
+    this.send({ type: "LeaveRace" });
   }
 
   startRace() {

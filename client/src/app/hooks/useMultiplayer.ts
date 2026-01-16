@@ -6,10 +6,10 @@ import { SphereView } from "../../sphere";
 import { AppAction } from "../state";
 
 type MultiplayerCallbacks = {
-  onCreateLobby: (playerName: string) => Promise<void>;
-  onJoinLobby: (lobbyId: string, playerName: string) => Promise<void>;
+  onCreateRace: (playerName: string) => Promise<void>;
+  onJoinRace: (raceId: string, playerName: string) => Promise<void>;
   onStartRace: () => void;
-  onLeaveLobby: () => void;
+  onLeaveRace: () => void;
 };
 
 /**
@@ -26,17 +26,17 @@ export function useMultiplayer(
 
   const createMultiplayerClient = useCallback(() => {
     return new MultiplayerClient({
-      onLobbyCreated: (lobbyId, playerId) => {
+      onRaceCreated: (raceId, playerId) => {
         const course = courseRef.current;
         if (!course) return;
         dispatch({
-          type: "LOBBY_CREATED",
-          lobbyId,
+          type: "RACE_CREATED",
+          raceId,
           playerId,
           course,
         });
       },
-      onLobbyJoined: (lobbyId, playerId, players, isCreator, courseKey) => {
+      onRaceJoined: (raceId, playerId, players, isCreator, courseKey) => {
         const course = coursesRef.current?.get(courseKey);
         if (!course) return;
         const playerMap = new Map<string, PeerState>();
@@ -52,8 +52,8 @@ export function useMultiplayer(
           }
         });
         dispatch({
-          type: "LOBBY_JOINED",
-          lobbyId,
+          type: "RACE_JOINED",
+          raceId,
           playerId,
           course,
           isCreator,
@@ -91,28 +91,28 @@ export function useMultiplayer(
       },
       onDisconnect: () => {
         // Don't null the ref here - it may have already been replaced
-        // by a new manager when switching lobbies
+        // by a new manager when switching races
       },
     });
   }, [dispatch, sphereViewRef, courseRef, coursesRef]);
 
-  const handleCreateLobby = useCallback(
+  const handleCreateRace = useCallback(
     async (playerName: string) => {
       const course = courseRef.current;
       if (!course) return;
       const client = createMultiplayerClient();
       multiplayerRef.current = client;
       await client.connect();
-      client.createLobby(course.key, playerName);
+      client.createRace(course.key, playerName);
     },
     [createMultiplayerClient, courseRef],
   );
 
-  const handleJoinLobby = useCallback(
-    async (lobbyId: string, playerName: string) => {
-      // Leave current lobby if we're in one
+  const handleJoinRace = useCallback(
+    async (raceId: string, playerName: string) => {
+      // Leave current race if we're in one
       if (multiplayerRef.current) {
-        multiplayerRef.current.leaveLobby();
+        multiplayerRef.current.leaveRace();
         multiplayerRef.current.disconnect();
         multiplayerRef.current = null;
       }
@@ -120,7 +120,7 @@ export function useMultiplayer(
       const client = createMultiplayerClient();
       multiplayerRef.current = client;
       await client.connect();
-      client.joinLobby(lobbyId, playerName);
+      client.joinRace(raceId, playerName);
     },
     [createMultiplayerClient],
   );
@@ -129,20 +129,20 @@ export function useMultiplayer(
     multiplayerRef.current?.startRace();
   }, []);
 
-  const handleLeaveLobby = useCallback(() => {
-    multiplayerRef.current?.leaveLobby();
+  const handleLeaveRace = useCallback(() => {
+    multiplayerRef.current?.leaveRace();
     multiplayerRef.current?.disconnect();
     multiplayerRef.current = null;
-    dispatch({ type: "LEAVE_LOBBY" });
+    dispatch({ type: "LEAVE_RACE" });
   }, [dispatch]);
 
   return [
     multiplayerRef,
     {
-      onCreateLobby: handleCreateLobby,
-      onJoinLobby: handleJoinLobby,
+      onCreateRace: handleCreateRace,
+      onJoinRace: handleJoinRace,
       onStartRace: handleStartRace,
-      onLeaveLobby: handleLeaveLobby,
+      onLeaveRace: handleLeaveRace,
     },
   ];
 }

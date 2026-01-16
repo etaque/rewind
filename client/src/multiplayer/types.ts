@@ -5,18 +5,18 @@ import { LngLat } from "../models";
 // ============================================================================
 
 export type ClientMessage =
-  | { type: "CreateLobby"; course_key: string; player_name: string }
-  | { type: "JoinLobby"; lobby_id: string; player_name: string }
-  | { type: "LeaveLobby" }
+  | { type: "CreateRace"; course_key: string; player_name: string }
+  | { type: "JoinRace"; race_id: string; player_name: string }
+  | { type: "LeaveRace" }
   | { type: "StartRace" }
   | { type: "PositionUpdate"; lng: number; lat: number; heading: number };
 
 export type ServerMessage =
   | { type: "Error"; message: string }
-  | { type: "LobbyCreated"; lobby_id: string; player_id: string }
+  | { type: "RaceCreated"; race_id: string; player_id: string }
   | {
-      type: "LobbyJoined";
-      lobby_id: string;
+      type: "RaceJoined";
+      race_id: string;
       player_id: string;
       course_key: string;
       players: PlayerInfo[];
@@ -53,7 +53,7 @@ export type PeerState = {
   lastUpdate: number;
 };
 
-export type LobbyState = {
+export type RaceState = {
   id: string;
   courseKey: string;
   myPlayerId: string;
@@ -64,9 +64,9 @@ export type LobbyState = {
 };
 
 export type MultiplayerCallbacks = {
-  onLobbyCreated: (lobbyId: string, playerId: string) => void;
-  onLobbyJoined: (
-    lobbyId: string,
+  onRaceCreated: (raceId: string, playerId: string) => void;
+  onRaceJoined: (
+    raceId: string,
     playerId: string,
     players: PlayerInfo[],
     isCreator: boolean,
