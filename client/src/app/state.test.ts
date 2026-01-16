@@ -59,6 +59,7 @@ function makePlayingState(
     tag: "Playing",
     race: { ...testRace, raceStarted: true },
     raceEndedReason: null,
+    leaderboard: [],
     session: {
       clock: 0,
       lastWindRefresh: 0,

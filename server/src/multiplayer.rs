@@ -74,6 +74,16 @@ pub enum ServerMessage {
     RaceEnded {
         reason: String,
     },
+    Leaderboard {
+        entries: Vec<LeaderboardEntry>,
+    },
+}
+
+#[derive(Debug, Clone, Serialize)]
+pub struct LeaderboardEntry {
+    pub player_id: String,
+    pub player_name: String,
+    pub distance_to_finish: f64,
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -91,6 +101,7 @@ pub struct Player {
     pub id: String,
     pub name: String,
     pub tx: mpsc::UnboundedSender<ServerMessage>,
+    pub position: Option<(f64, f64)>, // (lng, lat)
 }
 
 impl Player {
@@ -113,10 +124,11 @@ pub struct Race {
     pub race_ended: bool,
     pub max_race_time: i64,
     pub last_activity: DateTime<Utc>,
+    pub finish: (f64, f64), // (lng, lat)
 }
 
 impl Race {
-    fn new(course_key: String, creator_id: String, max_race_time: i64) -> Self {
+    fn new(course_key: String, creator_id: String, max_race_time: i64, finish: (f64, f64)) -> Self {
         Race {
             course_key,
             creator_id,
@@ -127,6 +139,7 @@ impl Race {
             race_ended: false,
             max_race_time,
             last_activity: Utc::now(),
+            finish,
         }
     }
 
@@ -173,6 +186,46 @@ impl Race {
         let inactive_duration = Utc::now() - self.last_activity;
         self.players.is_empty() && inactive_duration.num_minutes() >= 5
     }
+
+    fn compute_leaderboard(&self) -> Vec<LeaderboardEntry> {
+        let mut entries: Vec<LeaderboardEntry> = self
+            .players
+            .values()
+            .filter_map(|player| {
+                player.position.map(|(lng, lat)| LeaderboardEntry {
+                    player_id: player.id.clone(),
+                    player_name: player.name.clone(),
+                    distance_to_finish: haversine_distance(lat, lng, self.finish.1, self.finish.0),
+                })
+            })
+            .collect();
+
+        // Sort by distance (closest first)
+        entries.sort_by(|a, b| {
+            a.distance_to_finish
+                .partial_cmp(&b.distance_to_finish)
+                .unwrap_or(std::cmp::Ordering::Equal)
+        });
+
+        entries
+    }
+}
+
+/// Calculate distance between two points on Earth using Haversine formula
+/// Returns distance in nautical miles
+fn haversine_distance(lat1: f64, lng1: f64, lat2: f64, lng2: f64) -> f64 {
+    const EARTH_RADIUS_NM: f64 = 3440.065; // Earth radius in nautical miles
+
+    let lat1_rad = lat1.to_radians();
+    let lat2_rad = lat2.to_radians();
+    let delta_lat = (lat2 - lat1).to_radians();
+    let delta_lng = (lng2 - lng1).to_radians();
+
+    let a = (delta_lat / 2.0).sin().powi(2)
+        + lat1_rad.cos() * lat2_rad.cos() * (delta_lng / 2.0).sin().powi(2);
+    let c = 2.0 * a.sqrt().asin();
+
+    EARTH_RADIUS_NM * c
 }
 
 // ============================================================================
@@ -205,6 +258,23 @@ impl RaceManager {
             }
         });
 
+        // Spawn leaderboard broadcast task (every 2 seconds)
+        let races_clone = manager.races.clone();
+        tokio::spawn(async move {
+            loop {
+                tokio::time::sleep(tokio::time::Duration::from_secs(2)).await;
+                let races = races_clone.read().await;
+                for race in races.values() {
+                    if race.race_started && !race.race_ended {
+                        let leaderboard = race.compute_leaderboard();
+                        race.broadcast_all(ServerMessage::Leaderboard {
+                            entries: leaderboard,
+                        });
+                    }
+                }
+            }
+        });
+
         manager
     }
 
@@ -215,7 +285,7 @@ impl RaceManager {
         player_name: String,
         tx: mpsc::UnboundedSender<ServerMessage>,
     ) -> Result<String, String> {
-        // Look up course to get max_days
+        // Look up course to get max_days and finish
         let course = crate::courses::all()
             .into_iter()
             .find(|c| c.key == course_key)
@@ -223,14 +293,16 @@ impl RaceManager {
 
         // Convert max_days to milliseconds
         let max_race_time = course.max_days as i64 * 24 * 60 * 60 * 1000;
+        let finish = (course.finish.lng, course.finish.lat);
 
         let race_id = generate_race_id();
-        let mut race = Race::new(course_key, player_id.clone(), max_race_time);
+        let mut race = Race::new(course_key, player_id.clone(), max_race_time, finish);
 
         let player = Player {
             id: player_id.clone(),
             name: player_name,
             tx,
+            position: None,
         };
         race.add_player(player)?;
 
@@ -259,6 +331,7 @@ impl RaceManager {
             id: player_id.clone(),
             name: player_name.clone(),
             tx,
+            position: None,
         };
 
         // Notify existing players before adding new one
@@ -321,6 +394,11 @@ impl RaceManager {
         let Some(race) = races.get_mut(&race_id) else {
             return;
         };
+
+        // Update player position
+        if let Some(player) = race.players.get_mut(player_id) {
+            player.position = Some((lng as f64, lat as f64));
+        }
 
         // Calculate race time (ms since race start)
         let race_time = race
@@ -491,6 +569,7 @@ mod tests {
             id: id.to_string(),
             name: name.to_string(),
             tx,
+            position: None,
         }
     }
 
@@ -500,6 +579,7 @@ mod tests {
             "vg20".to_string(),
             "creator-1".to_string(),
             90 * 24 * 60 * 60 * 1000,
+            (-1.788, 46.470),
         );
 
         assert_eq!(race.course_key, "vg20");
@@ -515,6 +595,7 @@ mod tests {
             "vg20".to_string(),
             "creator-1".to_string(),
             90 * 24 * 60 * 60 * 1000,
+            (-1.788, 46.470),
         );
         let player = make_test_player("player-1", "Alice");
 
@@ -531,6 +612,7 @@ mod tests {
             "vg20".to_string(),
             "creator-1".to_string(),
             90 * 24 * 60 * 60 * 1000,
+            (-1.788, 46.470),
         );
         let initial_activity = race.last_activity;
 
@@ -549,6 +631,7 @@ mod tests {
             "vg20".to_string(),
             "creator-1".to_string(),
             90 * 24 * 60 * 60 * 1000,
+            (-1.788, 46.470),
         );
         race.race_started = true;
 
@@ -565,6 +648,7 @@ mod tests {
             "vg20".to_string(),
             "creator-1".to_string(),
             90 * 24 * 60 * 60 * 1000,
+            (-1.788, 46.470),
         );
 
         // Add max_players
@@ -587,6 +671,7 @@ mod tests {
             "vg20".to_string(),
             "creator-1".to_string(),
             90 * 24 * 60 * 60 * 1000,
+            (-1.788, 46.470),
         );
         let player = make_test_player("player-1", "Alice");
         race.add_player(player).unwrap();
@@ -604,6 +689,7 @@ mod tests {
             "vg20".to_string(),
             "creator-1".to_string(),
             90 * 24 * 60 * 60 * 1000,
+            (-1.788, 46.470),
         );
 
         let removed = race.remove_player("nonexistent");
@@ -617,6 +703,7 @@ mod tests {
             "vg20".to_string(),
             "creator-1".to_string(),
             90 * 24 * 60 * 60 * 1000,
+            (-1.788, 46.470),
         );
         // Set last activity to 6 minutes ago
         race.last_activity = Utc::now() - chrono::Duration::minutes(6);
@@ -630,6 +717,7 @@ mod tests {
             "vg20".to_string(),
             "creator-1".to_string(),
             90 * 24 * 60 * 60 * 1000,
+            (-1.788, 46.470),
         );
         race.last_activity = Utc::now() - chrono::Duration::minutes(6);
 
@@ -647,6 +735,7 @@ mod tests {
             "vg20".to_string(),
             "creator-1".to_string(),
             90 * 24 * 60 * 60 * 1000,
+            (-1.788, 46.470),
         );
         // Fresh race with no players
 
@@ -660,6 +749,7 @@ mod tests {
             "vg20".to_string(),
             "creator-1".to_string(),
             90 * 24 * 60 * 60 * 1000,
+            (-1.788, 46.470),
         );
         race.add_player(make_test_player("p1", "Alice")).unwrap();
         race.add_player(make_test_player("p2", "Bob")).unwrap();

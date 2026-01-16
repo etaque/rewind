@@ -86,6 +86,9 @@ export function useMultiplayer(
       onRaceEnded: (reason) => {
         dispatch({ type: "RACE_ENDED", reason });
       },
+      onLeaderboardUpdate: (entries) => {
+        dispatch({ type: "LEADERBOARD_UPDATE", entries });
+      },
       onError: (message) => {
         console.error("Multiplayer error:", message);
       },

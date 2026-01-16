@@ -11,6 +11,12 @@ export type ClientMessage =
   | { type: "StartRace" }
   | { type: "PositionUpdate"; lng: number; lat: number; heading: number };
 
+export type LeaderboardEntry = {
+  player_id: string;
+  player_name: string;
+  distance_to_finish: number;
+};
+
 export type ServerMessage =
   | { type: "Error"; message: string }
   | { type: "RaceCreated"; race_id: string; player_id: string }
@@ -34,7 +40,8 @@ export type ServerMessage =
       heading: number;
       race_time: number;
     }
-  | { type: "RaceEnded"; reason: string };
+  | { type: "RaceEnded"; reason: string }
+  | { type: "Leaderboard"; entries: LeaderboardEntry[] };
 
 // ============================================================================
 // State Types
@@ -84,6 +91,7 @@ export type MultiplayerCallbacks = {
   onCountdown: (seconds: number) => void;
   onRaceStarted: () => void;
   onRaceEnded: (reason: string) => void;
+  onLeaderboardUpdate: (entries: LeaderboardEntry[]) => void;
   onError: (message: string) => void;
   onDisconnect: () => void;
 };

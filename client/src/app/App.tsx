@@ -5,6 +5,7 @@ import InterpolatedWind from "../interpolated-wind";
 import { Course, WindReport } from "../models";
 import Hud from "./Hud";
 import CursorWind from "./CursorWind";
+import Leaderboard from "./Leaderboard";
 import { initLandData } from "./land";
 import RaceScreen from "./RaceScreen";
 import { useKeyboardControls, useGameLoop, useMultiplayer } from "./hooks";
@@ -277,7 +278,15 @@ export default function App() {
               />
             </div>
           )}
-        {state.tag === "Playing" && <Hud session={state.session} />}
+        {state.tag === "Playing" && (
+          <>
+            <Hud session={state.session} />
+            <Leaderboard
+              entries={state.leaderboard}
+              myPlayerId={state.race.myPlayerId}
+            />
+          </>
+        )}
       </div>
       <CursorWind
         sphereView={sphereViewRef.current}

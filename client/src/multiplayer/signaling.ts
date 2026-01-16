@@ -91,6 +91,10 @@ export class SignalingClient {
           message.race_time,
         );
         break;
+
+      case "Leaderboard":
+        this.callbacks.onLeaderboardUpdate(message.entries);
+        break;
     }
   }
 

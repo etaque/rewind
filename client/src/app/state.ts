@@ -1,5 +1,5 @@
 import { Course, LngLat, WindSpeed, WindReport } from "../models";
-import { PeerState } from "../multiplayer/types";
+import { LeaderboardEntry, PeerState } from "../multiplayer/types";
 import { tick } from "./tick";
 import { calculateTackTarget } from "./tack";
 import { toggleTWALock } from "./twa-lock";
@@ -18,6 +18,7 @@ export type AppState =
       session: Session;
       race: RaceState;
       raceEndedReason: string | null;
+      leaderboard: LeaderboardEntry[];
     };
 
 export type RaceState = {
@@ -76,7 +77,8 @@ export type AppAction =
   | { type: "START_PLAYING"; reports: WindReport[] }
   | { type: "LEAVE_RACE" }
   | { type: "SYNC_RACE_TIME"; raceTime: number }
-  | { type: "RACE_ENDED"; reason: string };
+  | { type: "RACE_ENDED"; reason: string }
+  | { type: "LEADERBOARD_UPDATE"; entries: LeaderboardEntry[] };
 
 export type Turn = "left" | "right" | null;
 
@@ -96,6 +98,7 @@ function createPlayingState(
     tag: "Playing",
     race: state.race,
     raceEndedReason: null,
+    leaderboard: [],
     session: {
       clock: 0,
       lastWindRefresh: 0,
@@ -288,6 +291,13 @@ export function appReducer(state: AppState, action: AppAction): AppState {
       return {
         ...state,
         raceEndedReason: action.reason,
+      };
+
+    case "LEADERBOARD_UPDATE":
+      if (state.tag !== "Playing") return state;
+      return {
+        ...state,
+        leaderboard: action.entries,
       };
 
     default:
