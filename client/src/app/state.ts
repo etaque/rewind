@@ -13,7 +13,12 @@ export type AppState =
       lobby: LobbyState;
       reportsLoaded: boolean;
     }
-  | { tag: "Playing"; session: Session; lobby: LobbyState };
+  | {
+      tag: "Playing";
+      session: Session;
+      lobby: LobbyState;
+      raceEndedReason: string | null;
+    };
 
 export type LobbyState = {
   id: string;
@@ -70,7 +75,8 @@ export type AppAction =
   | { type: "RACE_STARTED" }
   | { type: "START_PLAYING"; reports: WindReport[] }
   | { type: "LEAVE_LOBBY" }
-  | { type: "SYNC_RACE_TIME"; raceTime: number };
+  | { type: "SYNC_RACE_TIME"; raceTime: number }
+  | { type: "RACE_ENDED"; reason: string };
 
 export type Turn = "left" | "right" | null;
 
@@ -89,6 +95,7 @@ function createPlayingState(
   return {
     tag: "Playing",
     lobby: state.lobby,
+    raceEndedReason: null,
     session: {
       clock: 0,
       lastWindRefresh: 0,
@@ -274,6 +281,13 @@ export function appReducer(state: AppState, action: AppAction): AppState {
           ...state.session,
           courseTime: state.session.course.startTime + action.raceTime,
         },
+      };
+
+    case "RACE_ENDED":
+      if (state.tag !== "Playing") return state;
+      return {
+        ...state,
+        raceEndedReason: action.reason,
       };
 
     default:

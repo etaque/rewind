@@ -21,6 +21,7 @@ export type Course = {
   startHeading: number;
   finish: LngLat;
   timeFactor: number;
+  maxDays: number;
 };
 
 export type Pixel = { x: number; y: number };

@@ -78,6 +78,10 @@ export class SignalingClient {
         this.callbacks.onRaceStarted();
         break;
 
+      case "RaceEnded":
+        this.callbacks.onRaceEnded(message.reason);
+        break;
+
       case "PositionUpdate":
         this.callbacks.onPeerPositionUpdate(
           message.player_id,

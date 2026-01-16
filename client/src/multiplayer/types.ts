@@ -33,7 +33,8 @@ export type ServerMessage =
       lat: number;
       heading: number;
       race_time: number;
-    };
+    }
+  | { type: "RaceEnded"; reason: string };
 
 // ============================================================================
 // State Types
@@ -82,6 +83,7 @@ export type MultiplayerCallbacks = {
   ) => void;
   onCountdown: (seconds: number) => void;
   onRaceStarted: () => void;
+  onRaceEnded: (reason: string) => void;
   onError: (message: string) => void;
   onDisconnect: () => void;
 };

@@ -18,6 +18,7 @@ const testCourse: Course = {
   finish: { lng: 10, lat: 45 },
   startHeading: 90,
   timeFactor: 60,
+  maxDays: 90,
 };
 
 const testLobby: LobbyState = {
@@ -57,6 +58,7 @@ function makePlayingState(
   return {
     tag: "Playing",
     lobby: { ...testLobby, raceStarted: true },
+    raceEndedReason: null,
     session: {
       clock: 0,
       lastWindRefresh: 0,
@@ -238,7 +240,10 @@ describe("appReducer", () => {
   describe("REPORTS_LOADED", () => {
     it("marks reports as loaded if race not started", () => {
       const state = makeLoadingState();
-      const action: AppAction = { type: "REPORTS_LOADED", reports: testReports };
+      const action: AppAction = {
+        type: "REPORTS_LOADED",
+        reports: testReports,
+      };
 
       const result = appReducer(state, action);
 
@@ -252,7 +257,10 @@ describe("appReducer", () => {
       const state = makeLoadingState({
         lobby: { ...testLobby, raceStarted: true },
       });
-      const action: AppAction = { type: "REPORTS_LOADED", reports: testReports };
+      const action: AppAction = {
+        type: "REPORTS_LOADED",
+        reports: testReports,
+      };
 
       const result = appReducer(state, action);
 
@@ -405,7 +413,10 @@ describe("appReducer", () => {
     it("updates wind speed in session", () => {
       const state = makePlayingState();
       const newWind = { u: 15, v: -5 };
-      const action: AppAction = { type: "LOCAL_WIND_UPDATED", windSpeed: newWind };
+      const action: AppAction = {
+        type: "LOCAL_WIND_UPDATED",
+        windSpeed: newWind,
+      };
 
       const result = appReducer(state, action);
 

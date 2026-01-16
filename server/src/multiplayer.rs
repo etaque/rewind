@@ -71,6 +71,9 @@ pub enum ServerMessage {
         heading: f32,
         race_time: i64,
     },
+    RaceEnded {
+        reason: String,
+    },
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -107,11 +110,13 @@ pub struct Lobby {
     pub max_players: usize,
     pub race_started: bool,
     pub race_start_time: Option<i64>,
+    pub race_ended: bool,
+    pub max_race_time: i64,
     pub last_activity: DateTime<Utc>,
 }
 
 impl Lobby {
-    fn new(course_key: String, creator_id: String) -> Self {
+    fn new(course_key: String, creator_id: String, max_race_time: i64) -> Self {
         Lobby {
             course_key,
             creator_id,
@@ -119,6 +124,8 @@ impl Lobby {
             max_players: 10,
             race_started: false,
             race_start_time: None,
+            race_ended: false,
+            max_race_time,
             last_activity: Utc::now(),
         }
     }
@@ -208,8 +215,17 @@ impl LobbyManager {
         player_name: String,
         tx: mpsc::UnboundedSender<ServerMessage>,
     ) -> Result<String, String> {
+        // Look up course to get max_days
+        let course = crate::courses::all()
+            .into_iter()
+            .find(|c| c.key == course_key)
+            .ok_or_else(|| "Course not found".to_string())?;
+
+        // Convert max_days to milliseconds
+        let max_race_time = course.max_days as i64 * 24 * 60 * 60 * 1000;
+
         let lobby_id = generate_lobby_id();
-        let mut lobby = Lobby::new(course_key, player_id.clone());
+        let mut lobby = Lobby::new(course_key, player_id.clone(), max_race_time);
 
         let player = Player {
             id: player_id.clone(),
@@ -284,12 +300,25 @@ impl LobbyManager {
 
     pub async fn broadcast_position(&self, player_id: &str, lng: f32, lat: f32, heading: f32) {
         let player_lobbies = self.player_lobbies.read().await;
-        let Some(lobby_id) = player_lobbies.get(player_id) else {
+        let Some(lobby_id) = player_lobbies.get(player_id).cloned() else {
             return;
         };
+        drop(player_lobbies);
 
-        let lobbies = self.lobbies.read().await;
-        let Some(lobby) = lobbies.get(lobby_id) else {
+        // First check with read lock if race has ended
+        {
+            let lobbies = self.lobbies.read().await;
+            let Some(lobby) = lobbies.get(&lobby_id) else {
+                return;
+            };
+            if lobby.race_ended {
+                return;
+            }
+        }
+
+        // Now get write lock to potentially end the race
+        let mut lobbies = self.lobbies.write().await;
+        let Some(lobby) = lobbies.get_mut(&lobby_id) else {
             return;
         };
 
@@ -298,6 +327,15 @@ impl LobbyManager {
             .race_start_time
             .map(|start| Utc::now().timestamp_millis() - start)
             .unwrap_or(0);
+
+        // Check if race time exceeded max
+        if race_time >= lobby.max_race_time {
+            lobby.race_ended = true;
+            lobby.broadcast_all(ServerMessage::RaceEnded {
+                reason: "Time limit reached".to_string(),
+            });
+            return;
+        }
 
         // Broadcast to all players except sender
         lobby.broadcast(
@@ -458,9 +496,13 @@ mod tests {
 
     #[test]
     fn test_lobby_new() {
-        let lobby = Lobby::new("vendee-2020".to_string(), "creator-1".to_string());
+        let lobby = Lobby::new(
+            "vg20".to_string(),
+            "creator-1".to_string(),
+            90 * 24 * 60 * 60 * 1000,
+        );
 
-        assert_eq!(lobby.course_key, "vendee-2020");
+        assert_eq!(lobby.course_key, "vg20");
         assert_eq!(lobby.creator_id, "creator-1");
         assert_eq!(lobby.max_players, 10);
         assert!(!lobby.race_started);
@@ -469,7 +511,11 @@ mod tests {
 
     #[test]
     fn test_lobby_add_player() {
-        let mut lobby = Lobby::new("vendee-2020".to_string(), "creator-1".to_string());
+        let mut lobby = Lobby::new(
+            "vg20".to_string(),
+            "creator-1".to_string(),
+            90 * 24 * 60 * 60 * 1000,
+        );
         let player = make_test_player("player-1", "Alice");
 
         let result = lobby.add_player(player);
@@ -481,7 +527,11 @@ mod tests {
 
     #[test]
     fn test_lobby_add_player_updates_activity() {
-        let mut lobby = Lobby::new("vendee-2020".to_string(), "creator-1".to_string());
+        let mut lobby = Lobby::new(
+            "vg20".to_string(),
+            "creator-1".to_string(),
+            90 * 24 * 60 * 60 * 1000,
+        );
         let initial_activity = lobby.last_activity;
 
         // Small delay to ensure time difference
@@ -495,7 +545,11 @@ mod tests {
 
     #[test]
     fn test_lobby_add_player_fails_when_race_started() {
-        let mut lobby = Lobby::new("vendee-2020".to_string(), "creator-1".to_string());
+        let mut lobby = Lobby::new(
+            "vg20".to_string(),
+            "creator-1".to_string(),
+            90 * 24 * 60 * 60 * 1000,
+        );
         lobby.race_started = true;
 
         let player = make_test_player("player-1", "Alice");
@@ -507,7 +561,11 @@ mod tests {
 
     #[test]
     fn test_lobby_add_player_fails_when_full() {
-        let mut lobby = Lobby::new("vendee-2020".to_string(), "creator-1".to_string());
+        let mut lobby = Lobby::new(
+            "vg20".to_string(),
+            "creator-1".to_string(),
+            90 * 24 * 60 * 60 * 1000,
+        );
 
         // Add max_players
         for i in 0..lobby.max_players {
@@ -525,7 +583,11 @@ mod tests {
 
     #[test]
     fn test_lobby_remove_player() {
-        let mut lobby = Lobby::new("vendee-2020".to_string(), "creator-1".to_string());
+        let mut lobby = Lobby::new(
+            "vg20".to_string(),
+            "creator-1".to_string(),
+            90 * 24 * 60 * 60 * 1000,
+        );
         let player = make_test_player("player-1", "Alice");
         lobby.add_player(player).unwrap();
 
@@ -538,7 +600,11 @@ mod tests {
 
     #[test]
     fn test_lobby_remove_nonexistent_player() {
-        let mut lobby = Lobby::new("vendee-2020".to_string(), "creator-1".to_string());
+        let mut lobby = Lobby::new(
+            "vg20".to_string(),
+            "creator-1".to_string(),
+            90 * 24 * 60 * 60 * 1000,
+        );
 
         let removed = lobby.remove_player("nonexistent");
 
@@ -547,7 +613,11 @@ mod tests {
 
     #[test]
     fn test_lobby_is_expired_empty_and_old() {
-        let mut lobby = Lobby::new("vendee-2020".to_string(), "creator-1".to_string());
+        let mut lobby = Lobby::new(
+            "vg20".to_string(),
+            "creator-1".to_string(),
+            90 * 24 * 60 * 60 * 1000,
+        );
         // Set last activity to 6 minutes ago
         lobby.last_activity = Utc::now() - chrono::Duration::minutes(6);
 
@@ -556,7 +626,11 @@ mod tests {
 
     #[test]
     fn test_lobby_is_not_expired_with_players() {
-        let mut lobby = Lobby::new("vendee-2020".to_string(), "creator-1".to_string());
+        let mut lobby = Lobby::new(
+            "vg20".to_string(),
+            "creator-1".to_string(),
+            90 * 24 * 60 * 60 * 1000,
+        );
         lobby.last_activity = Utc::now() - chrono::Duration::minutes(6);
 
         // Add a player
@@ -569,7 +643,11 @@ mod tests {
 
     #[test]
     fn test_lobby_is_not_expired_recent_activity() {
-        let lobby = Lobby::new("vendee-2020".to_string(), "creator-1".to_string());
+        let lobby = Lobby::new(
+            "vg20".to_string(),
+            "creator-1".to_string(),
+            90 * 24 * 60 * 60 * 1000,
+        );
         // Fresh lobby with no players
 
         // Should not be expired because activity is recent
@@ -578,7 +656,11 @@ mod tests {
 
     #[test]
     fn test_lobby_get_player_infos() {
-        let mut lobby = Lobby::new("vendee-2020".to_string(), "creator-1".to_string());
+        let mut lobby = Lobby::new(
+            "vg20".to_string(),
+            "creator-1".to_string(),
+            90 * 24 * 60 * 60 * 1000,
+        );
         lobby.add_player(make_test_player("p1", "Alice")).unwrap();
         lobby.add_player(make_test_player("p2", "Bob")).unwrap();
 
@@ -601,7 +683,7 @@ mod tests {
 
         let result = manager
             .create_lobby(
-                "vendee-2020".to_string(),
+                "vg20".to_string(),
                 "player-1".to_string(),
                 "Alice".to_string(),
                 tx,
@@ -626,7 +708,7 @@ mod tests {
         // Create lobby
         let lobby_id = manager
             .create_lobby(
-                "vendee-2020".to_string(),
+                "vg20".to_string(),
                 "player-1".to_string(),
                 "Alice".to_string(),
                 tx1,
@@ -641,7 +723,7 @@ mod tests {
 
         assert!(result.is_ok());
         let (players, course_key, is_creator) = result.unwrap();
-        assert_eq!(course_key, "vendee-2020");
+        assert_eq!(course_key, "vg20");
         assert!(!is_creator);
         assert_eq!(players.len(), 2); // Alice and Bob
     }
@@ -666,7 +748,7 @@ mod tests {
 
         let lobby_id = manager
             .create_lobby(
-                "vendee-2020".to_string(),
+                "vg20".to_string(),
                 "player-1".to_string(),
                 "Alice".to_string(),
                 tx,
@@ -690,7 +772,7 @@ mod tests {
 
         manager
             .create_lobby(
-                "vendee-2020".to_string(),
+                "vg20".to_string(),
                 "player-1".to_string(),
                 "Alice".to_string(),
                 tx1,
@@ -700,7 +782,7 @@ mod tests {
 
         manager
             .create_lobby(
-                "vendee-2020".to_string(),
+                "vg20".to_string(),
                 "player-2".to_string(),
                 "Bob".to_string(),
                 tx2,
@@ -720,7 +802,7 @@ mod tests {
 
         let lobby_id = manager
             .create_lobby(
-                "vendee-2020".to_string(),
+                "vg20".to_string(),
                 "player-1".to_string(),
                 "Alice".to_string(),
                 tx,

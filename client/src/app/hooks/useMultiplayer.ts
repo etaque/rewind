@@ -83,6 +83,9 @@ export function useMultiplayer(
       onRaceStarted: () => {
         dispatch({ type: "RACE_STARTED" });
       },
+      onRaceEnded: (reason) => {
+        dispatch({ type: "RACE_ENDED", reason });
+      },
       onError: (message) => {
         console.error("Multiplayer error:", message);
       },

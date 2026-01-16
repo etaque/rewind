@@ -16,6 +16,7 @@ pub struct Course {
     pub start_heading: f64,
     pub finish: LngLat,
     pub time_factor: u32,
+    pub max_days: u32,
 }
 
 pub fn all() -> Vec<Course> {
@@ -34,5 +35,6 @@ pub fn all() -> Vec<Course> {
             lat: 46.470243284275966,
         },
         time_factor: 2000,
+        max_days: 90,
     }]
 }

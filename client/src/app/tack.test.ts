@@ -13,6 +13,7 @@ function makeSession(overrides: Partial<Session> = {}): Session {
       finish: { lng: 0, lat: 0 },
       startHeading: 0,
       timeFactor: 1,
+      maxDays: 90,
     },
     clock: 0,
     lastWindRefresh: 0,
