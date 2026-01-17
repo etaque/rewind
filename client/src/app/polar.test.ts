@@ -3,13 +3,12 @@ import { getBoatSpeed, calculateTWA } from "./polar";
 
 describe("getBoatSpeed", () => {
   describe("boundary conditions", () => {
-    it("returns low speed at TWA 0 (heading into wind)", () => {
-      // Polar has non-zero values at TWA 0 (drift/forward motion)
-      // But speed should be much lower than at other angles
+    it("returns zero speed at TWA 0 (heading into wind)", () => {
+      // VR polar has 0 speed at TWA 0 (can't sail directly into wind)
       const speedIntoWind = getBoatSpeed(10, 0);
       const speedBeamReach = getBoatSpeed(10, 90);
       expect(speedIntoWind).toBeLessThan(speedBeamReach / 2);
-      expect(speedIntoWind).toBeCloseTo(3.5, 1); // From polar data
+      expect(speedIntoWind).toBe(0);
     });
 
     it("handles TWA > 180 by normalizing", () => {
@@ -70,11 +69,11 @@ describe("getBoatSpeed", () => {
     });
 
     it("clamps TWS above maximum to maximum", () => {
-      // Very high wind should be clamped to max TWS in polar
+      // Very high wind should be clamped to max TWS in polar (70 knots)
       const speed = getBoatSpeed(100, 90);
       expect(speed).toBeGreaterThan(0);
-      // Should be same as max TWS value
-      const speedAtMax = getBoatSpeed(40, 90);
+      // Should be same as max TWS value (70 knots in VR polar)
+      const speedAtMax = getBoatSpeed(70, 90);
       expect(speed).toBeCloseTo(speedAtMax, 1);
     });
   });

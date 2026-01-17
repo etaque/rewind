@@ -5,7 +5,9 @@ use rand::Rng;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::sync::Arc;
-use tokio::sync::{mpsc, RwLock};
+use tokio::sync::{RwLock, mpsc};
+
+use crate::courses::Course;
 
 // ============================================================================
 // Message Types
@@ -60,15 +62,13 @@ pub enum ServerMessage {
     RaceCountdown {
         seconds: i32,
     },
-    RaceStarted {
-        start_time: i64,
-        course_key: String,
-    },
     PositionUpdate {
         player_id: String,
         lng: f32,
         lat: f32,
         heading: f32,
+    },
+    SyncRaceTime {
         race_time: i64,
     },
     RaceEnded {
@@ -115,36 +115,34 @@ impl Player {
 
 #[derive(Debug)]
 pub struct Race {
-    pub course_key: String,
+    pub course: Course,
     pub creator_id: String,
     pub players: HashMap<String, Player>,
     pub max_players: usize,
-    pub race_started: bool,
     pub race_start_time: Option<i64>,
     pub race_ended: bool,
-    pub max_race_time: i64,
     pub last_activity: DateTime<Utc>,
-    pub finish: (f64, f64), // (lng, lat)
 }
 
 impl Race {
-    fn new(course_key: String, creator_id: String, max_race_time: i64, finish: (f64, f64)) -> Self {
+    fn new(course: Course, creator_id: String) -> Self {
         Race {
-            course_key,
+            course,
             creator_id,
             players: HashMap::new(),
             max_players: 10,
-            race_started: false,
             race_start_time: None,
             race_ended: false,
-            max_race_time,
             last_activity: Utc::now(),
-            finish,
         }
     }
 
+    pub fn race_started(&self) -> bool {
+        self.race_start_time.is_some()
+    }
+
     fn add_player(&mut self, player: Player) -> Result<(), String> {
-        if self.race_started {
+        if self.race_started() {
             return Err("Race has already started".to_string());
         }
         if self.players.len() >= self.max_players {
@@ -195,7 +193,12 @@ impl Race {
                 player.position.map(|(lng, lat)| LeaderboardEntry {
                     player_id: player.id.clone(),
                     player_name: player.name.clone(),
-                    distance_to_finish: haversine_distance(lat, lng, self.finish.1, self.finish.0),
+                    distance_to_finish: haversine_distance(
+                        lat,
+                        lng,
+                        self.course.finish.lat,
+                        self.course.finish.lng,
+                    ),
                 })
             })
             .collect();
@@ -258,6 +261,40 @@ impl RaceManager {
             }
         });
 
+        // Spawn race time update task
+        let races_clone = manager.races.clone();
+        tokio::spawn(async move {
+            loop {
+                tokio::time::sleep(tokio::time::Duration::from_secs(1)).await;
+                let races = races_clone.read().await;
+                for (race_id, race) in races.iter() {
+                    if let Some(start_time) = race.race_start_time
+                        && !race.race_ended
+                    {
+                        // Calculate race time (ms since race start)
+                        let now = Utc::now().timestamp_millis();
+                        let race_time = race.course.race_time(now - start_time);
+
+                        race.broadcast_all(ServerMessage::SyncRaceTime { race_time });
+
+                        // Check if race time exceeded max
+                        if race_time >= race.course.max_finish_time() {
+                            {
+                                let mut races = races_clone.write().await;
+                                if let Some(race) = races.get_mut(race_id) {
+                                    race.race_ended = true;
+                                }
+                            }
+                            race.broadcast_all(ServerMessage::RaceEnded {
+                                reason: "Time limit reached".to_string(),
+                            });
+                            return;
+                        }
+                    }
+                }
+            }
+        });
+
         // Spawn leaderboard broadcast task (every 2 seconds)
         let races_clone = manager.races.clone();
         tokio::spawn(async move {
@@ -265,7 +302,7 @@ impl RaceManager {
                 tokio::time::sleep(tokio::time::Duration::from_secs(2)).await;
                 let races = races_clone.read().await;
                 for race in races.values() {
-                    if race.race_started && !race.race_ended {
+                    if race.race_started() && !race.race_ended {
                         let leaderboard = race.compute_leaderboard();
                         race.broadcast_all(ServerMessage::Leaderboard {
                             entries: leaderboard,
@@ -285,18 +322,13 @@ impl RaceManager {
         player_name: String,
         tx: mpsc::UnboundedSender<ServerMessage>,
     ) -> Result<String, String> {
-        // Look up course to get max_days and finish
         let course = crate::courses::all()
             .into_iter()
             .find(|c| c.key == course_key)
             .ok_or_else(|| "Course not found".to_string())?;
 
-        // Convert max_days to milliseconds
-        let max_race_time = course.max_days as i64 * 24 * 60 * 60 * 1000;
-        let finish = (course.finish.lng, course.finish.lat);
-
         let race_id = generate_race_id();
-        let mut race = Race::new(course_key, player_id.clone(), max_race_time, finish);
+        let mut race = Race::new(course, player_id.clone());
 
         let player = Player {
             id: player_id.clone(),
@@ -341,7 +373,7 @@ impl RaceManager {
         });
 
         let is_creator = race.creator_id == player_id;
-        let course_key = race.course_key.clone();
+        let course_key = race.course.key.clone();
         race.add_player(player)?;
 
         let players = race.get_player_infos();
@@ -389,7 +421,7 @@ impl RaceManager {
             }
         }
 
-        // Now get write lock to potentially end the race
+        // Now get write lock to update player position
         let mut races = self.races.write().await;
         let Some(race) = races.get_mut(&race_id) else {
             return;
@@ -400,21 +432,6 @@ impl RaceManager {
             player.position = Some((lng as f64, lat as f64));
         }
 
-        // Calculate race time (ms since race start)
-        let race_time = race
-            .race_start_time
-            .map(|start| Utc::now().timestamp_millis() - start)
-            .unwrap_or(0);
-
-        // Check if race time exceeded max
-        if race_time >= race.max_race_time {
-            race.race_ended = true;
-            race.broadcast_all(ServerMessage::RaceEnded {
-                reason: "Time limit reached".to_string(),
-            });
-            return;
-        }
-
         // Broadcast to all players except sender
         race.broadcast(
             ServerMessage::PositionUpdate {
@@ -422,7 +439,6 @@ impl RaceManager {
                 lng,
                 lat,
                 heading,
-                race_time,
             },
             Some(player_id),
         );
@@ -437,7 +453,7 @@ impl RaceManager {
         drop(player_races);
 
         // Validate and mark race as started
-        let course_key = {
+        {
             let mut races = self.races.write().await;
             let race = races
                 .get_mut(&race_id)
@@ -447,13 +463,10 @@ impl RaceManager {
                 return Err("Only the race creator can start the race".to_string());
             }
 
-            if race.race_started {
+            if race.race_started() {
                 return Err("Race has already started".to_string());
             }
-
-            race.race_started = true;
-            race.course_key.clone()
-        };
+        }
 
         // Countdown (release lock between each second)
         for seconds in (1..=3).rev() {
@@ -475,10 +488,7 @@ impl RaceManager {
             if let Some(race) = races.get_mut(&race_id) {
                 let start_time = Utc::now().timestamp_millis();
                 race.race_start_time = Some(start_time);
-                race.broadcast_all(ServerMessage::RaceStarted {
-                    start_time,
-                    course_key,
-                });
+                race.broadcast_all(ServerMessage::RaceCountdown { seconds: 0 });
             }
         }
 
@@ -502,12 +512,12 @@ impl RaceManager {
         let races = self.races.read().await;
         races
             .iter()
-            .filter(|(_, race)| !race.race_started) // Only show races that haven't started
+            .filter(|(_, race)| !race.race_started()) // Only show races that haven't started
             .map(|(id, race)| RaceInfo {
                 id: id.clone(),
-                course_key: race.course_key.clone(),
+                course_key: race.course.key.clone(),
                 max_players: race.max_players,
-                race_started: race.race_started,
+                race_started: race.race_started(),
                 creator_id: race.creator_id.clone(),
                 players: race.players.values().map(|player| player.info()).collect(),
             })
@@ -538,9 +548,10 @@ mod tests {
         // Should be 16 hex characters (8 bytes * 2 chars each)
         assert_eq!(id.len(), 16);
         // Should be valid uppercase hex
-        assert!(id
-            .chars()
-            .all(|c| c.is_ascii_hexdigit() && !c.is_lowercase()));
+        assert!(
+            id.chars()
+                .all(|c| c.is_ascii_hexdigit() && !c.is_lowercase())
+        );
     }
 
     #[test]
@@ -573,30 +584,39 @@ mod tests {
         }
     }
 
+    fn make_test_course() -> Course {
+        Course {
+            key: "vg20".to_string(),
+            name: "Vendee Globe 2020".to_string(),
+            start_time: 1604833200000,
+            start: crate::courses::LngLat {
+                lng: -1.788,
+                lat: 46.470,
+            },
+            start_heading: 270.0,
+            finish: crate::courses::LngLat {
+                lng: -1.788,
+                lat: 46.470,
+            },
+            time_factor: 2000,
+            max_days: 90,
+        }
+    }
+
     #[test]
     fn test_race_new() {
-        let race = Race::new(
-            "vg20".to_string(),
-            "creator-1".to_string(),
-            90 * 24 * 60 * 60 * 1000,
-            (-1.788, 46.470),
-        );
+        let race = Race::new(make_test_course(), "creator-1".to_string());
 
-        assert_eq!(race.course_key, "vg20");
+        assert_eq!(race.course.key, "vg20");
         assert_eq!(race.creator_id, "creator-1");
         assert_eq!(race.max_players, 10);
-        assert!(!race.race_started);
+        assert!(race.race_start_time.is_none());
         assert!(race.players.is_empty());
     }
 
     #[test]
     fn test_race_add_player() {
-        let mut race = Race::new(
-            "vg20".to_string(),
-            "creator-1".to_string(),
-            90 * 24 * 60 * 60 * 1000,
-            (-1.788, 46.470),
-        );
+        let mut race = Race::new(make_test_course(), "creator-1".to_string());
         let player = make_test_player("player-1", "Alice");
 
         let result = race.add_player(player);
@@ -608,12 +628,7 @@ mod tests {
 
     #[test]
     fn test_race_add_player_updates_activity() {
-        let mut race = Race::new(
-            "vg20".to_string(),
-            "creator-1".to_string(),
-            90 * 24 * 60 * 60 * 1000,
-            (-1.788, 46.470),
-        );
+        let mut race = Race::new(make_test_course(), "creator-1".to_string());
         let initial_activity = race.last_activity;
 
         // Small delay to ensure time difference
@@ -627,13 +642,8 @@ mod tests {
 
     #[test]
     fn test_race_add_player_fails_when_race_started() {
-        let mut race = Race::new(
-            "vg20".to_string(),
-            "creator-1".to_string(),
-            90 * 24 * 60 * 60 * 1000,
-            (-1.788, 46.470),
-        );
-        race.race_started = true;
+        let mut race = Race::new(make_test_course(), "creator-1".to_string());
+        race.race_start_time = Some(Utc::now().timestamp_millis());
 
         let player = make_test_player("player-1", "Alice");
         let result = race.add_player(player);
@@ -644,12 +654,7 @@ mod tests {
 
     #[test]
     fn test_race_add_player_fails_when_full() {
-        let mut race = Race::new(
-            "vg20".to_string(),
-            "creator-1".to_string(),
-            90 * 24 * 60 * 60 * 1000,
-            (-1.788, 46.470),
-        );
+        let mut race = Race::new(make_test_course(), "creator-1".to_string());
 
         // Add max_players
         for i in 0..race.max_players {
@@ -667,12 +672,7 @@ mod tests {
 
     #[test]
     fn test_race_remove_player() {
-        let mut race = Race::new(
-            "vg20".to_string(),
-            "creator-1".to_string(),
-            90 * 24 * 60 * 60 * 1000,
-            (-1.788, 46.470),
-        );
+        let mut race = Race::new(make_test_course(), "creator-1".to_string());
         let player = make_test_player("player-1", "Alice");
         race.add_player(player).unwrap();
 
@@ -685,12 +685,7 @@ mod tests {
 
     #[test]
     fn test_race_remove_nonexistent_player() {
-        let mut race = Race::new(
-            "vg20".to_string(),
-            "creator-1".to_string(),
-            90 * 24 * 60 * 60 * 1000,
-            (-1.788, 46.470),
-        );
+        let mut race = Race::new(make_test_course(), "creator-1".to_string());
 
         let removed = race.remove_player("nonexistent");
 
@@ -699,12 +694,7 @@ mod tests {
 
     #[test]
     fn test_race_is_expired_empty_and_old() {
-        let mut race = Race::new(
-            "vg20".to_string(),
-            "creator-1".to_string(),
-            90 * 24 * 60 * 60 * 1000,
-            (-1.788, 46.470),
-        );
+        let mut race = Race::new(make_test_course(), "creator-1".to_string());
         // Set last activity to 6 minutes ago
         race.last_activity = Utc::now() - chrono::Duration::minutes(6);
 
@@ -713,12 +703,7 @@ mod tests {
 
     #[test]
     fn test_race_is_not_expired_with_players() {
-        let mut race = Race::new(
-            "vg20".to_string(),
-            "creator-1".to_string(),
-            90 * 24 * 60 * 60 * 1000,
-            (-1.788, 46.470),
-        );
+        let mut race = Race::new(make_test_course(), "creator-1".to_string());
         race.last_activity = Utc::now() - chrono::Duration::minutes(6);
 
         // Add a player
@@ -731,12 +716,7 @@ mod tests {
 
     #[test]
     fn test_race_is_not_expired_recent_activity() {
-        let race = Race::new(
-            "vg20".to_string(),
-            "creator-1".to_string(),
-            90 * 24 * 60 * 60 * 1000,
-            (-1.788, 46.470),
-        );
+        let race = Race::new(make_test_course(), "creator-1".to_string());
         // Fresh race with no players
 
         // Should not be expired because activity is recent
@@ -745,12 +725,7 @@ mod tests {
 
     #[test]
     fn test_race_get_player_infos() {
-        let mut race = Race::new(
-            "vg20".to_string(),
-            "creator-1".to_string(),
-            90 * 24 * 60 * 60 * 1000,
-            (-1.788, 46.470),
-        );
+        let mut race = Race::new(make_test_course(), "creator-1".to_string());
         race.add_player(make_test_player("p1", "Alice")).unwrap();
         race.add_player(make_test_player("p2", "Bob")).unwrap();
 
@@ -903,7 +878,7 @@ mod tests {
         // Mark race as started
         {
             let mut races = manager.races.write().await;
-            races.get_mut(&race_id).unwrap().race_started = true;
+            races.get_mut(&race_id).unwrap().race_start_time = Some(Utc::now().timestamp_millis());
         }
 
         let races = manager.list_races().await;
@@ -1018,6 +993,7 @@ async fn handle_client_message(
     };
 
     if let Err(error_message) = result {
+        log::error!("Failed to handle client message: {}", error_message);
         let _ = tx.send(ServerMessage::Error {
             message: error_message,
         });

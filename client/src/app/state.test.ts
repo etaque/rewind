@@ -64,6 +64,7 @@ function makePlayingState(
       clock: 0,
       lastWindRefresh: 0,
       courseTime: 1000,
+      serverRaceTime: 1000,
       position: { lng: -10, lat: 45 },
       turning: null,
       heading: 90,
@@ -224,10 +225,10 @@ describe("appReducer", () => {
     });
   });
 
-  describe("RACE_STARTED", () => {
+  describe("COUNTDOWN", () => {
     it("marks race as started", () => {
       const state = makeLoadingState();
-      const action: AppAction = { type: "RACE_STARTED" };
+      const action: AppAction = { type: "COUNTDOWN", seconds: 0 };
 
       const result = appReducer(state, action);
 

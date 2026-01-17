@@ -84,7 +84,7 @@ export function tick(session: Session, delta: number): TickResult {
 
   // Calculate TWA and boat speed from polar
   const twa = calculateTWA(heading, windDirNorm);
-  const boatSpeed = getBoatSpeed(tws, twa);
+  let boatSpeed = getBoatSpeed(tws, twa);
 
   // Move boat based on speed and heading
   // Boat speed is in knots, delta is in ms
@@ -104,24 +104,15 @@ export function tick(session: Session, delta: number): TickResult {
     (distanceKm * Math.sin(headingRad)) /
     (111 * Math.cos((session.position.lat * Math.PI) / 180));
 
-  const newPosition: LngLat = {
+  let newPosition: LngLat = {
     lat: session.position.lat + latDelta,
     lng: session.position.lng + lngDelta,
   };
 
   // Check land collision - don't move if new position is on land
   if (isPointOnLand(newPosition.lng, newPosition.lat)) {
-    return {
-      clock: newClock,
-      courseTime: newCourseTime,
-      boatSpeed: 0,
-      position: session.position,
-      heading,
-      targetHeading,
-      lockedTWA,
-      currentReport,
-      nextReports,
-    };
+    boatSpeed = 0;
+    newPosition = session.position;
   }
 
   return {

@@ -74,10 +74,6 @@ export class SignalingClient {
         this.callbacks.onCountdown(message.seconds);
         break;
 
-      case "RaceStarted":
-        this.callbacks.onRaceStarted();
-        break;
-
       case "RaceEnded":
         this.callbacks.onRaceEnded(message.reason);
         break;

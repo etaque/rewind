@@ -89,7 +89,6 @@ export type MultiplayerCallbacks = {
     raceTime: number,
   ) => void;
   onCountdown: (seconds: number) => void;
-  onRaceStarted: () => void;
   onRaceEnded: (reason: string) => void;
   onLeaderboardUpdate: (entries: LeaderboardEntry[]) => void;
   onError: (message: string) => void;

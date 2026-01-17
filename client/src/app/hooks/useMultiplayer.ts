@@ -67,22 +67,18 @@ export function useMultiplayer(
         dispatch({ type: "PLAYER_LEFT", playerId });
         sphereViewRef.current?.removePeer(playerId);
       },
-      onPeerPositionUpdate: (peerId, position, heading, name, raceTime) => {
+      onPeerPositionUpdate: (peerId, position, heading, name) => {
         sphereViewRef.current?.updatePeerPosition(
           peerId,
           position,
           heading,
           name,
         );
-        // Sync race time from server
-        dispatch({ type: "SYNC_RACE_TIME", raceTime });
       },
       onCountdown: (seconds) => {
         dispatch({ type: "COUNTDOWN", seconds });
       },
-      onRaceStarted: () => {
-        dispatch({ type: "RACE_STARTED" });
-      },
+
       onRaceEnded: (reason) => {
         dispatch({ type: "RACE_ENDED", reason });
       },

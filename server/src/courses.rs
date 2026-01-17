@@ -15,8 +15,18 @@ pub struct Course {
     pub start: LngLat,
     pub start_heading: f64,
     pub finish: LngLat,
-    pub time_factor: u32,
-    pub max_days: u32,
+    pub time_factor: u16,
+    pub max_days: u8,
+}
+
+impl Course {
+    pub fn max_finish_time(&self) -> i64 {
+        self.start_time + (self.max_days as i64 * 24 * 60 * 60 * 1000)
+    }
+
+    pub fn race_time(&self, elapsed_since_start: i64) -> i64 {
+        self.start_time + elapsed_since_start * (self.time_factor as i64)
+    }
 }
 
 pub fn all() -> Vec<Course> {

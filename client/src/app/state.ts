@@ -36,6 +36,7 @@ export type Session = {
   clock: number;
   lastWindRefresh: number;
   courseTime: number;
+  serverRaceTime: number;
   position: LngLat;
   turning: Turn;
   heading: number;
@@ -75,7 +76,6 @@ export type AppAction =
   | { type: "PLAYER_JOINED"; playerId: string; playerName: string }
   | { type: "PLAYER_LEFT"; playerId: string }
   | { type: "COUNTDOWN"; seconds: number }
-  | { type: "RACE_STARTED" }
   | { type: "START_PLAYING"; reports: WindReport[] }
   | { type: "LEAVE_RACE" }
   | { type: "SYNC_RACE_TIME"; raceTime: number }
@@ -105,6 +105,7 @@ function createPlayingState(
       clock: 0,
       lastWindRefresh: 0,
       courseTime: state.course.startTime,
+      serverRaceTime: state.course.startTime,
       position: state.course.start,
       turning: null,
       heading: state.course.startHeading,
@@ -272,15 +273,11 @@ export function appReducer(state: AppState, action: AppAction): AppState {
       if (state.tag !== "Loading") return state;
       return {
         ...state,
-        race: { ...state.race, countdown: action.seconds },
-      };
-
-    case "RACE_STARTED":
-      if (state.tag !== "Loading") return state;
-      // Mark race as started
-      return {
-        ...state,
-        race: { ...state.race, raceStarted: true },
+        race: {
+          ...state.race,
+          countdown: action.seconds,
+          raceStarted: action.seconds === 0,
+        },
       };
 
     case "START_PLAYING":
@@ -293,20 +290,13 @@ export function appReducer(state: AppState, action: AppAction): AppState {
 
     case "SYNC_RACE_TIME": {
       if (state.tag !== "Playing") return state;
-      // Only sync if drift exceeds threshold (5 seconds of game time)
-      const DRIFT_THRESHOLD_MS = 5000;
-      const serverCourseTime = state.session.course.startTime + action.raceTime;
-      const drift = Math.abs(serverCourseTime - state.session.courseTime);
-      if (drift > DRIFT_THRESHOLD_MS) {
-        return {
-          ...state,
-          session: {
-            ...state.session,
-            courseTime: serverCourseTime,
-          },
-        };
-      }
-      return state;
+      return {
+        ...state,
+        session: {
+          ...state.session,
+          serverRaceTime: action.raceTime,
+        },
+      };
     }
 
     case "RACE_ENDED":
