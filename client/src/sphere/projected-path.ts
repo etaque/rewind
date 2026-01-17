@@ -1,11 +1,6 @@
 import { geoDistance } from "d3-geo";
-import { LngLat } from "../models";
 import { Scene } from "./scene";
-
-export type ProjectedPoint = {
-  position: LngLat;
-  time: number;
-};
+import { ProjectedPoint } from "../app/projected-path";
 
 export default class ProjectedPath {
   canvas: HTMLCanvasElement;

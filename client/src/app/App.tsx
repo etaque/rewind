@@ -254,10 +254,8 @@ export default function App() {
     const projectedPath = computeProjectedPath(
       state.session.position,
       state.session.heading,
-      state.session.lockedTWA,
-      state.session.targetHeading,
+      state.session.boatSpeed,
       state.session.courseTime,
-      state.session.course.timeFactor,
       interpolatedWind,
     );
     sphereViewRef.current.updateProjectedPath(projectedPath);

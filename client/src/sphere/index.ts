@@ -14,7 +14,8 @@ import WindTexture from "./wind-texture";
 import WindParticles from "./wind-particles";
 import GhostBoats from "./ghost-boats";
 import CourseLine from "./course-line";
-import ProjectedPath, { ProjectedPoint } from "./projected-path";
+import ProjectedPath from "./projected-path";
+import { ProjectedPoint } from "../app/projected-path";
 
 export class SphereView {
   readonly course: Course;

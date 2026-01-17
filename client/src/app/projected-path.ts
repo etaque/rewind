@@ -4,15 +4,13 @@ import { getBoatSpeed, calculateTWA } from "./polar";
 import { getWindDirection, getWindSpeedKnots } from "../utils";
 
 // Projection settings
-const PROJECTION_HOURS = 6;
-const SAMPLE_INTERVAL_MINUTES = 15;
+const PROJECTION_HOURS = 12;
+const SAMPLE_INTERVAL_MINUTES = 30;
 const SAMPLES = (PROJECTION_HOURS * 60) / SAMPLE_INTERVAL_MINUTES;
-
-// Turn rate during tack (degrees per second of real time)
-const TACK_TURN_RATE = 90;
 
 export type ProjectedPoint = {
   position: LngLat;
+  boatSpeed: number;
   time: number;
 };
 
@@ -23,26 +21,20 @@ export type ProjectedPoint = {
 export function computeProjectedPath(
   startPosition: LngLat,
   heading: number,
-  lockedTWA: number | null,
-  targetHeading: number | null,
+  speed: number,
   courseTime: number,
-  timeFactor: number,
   interpolatedWind: InterpolatedWind,
 ): ProjectedPoint[] {
   const points: ProjectedPoint[] = [
-    { position: startPosition, time: courseTime },
+    { position: startPosition, time: courseTime, boatSpeed: speed },
   ];
 
   let currentPos = { ...startPosition };
   let currentHeading = heading;
-  let currentTargetHeading = targetHeading;
-  let currentLockedTWA = lockedTWA;
   let currentTime = courseTime;
 
   // Time step in milliseconds (game time)
   const timeStepMs = SAMPLE_INTERVAL_MINUTES * 60 * 1000;
-  // Real time equivalent for the time step (for turn rate calculation)
-  const realTimeStepMs = timeStepMs / timeFactor;
 
   for (let i = 0; i < SAMPLES; i++) {
     // Advance time
@@ -54,36 +46,6 @@ export function computeProjectedPath(
 
     const tws = getWindSpeedKnots(wind);
     const windDir = getWindDirection(wind);
-
-    // Handle progressive turning during tack
-    if (currentTargetHeading !== null) {
-      const realDeltaSeconds = realTimeStepMs / 1000;
-      const maxTurn = TACK_TURN_RATE * realDeltaSeconds;
-
-      // Calculate shortest turn direction
-      let diff = currentTargetHeading - currentHeading;
-      while (diff > 180) diff -= 360;
-      while (diff < -180) diff += 360;
-
-      if (Math.abs(diff) <= maxTurn) {
-        // Reached target
-        currentHeading = currentTargetHeading;
-        currentTargetHeading = null;
-        // Flip TWA lock to opposite side when tack completes
-        if (currentLockedTWA !== null) {
-          currentLockedTWA = -currentLockedTWA;
-        }
-      } else {
-        // Turn toward target
-        currentHeading =
-          (currentHeading + Math.sign(diff) * maxTurn + 360) % 360;
-      }
-    } else if (currentLockedTWA !== null) {
-      // Apply TWA lock: adjust heading to maintain locked TWA
-      currentHeading = windDir - currentLockedTWA;
-      while (currentHeading < 0) currentHeading += 360;
-      while (currentHeading >= 360) currentHeading -= 360;
-    }
 
     // Calculate boat speed
     const twa = calculateTWA(currentHeading, windDir);
@@ -112,7 +74,11 @@ export function computeProjectedPath(
       lng: currentPos.lng + dLng,
     };
 
-    points.push({ position: currentPos, time: currentTime });
+    points.push({
+      position: currentPos,
+      time: currentTime,
+      boatSpeed: boatSpeed,
+    });
   }
 
   return points;
