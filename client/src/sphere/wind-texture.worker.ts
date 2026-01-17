@@ -132,12 +132,12 @@ function speedAt(
 }
 
 function posToPixel(lng: number, lat: number): { x: number; y: number } | null {
-  if (lat < -LAT_AMPLITUDE || lat > LAT_AMPLITUDE) {
+  if (lat < -LAT_AMPLITUDE / 2 || lat > LAT_AMPLITUDE / 2) {
     return null;
   }
   return {
     x: toGribLongitude(lng) / PIXEL_SIZE,
-    y: (lat + LAT_AMPLITUDE / 2) / PIXEL_SIZE,
+    y: (LAT_AMPLITUDE / 2 - lat) / PIXEL_SIZE,
   };
 }
 

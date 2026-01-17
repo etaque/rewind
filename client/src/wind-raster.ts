@@ -65,12 +65,12 @@ const pixelToIndex = ({ x, y }: Pixel): number =>
   (pixelWidth * y + x) * channels;
 
 const posToPixel = ({ lng, lat }: LngLat): Pixel | null => {
-  if (lat < -latAmplitude || lat > latAmplitude) {
+  if (lat < -latAmplitude / 2 || lat > latAmplitude / 2) {
     return null;
   } else {
     return {
       x: toGribLongitude(lng) / pixelSize,
-      y: (lat + latAmplitude / 2) / pixelSize,
+      y: (latAmplitude / 2 - lat) / pixelSize,
     };
   }
 };
