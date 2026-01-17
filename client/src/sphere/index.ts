@@ -211,6 +211,25 @@ export class SphereView {
     this.render();
   }
 
+  zoomToMax() {
+    const maxScale = 8;
+    this.projection.scale(
+      (this.projection.scale() * maxScale) / this.getCurrentZoomRatio(),
+    );
+    this.particles.reset();
+    this.render();
+  }
+
+  private getCurrentZoomRatio(): number {
+    const currentScale = this.projection.scale();
+    // Calculate default scale for current size
+    const tempProjection = d3
+      .geoOrthographic()
+      .fitSize([this.width, this.height], sphere);
+    const defaultScale = tempProjection.scale();
+    return currentScale / defaultScale;
+  }
+
   resize() {
     const oldWidth = this.width;
     const oldHeight = this.height;

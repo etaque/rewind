@@ -77,6 +77,10 @@ export function useMultiplayer(
       },
       onCountdown: (seconds) => {
         dispatch({ type: "COUNTDOWN", seconds });
+        // Zoom to max when countdown starts
+        if (seconds === 3) {
+          sphereViewRef.current?.zoomToMax();
+        }
       },
 
       onRaceEnded: (reason) => {
