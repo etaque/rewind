@@ -49,25 +49,30 @@ export class SignalingClient {
         break;
 
       case "RaceCreated":
-        this.callbacks.onRaceCreated(message.race_id, message.player_id);
+        this.callbacks.onRaceCreated(
+          message.raceId,
+          message.playerId,
+          message.windRasterSources,
+        );
         break;
 
       case "RaceJoined":
         this.callbacks.onRaceJoined(
-          message.race_id,
-          message.player_id,
+          message.raceId,
+          message.playerId,
           message.players,
-          message.is_creator,
-          message.course_key,
+          message.isCreator,
+          message.courseKey,
+          message.windRasterSources,
         );
         break;
 
       case "PlayerJoined":
-        this.callbacks.onPlayerJoined(message.player_id, message.player_name);
+        this.callbacks.onPlayerJoined(message.playerId, message.playerName);
         break;
 
       case "PlayerLeft":
-        this.callbacks.onPlayerLeft(message.player_id);
+        this.callbacks.onPlayerLeft(message.playerId);
         break;
 
       case "RaceCountdown":
@@ -80,11 +85,11 @@ export class SignalingClient {
 
       case "PositionUpdate":
         this.callbacks.onPeerPositionUpdate(
-          message.player_id,
+          message.playerId,
           { lng: message.lng, lat: message.lat },
           message.heading,
           "", // Name is resolved by the client from peerStates
-          message.race_time,
+          message.raceTime,
         );
         break;
 
@@ -103,16 +108,16 @@ export class SignalingClient {
   createRace(courseKey: string, playerName: string) {
     this.send({
       type: "CreateRace",
-      course_key: courseKey,
-      player_name: playerName,
+      courseKey: courseKey,
+      playerName: playerName,
     });
   }
 
   joinRace(raceId: string, playerName: string) {
     this.send({
       type: "JoinRace",
-      race_id: raceId,
-      player_name: playerName,
+      raceId: raceId,
+      playerName: playerName,
     });
   }
 

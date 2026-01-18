@@ -1,4 +1,5 @@
 use crate::config::config;
+use crate::courses::Course;
 use crate::s3;
 use anyhow::Result;
 use bytes::Bytes;
@@ -32,6 +33,7 @@ pub struct Manifest {
 
 impl Manifest {
     /// Load manifest from S3, returning empty manifest if not found
+    #[cfg(not(test))]
     pub async fn load() -> Result<Self> {
         let client = s3::raster_client();
         match client.get(&MANIFEST_PATH.into()).await {
@@ -58,6 +60,13 @@ impl Manifest {
         }
     }
 
+    #[cfg(test)]
+    pub async fn load() -> Result<Self> {
+        Ok(Manifest {
+            reports: Vec::new(),
+        })
+    }
+
     /// Save manifest to S3
     pub async fn save(&self) -> Result<()> {
         let client = s3::raster_client();
@@ -78,12 +87,14 @@ impl Manifest {
         true
     }
 
-    /// Get reports since a given time
-    pub fn reports_since(&self, since: DateTime<Utc>, limit: usize) -> Vec<&WindReport> {
+    /// Get reports for a given course
+    pub fn for_course(&self, course: &Course) -> Vec<WindReport> {
+        let since = course.start_time - TimeDelta::days(1).num_milliseconds();
+        let until = course.max_finish_time();
         self.reports
             .iter()
-            .filter(|r| r.time >= since)
-            .take(limit)
+            .filter(|r| r.time.timestamp_millis() >= since && r.time.timestamp_millis() <= until)
+            .cloned()
             .collect()
     }
 
@@ -290,68 +301,5 @@ mod tests {
         assert!(!added2);
         assert_eq!(manifest.reports.len(), 1);
         assert_eq!(manifest.reports[0].png_path, "a.png"); // first one kept
-    }
-
-    // =========================================================================
-    // Manifest::reports_since tests
-    // =========================================================================
-
-    #[test]
-    fn test_reports_since_filters_by_time() {
-        let mut manifest = Manifest::default();
-        manifest.add_report(make_report("2020-11-01T03:00:00Z", "a.png"));
-        manifest.add_report(make_report("2020-11-01T06:00:00Z", "b.png"));
-        manifest.add_report(make_report("2020-11-01T09:00:00Z", "c.png"));
-
-        let since = DateTime::parse_from_rfc3339("2020-11-01T05:00:00Z")
-            .unwrap()
-            .into();
-        let reports = manifest.reports_since(since, 100);
-
-        assert_eq!(reports.len(), 2);
-        assert_eq!(reports[0].png_path, "b.png");
-        assert_eq!(reports[1].png_path, "c.png");
-    }
-
-    #[test]
-    fn test_reports_since_respects_limit() {
-        let mut manifest = Manifest::default();
-        manifest.add_report(make_report("2020-11-01T03:00:00Z", "a.png"));
-        manifest.add_report(make_report("2020-11-01T06:00:00Z", "b.png"));
-        manifest.add_report(make_report("2020-11-01T09:00:00Z", "c.png"));
-
-        let since = DateTime::parse_from_rfc3339("2020-11-01T00:00:00Z")
-            .unwrap()
-            .into();
-        let reports = manifest.reports_since(since, 2);
-
-        assert_eq!(reports.len(), 2);
-        assert_eq!(reports[0].png_path, "a.png");
-        assert_eq!(reports[1].png_path, "b.png");
-    }
-
-    #[test]
-    fn test_reports_since_includes_exact_match() {
-        let mut manifest = Manifest::default();
-        manifest.add_report(make_report("2020-11-01T06:00:00Z", "a.png"));
-
-        let since = DateTime::parse_from_rfc3339("2020-11-01T06:00:00Z")
-            .unwrap()
-            .into();
-        let reports = manifest.reports_since(since, 100);
-
-        assert_eq!(reports.len(), 1);
-    }
-
-    #[test]
-    fn test_reports_since_empty_manifest() {
-        let manifest = Manifest::default();
-        let since = DateTime::parse_from_rfc3339("2020-11-01T00:00:00Z")
-            .unwrap()
-            .into();
-
-        let reports = manifest.reports_since(since, 100);
-
-        assert!(reports.is_empty());
     }
 }

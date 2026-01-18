@@ -2,14 +2,16 @@ import { useReducer, useEffect, useRef, useState, useCallback } from "react";
 import { appReducer, initialState } from "./state";
 import { SphereView } from "../sphere";
 import InterpolatedWind from "../interpolated-wind";
-import { Course, WindReport } from "../models";
+import { Course } from "../models";
 import Hud from "./Hud";
 import CursorWind from "./CursorWind";
 import Leaderboard from "./Leaderboard";
 import { initLandData } from "./land";
-import RaceScreen from "./RaceScreen";
+import RaceChoiceScreen from "./RaceChoiceScreen";
 import { useKeyboardControls, useGameLoop, useMultiplayer } from "./hooks";
 import { computeProjectedPath } from "./projected-path";
+import { CountdownDisplay } from "./race";
+import { currentWindContext } from "./wind-context";
 
 const serverUrl = import.meta.env.REWIND_SERVER_URL;
 
@@ -34,7 +36,6 @@ export default function App() {
   );
   const coursesRef = useRef<Map<string, Course>>(new Map());
   const selectedCourseRef = useRef<Course | null>(null);
-  const reportsRef = useRef<WindReport[] | null>(null);
 
   // Sync selectedCourseRef when selectedCourseKey changes
   useEffect(() => {
@@ -121,7 +122,7 @@ export default function App() {
     },
   );
 
-  // Initialize SphereView and fetch reports when Loading
+  // Initialize SphereView
   useEffect(() => {
     if (state.tag !== "Loading") return;
 
@@ -136,69 +137,29 @@ export default function App() {
     // Initialize land collision data
     initLandData();
 
-    // Fetch wind reports
-    const since = course.startTime - 1000 * 60 * 60 * 24;
-    const url = `${serverUrl}/wind-reports/since/${since}`;
+    const [currentWindSource, nextWindSources] = currentWindContext(
+      course.startTime,
+      null,
+      state.windRasterSources,
+    );
 
-    fetch(url)
-      .then((res) => res.json())
-      .then(async (reports: WindReport[]) => {
-        reportsRef.current = reports;
-
-        // Load and display wind immediately
-        if (reports.length > 0 && sphereViewRef.current) {
-          const sortedReports = [...reports].sort((a, b) => a.time - b.time);
-          let currentReport: WindReport | null = null;
-          let nextReports: WindReport[] = [];
-
-          for (let i = 0; i < sortedReports.length; i++) {
-            if (sortedReports[i].time <= course.startTime) {
-              currentReport = sortedReports[i];
-              nextReports = sortedReports.slice(i + 1);
-            } else {
-              break;
-            }
-          }
-
-          if (!currentReport && sortedReports.length > 0) {
-            currentReport = sortedReports[0];
-            nextReports = sortedReports.slice(1);
-          }
-
-          if (currentReport) {
-            await interpolatedWindRef.current.update(
-              currentReport,
-              nextReports,
-            );
-            const factor = interpolatedWindRef.current.getInterpolationFactor(
-              course.startTime,
-            );
-            sphereViewRef.current.updateWind(
-              interpolatedWindRef.current,
-              factor,
-            );
-          }
-        }
-
-        dispatch({ type: "REPORTS_LOADED", reports });
-      })
-      .catch((err) => {
-        console.error("Failed to fetch reports:", err);
-        dispatch({ type: "REPORTS_ERROR" });
+    interpolatedWindRef.current
+      .update(currentWindSource, nextWindSources)
+      .then(() => {
+        const factor = interpolatedWindRef.current.getInterpolationFactor(
+          course.startTime,
+        );
+        sphereViewRef.current?.updateWind(interpolatedWindRef.current, factor);
       });
   }, [state.tag === "Loading" ? state.course.key : null]);
 
-  // Transition to Playing when both reports loaded and race started
+  // Transition to Playing when countdown is over
   useEffect(() => {
-    if (state.tag !== "Loading") return;
-    if (!state.reportsLoaded || !state.race.raceStarted) return;
-    if (!reportsRef.current) return;
+    if (state.tag !== "Countdown") return;
+    if (state.countdown > 0) return;
 
-    dispatch({ type: "START_PLAYING", reports: reportsRef.current });
-  }, [
-    state.tag === "Loading" ? state.reportsLoaded : false,
-    state.tag === "Loading" ? state.race.raceStarted : false,
-  ]);
+    dispatch({ type: "START_PLAYING" });
+  }, [state.tag === "Countdown" ? state.countdown : false]);
 
   // Handle window resize
   useEffect(() => {
@@ -210,22 +171,22 @@ export default function App() {
     return () => window.removeEventListener("resize", handleResize);
   }, []);
 
-  // Update interpolated wind when reports change
+  // Update interpolated wind when raster sources change
   useEffect(() => {
     if (state.tag !== "Playing") return;
 
-    const { currentReport, nextReports, courseTime } = state.session;
+    const { currentSource, nextSources, courseTime } = state.session;
     const interpolatedWind = interpolatedWindRef.current;
 
-    interpolatedWind.update(currentReport, nextReports).then(() => {
+    interpolatedWind.update(currentSource, nextSources).then(() => {
       if (sphereViewRef.current) {
         const factor = interpolatedWind.getInterpolationFactor(courseTime);
         sphereViewRef.current.updateWind(interpolatedWind, factor);
       }
     });
   }, [
-    state.tag === "Playing" ? state.session.currentReport?.time : null,
-    state.tag === "Playing" ? state.session.nextReports[0]?.time : null,
+    state.tag === "Playing" ? state.session.currentSource?.time : null,
+    state.tag === "Playing" ? state.session.nextSources[0]?.time : null,
   ]);
 
   // Sync position, heading, and courseTime to SphereView
@@ -274,7 +235,7 @@ export default function App() {
         {(state.tag === "Idle" || state.tag === "Loading") &&
           courses.length > 0 && (
             <div className="pointer-events-auto">
-              <RaceScreen
+              <RaceChoiceScreen
                 raceId={state.tag === "Loading" ? state.race.id : null}
                 myPlayerId={
                   state.tag === "Loading" ? state.race.myPlayerId : null
@@ -284,9 +245,6 @@ export default function App() {
                 }
                 players={
                   state.tag === "Loading" ? state.race.players : new Map()
-                }
-                countdown={
-                  state.tag === "Loading" ? state.race.countdown : null
                 }
                 courses={courses}
                 selectedCourseKey={selectedCourseKey}
@@ -298,6 +256,13 @@ export default function App() {
               />
             </div>
           )}
+        {state.tag === "Countdown" && (
+          <div className="fixed inset-0 flex flex-col items-center justify-center bg-black bg-opacity-10">
+            <div className="bg-slate-900 bg-opacity-90 rounded-lg p-8 max-w-md w-full mx-4 space-y-6">
+              <CountdownDisplay countdown={state.countdown} />
+            </div>
+          </div>
+        )}
         {state.tag === "Playing" && (
           <>
             <Hud session={state.session} />

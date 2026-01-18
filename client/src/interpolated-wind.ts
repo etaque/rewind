@@ -1,59 +1,59 @@
-import { LngLat, WindSpeed, WindReport } from "./models";
+import { LngLat, WindSpeed, WindRasterSource } from "./models";
 import WindRaster from "./wind-raster";
 
 /**
  * Manages two wind rasters (current and next) and provides interpolated wind values.
- * Pre-loads the next report so transitions are seamless.
+ * Pre-loads the next source so transitions are seamless.
  */
 export default class InterpolatedWind {
   private currentRaster: WindRaster | null = null;
   private nextRaster: WindRaster | null = null;
-  private currentReport: WindReport | null = null;
-  private nextReport: WindReport | null = null;
+  private currentSource: WindRasterSource | null = null;
+  private nextSource: WindRasterSource | null = null;
   private loadingTime: number | null = null;
 
   /**
-   * Update which reports should be active. Call this on every tick or when reports change.
+   * Update which sources should be active. Call this on every tick or when sources change.
    * Returns true if the current raster changed (for triggering texture updates).
    */
   async update(
-    currentReport: WindReport | null,
-    nextReports: WindReport[],
+    currentSource: WindRasterSource | null,
+    nextSourcess: WindRasterSource[],
   ): Promise<boolean> {
-    const nextReport = nextReports[0] ?? null;
+    const nextSource = nextSourcess[0] ?? null;
     let currentChanged = false;
 
-    // Check if current report changed
-    if (currentReport?.time !== this.currentReport?.time) {
+    // Check if current source changed
+    if (currentSource?.time !== this.currentSource?.time) {
       // If the new current was our pre-loaded next, swap it
-      if (this.nextRaster && currentReport?.time === this.nextReport?.time) {
+      if (this.nextRaster && currentSource?.time === this.nextSource?.time) {
         this.currentRaster = this.nextRaster;
         this.nextRaster = null;
-      } else if (currentReport) {
-        // Need to load the current report
+      } else if (currentSource) {
+        // Need to load the current source
         this.currentRaster = await WindRaster.load(
-          currentReport.time,
-          currentReport.pngUrl,
+          currentSource.time,
+          currentSource.pngUrl,
         );
       } else {
         this.currentRaster = null;
       }
-      this.currentReport = currentReport;
+      this.currentSource = currentSource;
       currentChanged = true;
     }
 
-    // Pre-load next report if needed
+    // Pre-load next source if needed
     if (
-      nextReport &&
-      nextReport.time !== this.nextReport?.time &&
-      nextReport.time !== this.loadingTime
+      nextSource &&
+      nextSource.time !== this.nextSource?.time &&
+      nextSource.time !== this.loadingTime
     ) {
-      this.loadingTime = nextReport.time;
-      this.nextReport = nextReport;
+      this.loadingTime = nextSource.time;
+      this.nextSource = nextSource;
 
-      WindRaster.load(nextReport.time, nextReport.pngUrl).then((raster) => {
+      WindRaster.load(nextSource.time, nextSource.pngUrl).then((raster) => {
         // Only set if still relevant
-        if (this.nextReport?.time === raster.time) {
+        if (this.nextSource?.time === raster.time) {
           this.nextRaster = raster;
         }
         this.loadingTime = null;
@@ -102,12 +102,12 @@ export default class InterpolatedWind {
    * Get the interpolation factor (0-1) based on course time.
    */
   getInterpolationFactor(courseTime: number): number {
-    if (!this.currentReport || !this.nextReport) return 0;
+    if (!this.currentSource || !this.nextSource) return 0;
 
-    const duration = this.nextReport.time - this.currentReport.time;
+    const duration = this.nextSource.time - this.currentSource.time;
     if (duration <= 0) return 0;
 
-    const elapsed = courseTime - this.currentReport.time;
+    const elapsed = courseTime - this.currentSource.time;
     return Math.max(0, Math.min(1, elapsed / duration));
   }
 

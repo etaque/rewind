@@ -1,10 +1,10 @@
-import { Course, LngLat, WindSpeed, WindReport } from "../models";
+import { Course, LngLat, WindSpeed, WindRasterSource } from "../models";
 import { LeaderboardEntry, PeerState } from "../multiplayer/types";
 import { tick } from "./tick";
 import { calculateTackTarget } from "./tack";
 import { toggleTWALock } from "./twa-lock";
 import { calculateVMGLockHeading } from "./vmg-lock";
-import { refreshWindReport } from "./wind-report";
+import { currentWindContext } from "./wind-context";
 
 export type AppState =
   | { tag: "Idle" }
@@ -12,7 +12,14 @@ export type AppState =
       tag: "Loading";
       course: Course;
       race: RaceState;
-      reportsLoaded: boolean;
+      windRasterSources: WindRasterSource[];
+    }
+  | {
+      tag: "Countdown";
+      countdown: number;
+      course: Course;
+      windRasterSources: WindRasterSource[];
+      race: RaceState;
     }
   | {
       tag: "Playing";
@@ -24,12 +31,9 @@ export type AppState =
 
 export type RaceState = {
   id: string;
-  courseKey: string;
   myPlayerId: string;
   isCreator: boolean;
   players: Map<string, PeerState>;
-  countdown: number | null;
-  raceStarted: boolean;
 };
 
 export type Session = {
@@ -44,14 +48,12 @@ export type Session = {
   lockedTWA: number | null; // when set, maintain this TWA as wind changes
   boatSpeed: number; // in knots
   course: Course;
-  currentReport: WindReport | null;
-  nextReports: WindReport[];
+  currentSource: WindRasterSource | null;
+  nextSources: WindRasterSource[];
   windSpeed: WindSpeed;
 };
 
 export type AppAction =
-  | { type: "REPORTS_LOADED"; reports: WindReport[] }
-  | { type: "REPORTS_ERROR" }
   | { type: "LOCAL_WIND_UPDATED"; windSpeed: WindSpeed }
   | { type: "TICK"; delta: number }
   | { type: "TURN"; direction: Turn }
@@ -64,6 +66,7 @@ export type AppAction =
       raceId: string;
       playerId: string;
       course: Course;
+      windRasterSources: WindRasterSource[];
     }
   | {
       type: "RACE_JOINED";
@@ -72,11 +75,12 @@ export type AppAction =
       course: Course;
       isCreator: boolean;
       players: Map<string, PeerState>;
+      windRasterSources: WindRasterSource[];
     }
   | { type: "PLAYER_JOINED"; playerId: string; playerName: string }
   | { type: "PLAYER_LEFT"; playerId: string }
   | { type: "COUNTDOWN"; seconds: number }
-  | { type: "START_PLAYING"; reports: WindReport[] }
+  | { type: "START_PLAYING" }
   | { type: "LEAVE_RACE" }
   | { type: "SYNC_RACE_TIME"; raceTime: number }
   | { type: "RACE_ENDED"; reason: string }
@@ -86,15 +90,15 @@ export type Turn = "left" | "right" | null;
 
 export const initialState: AppState = { tag: "Idle" };
 
-// Helper to create a Playing state from Loading state with reports
+// Helper to create a Playing state from Loading state with raster sources
 function createPlayingState(
-  state: Extract<AppState, { tag: "Loading" }>,
-  reports: WindReport[],
+  state: Extract<AppState, { tag: "Countdown" }>,
+  windRasterSources: WindRasterSource[],
 ): AppState {
-  const [currentReport, nextReports] = refreshWindReport(
+  const [currentSource, nextSources] = currentWindContext(
     state.course.startTime,
     null,
-    reports,
+    windRasterSources,
   );
   return {
     tag: "Playing",
@@ -113,8 +117,8 @@ function createPlayingState(
       lockedTWA: null,
       boatSpeed: 0,
       course: state.course,
-      currentReport,
-      nextReports,
+      currentSource: currentSource,
+      nextSources: nextSources,
       windSpeed: { u: 0, v: 0 },
     },
   };
@@ -122,21 +126,6 @@ function createPlayingState(
 
 export function appReducer(state: AppState, action: AppAction): AppState {
   switch (action.type) {
-    case "REPORTS_LOADED":
-      if (state.tag !== "Loading") return state;
-      // If race already started (countdown finished), go to Playing
-      if (state.race.raceStarted) {
-        return createPlayingState(state, action.reports);
-      }
-      // Otherwise, mark reports as loaded and wait for race start
-      return {
-        ...state,
-        reportsLoaded: true,
-      };
-
-    case "REPORTS_ERROR":
-      return { tag: "Idle" };
-
     case "LOCAL_WIND_UPDATED":
       if (state.tag !== "Playing") return state;
       return {
@@ -209,15 +198,12 @@ export function appReducer(state: AppState, action: AppAction): AppState {
       return {
         tag: "Loading",
         course: action.course,
-        reportsLoaded: false,
+        windRasterSources: action.windRasterSources,
         race: {
           id: action.raceId,
-          courseKey: action.course.key,
           myPlayerId: action.playerId,
           isCreator: true,
           players: new Map(),
-          countdown: null,
-          raceStarted: false,
         },
       };
     }
@@ -228,19 +214,12 @@ export function appReducer(state: AppState, action: AppAction): AppState {
       return {
         tag: "Loading",
         course: action.course,
-        // Keep reportsLoaded if we already have them for the same course
-        reportsLoaded:
-          state.tag === "Loading" && state.course.key === action.course.key
-            ? state.reportsLoaded
-            : false,
+        windRasterSources: action.windRasterSources,
         race: {
           id: action.raceId,
-          courseKey: action.course.key,
           myPlayerId: action.playerId,
           isCreator: action.isCreator,
           players: action.players,
-          countdown: null,
-          raceStarted: false,
         },
       };
     }
@@ -270,19 +249,21 @@ export function appReducer(state: AppState, action: AppAction): AppState {
       };
 
     case "COUNTDOWN":
-      if (state.tag !== "Loading") return state;
+      if (state.tag !== "Loading" && state.tag !== "Countdown") return state;
+      if (state.windRasterSources === null) return state;
+      if (state.tag === "Countdown" && action.seconds === 0) {
+        return createPlayingState(state, state.windRasterSources);
+      }
       return {
         ...state,
-        race: {
-          ...state.race,
-          countdown: action.seconds,
-          raceStarted: action.seconds === 0,
-        },
+        tag: "Countdown",
+        countdown: action.seconds,
+        windRasterSources: state.windRasterSources,
       };
 
     case "START_PLAYING":
-      if (state.tag !== "Loading") return state;
-      return createPlayingState(state, action.reports);
+      if (state.tag !== "Countdown") return state;
+      return createPlayingState(state, state.windRasterSources);
 
     case "LEAVE_RACE":
       if (state.tag !== "Loading") return state;

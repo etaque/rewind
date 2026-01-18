@@ -7,7 +7,7 @@ import {
   Session,
   RaceState,
 } from "./state";
-import { Course, WindReport } from "../models";
+import { Course, WindRasterSource } from "../models";
 
 // Test fixtures
 const testCourse: Course = {
@@ -23,15 +23,12 @@ const testCourse: Course = {
 
 const testRace: RaceState = {
   id: "ABC123",
-  courseKey: "test-course",
   myPlayerId: "player-1",
   isCreator: true,
   players: new Map(),
-  countdown: null,
-  raceStarted: false,
 };
 
-const testReports: WindReport[] = [
+const testWindRasterSources: WindRasterSource[] = [
   { time: 900, pngUrl: "http://test/1.png" },
   { time: 1100, pngUrl: "http://test/2.png" },
 ];
@@ -40,14 +37,30 @@ function makeLoadingState(
   overrides: Partial<{
     course: Course;
     race: RaceState;
-    reportsLoaded: boolean;
   }> = {},
 ): Extract<AppState, { tag: "Loading" }> {
   return {
     tag: "Loading",
     course: testCourse,
     race: testRace,
-    reportsLoaded: false,
+    windRasterSources: [],
+    ...overrides,
+  };
+}
+
+function makeCountdownState(
+  overrides: Partial<{
+    countdown: number;
+    course: Course;
+    race: RaceState;
+  }> = {},
+): Extract<AppState, { tag: "Countdown" }> {
+  return {
+    tag: "Countdown",
+    countdown: 3,
+    course: testCourse,
+    race: testRace,
+    windRasterSources: [],
     ...overrides,
   };
 }
@@ -57,7 +70,7 @@ function makePlayingState(
 ): Extract<AppState, { tag: "Playing" }> {
   return {
     tag: "Playing",
-    race: { ...testRace, raceStarted: true },
+    race: { ...testRace },
     raceEndedReason: null,
     leaderboard: [],
     session: {
@@ -72,8 +85,8 @@ function makePlayingState(
       lockedTWA: null,
       boatSpeed: 10,
       course: testCourse,
-      currentReport: testReports[0],
-      nextReports: [testReports[1]],
+      currentSource: testWindRasterSources[0],
+      nextSources: [testWindRasterSources[1]],
       windSpeed: { u: 5, v: -10 },
       ...sessionOverrides,
     },
@@ -94,6 +107,7 @@ describe("appReducer", () => {
         raceId: "ABC123",
         playerId: "player-1",
         course: testCourse,
+        windRasterSources: testWindRasterSources,
       };
 
       const result = appReducer(initialState, action);
@@ -104,7 +118,7 @@ describe("appReducer", () => {
         expect(result.race.myPlayerId).toBe("player-1");
         expect(result.race.isCreator).toBe(true);
         expect(result.course).toBe(testCourse);
-        expect(result.reportsLoaded).toBe(false);
+        expect(result.windRasterSources === testWindRasterSources);
       }
     });
 
@@ -115,6 +129,7 @@ describe("appReducer", () => {
         raceId: "NEW123",
         playerId: "player-2",
         course: testCourse,
+        windRasterSources: [testWindRasterSources[1]],
       };
 
       const result = appReducer(loadingState, action);
@@ -143,6 +158,7 @@ describe("appReducer", () => {
         course: testCourse,
         isCreator: false,
         players,
+        windRasterSources: [testWindRasterSources[1]],
       };
 
       const result = appReducer(initialState, action);
@@ -213,71 +229,26 @@ describe("appReducer", () => {
 
   describe("COUNTDOWN", () => {
     it("updates countdown in race", () => {
-      const state = makeLoadingState();
+      const state = makeCountdownState();
       const action: AppAction = { type: "COUNTDOWN", seconds: 3 };
 
       const result = appReducer(state, action);
 
-      expect(result.tag).toBe("Loading");
-      if (result.tag === "Loading") {
-        expect(result.race.countdown).toBe(3);
+      expect(result.tag).toBe("Countdown");
+      if (result.tag === "Countdown") {
+        expect(result.countdown).toBe(3);
       }
     });
   });
 
   describe("COUNTDOWN", () => {
     it("marks race as started", () => {
-      const state = makeLoadingState();
+      const state = makeCountdownState();
       const action: AppAction = { type: "COUNTDOWN", seconds: 0 };
 
       const result = appReducer(state, action);
 
-      expect(result.tag).toBe("Loading");
-      if (result.tag === "Loading") {
-        expect(result.race.raceStarted).toBe(true);
-      }
-    });
-  });
-
-  describe("REPORTS_LOADED", () => {
-    it("marks reports as loaded if race not started", () => {
-      const state = makeLoadingState();
-      const action: AppAction = {
-        type: "REPORTS_LOADED",
-        reports: testReports,
-      };
-
-      const result = appReducer(state, action);
-
-      expect(result.tag).toBe("Loading");
-      if (result.tag === "Loading") {
-        expect(result.reportsLoaded).toBe(true);
-      }
-    });
-
-    it("transitions to Playing if race already started", () => {
-      const state = makeLoadingState({
-        race: { ...testRace, raceStarted: true },
-      });
-      const action: AppAction = {
-        type: "REPORTS_LOADED",
-        reports: testReports,
-      };
-
-      const result = appReducer(state, action);
-
       expect(result.tag).toBe("Playing");
-    });
-  });
-
-  describe("REPORTS_ERROR", () => {
-    it("returns to Idle state", () => {
-      const state = makeLoadingState();
-      const action: AppAction = { type: "REPORTS_ERROR" };
-
-      const result = appReducer(state, action);
-
-      expect(result).toEqual({ tag: "Idle" });
     });
   });
 

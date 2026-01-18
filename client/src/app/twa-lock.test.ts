@@ -26,8 +26,8 @@ function makeSession(overrides: Partial<Session> = {}): Session {
     lockedTWA: null,
     boatSpeed: 0,
     windSpeed: { u: 0, v: -10 }, // Wind from north by default
-    currentReport: null,
-    nextReports: [],
+    currentSource: null,
+    nextSources: [],
     ...overrides,
   };
 }

@@ -13,7 +13,14 @@ export class MultiplayerClient {
   constructor(callbacks: MultiplayerCallbacks) {
     this.signaling = new SignalingClient({
       ...callbacks,
-      onRaceJoined: (raceId, playerId, players, isCreator, courseKey) => {
+      onRaceJoined: (
+        raceId,
+        playerId,
+        players,
+        isCreator,
+        courseKey,
+        windSources,
+      ) => {
         // Initialize peer states for existing players
         players.forEach((p) => {
           if (p.id !== playerId) {
@@ -26,7 +33,14 @@ export class MultiplayerClient {
             });
           }
         });
-        callbacks.onRaceJoined(raceId, playerId, players, isCreator, courseKey);
+        callbacks.onRaceJoined(
+          raceId,
+          playerId,
+          players,
+          isCreator,
+          courseKey,
+          windSources,
+        );
       },
       onPlayerJoined: (playerId, playerName) => {
         this.peerStates.set(playerId, {

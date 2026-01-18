@@ -8,7 +8,7 @@ export type WindSpeed = {
   v: number;
 };
 
-export type WindReport = {
+export type WindRasterSource = {
   time: number;
   pngUrl: string;
 };

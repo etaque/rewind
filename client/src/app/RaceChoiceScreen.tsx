@@ -1,13 +1,7 @@
 import { useState, useEffect } from "react";
 import { PeerState } from "../multiplayer/types";
 import { Course } from "../models";
-import {
-  PlayerList,
-  AvailableRaces,
-  CountdownDisplay,
-  PlayerNameInput,
-  RaceInfo,
-} from "./race";
+import { PlayerList, AvailableRaces, PlayerNameInput, RaceInfo } from "./race";
 
 const PLAYER_NAME_KEY = "rewind:player_name";
 const serverUrl = import.meta.env.REWIND_SERVER_URL;
@@ -17,7 +11,6 @@ type Props = {
   myPlayerId: string | null;
   isCreator: boolean;
   players: Map<string, PeerState>;
-  countdown: number | null;
   courses: Course[];
   selectedCourseKey: string | null;
   onCourseChange: (courseKey: string) => void;
@@ -27,12 +20,11 @@ type Props = {
   onLeaveRace: () => void;
 };
 
-export default function RaceScreen({
+export default function RaceChoiceScreen({
   raceId,
   myPlayerId,
   isCreator,
   players,
-  countdown,
   courses,
   selectedCourseKey,
   onCourseChange,
@@ -100,9 +92,7 @@ export default function RaceScreen({
       <h1 className="logo mb-6">Re:wind</h1>
 
       <div className="bg-slate-900 bg-opacity-90 rounded-lg p-8 max-w-md w-full mx-4 space-y-6">
-        {countdown !== null ? (
-          <CountdownDisplay countdown={countdown} />
-        ) : !inRace ? (
+        {!inRace ? (
           <div className="text-center text-slate-400 py-4">Connecting...</div>
         ) : (
           <>

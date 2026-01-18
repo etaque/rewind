@@ -45,10 +45,10 @@ export default function Hud({ session }: Props) {
           <span className="text-gray-400">UTC </span>
           <span>{formatCourseTime(session.courseTime)}</span>
         </div>
-        {session.currentReport && (
+        {session.currentSource && (
           <div>
             <span className="text-gray-400">REP </span>
-            <span>{formatCourseTime(session.currentReport.time)}</span>
+            <span>{formatCourseTime(session.currentSource.time)}</span>
           </div>
         )}
         <div>

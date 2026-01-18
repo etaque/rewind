@@ -1,8 +1,8 @@
-import { LngLat, WindReport } from "../models";
+import { LngLat, WindRasterSource } from "../models";
 import { getBoatSpeed, calculateTWA } from "./polar";
 import { isPointOnLand } from "./land";
 import { Session } from "./state";
-import { refreshWindReport } from "./wind-report";
+import { currentWindContext } from "./wind-context";
 import { getWindDirection, getWindSpeed, msToKnots } from "../utils";
 
 export type TickResult = {
@@ -13,8 +13,8 @@ export type TickResult = {
   heading: number;
   targetHeading: number | null;
   lockedTWA: number | null;
-  currentReport: WindReport | null;
-  nextReports: WindReport[];
+  currentSource: WindRasterSource | null;
+  nextSources: WindRasterSource[];
 };
 
 // Turn rate in degrees per second during a tack
@@ -26,10 +26,10 @@ export function tick(session: Session, delta: number): TickResult {
   const newCourseTime =
     session.course.startTime + Math.round(newClock * session.course.timeFactor);
 
-  const [currentReport, nextReports] = refreshWindReport(
+  const [currentSource, nextSources] = currentWindContext(
     session.courseTime,
-    session.currentReport,
-    session.nextReports,
+    session.currentSource,
+    session.nextSources,
   );
 
   let heading = session.heading;
@@ -123,7 +123,7 @@ export function tick(session: Session, delta: number): TickResult {
     heading,
     targetHeading,
     lockedTWA,
-    currentReport,
-    nextReports,
+    currentSource: currentSource,
+    nextSources: nextSources,
   };
 }

@@ -1,23 +1,21 @@
 use axum::{
-    extract::{ws::WebSocketUpgrade, Path, State},
+    Json, Router,
+    extract::{State, ws::WebSocketUpgrade},
     http::{Method, StatusCode},
     response::{IntoResponse, Response},
     routing::{any, get},
-    Json, Router,
 };
 use bytes::Bytes;
-use chrono::{DateTime, Utc};
-use object_store::path::Path as S3Path;
 use object_store::ObjectStoreExt;
-use serde::Serialize;
+use object_store::path::Path as S3Path;
 use tower_http::{compression::CompressionLayer, cors::CorsLayer};
 
 use crate::{
     courses,
-    multiplayer::{handle_websocket, RaceManager},
+    multiplayer::{RaceManager, handle_websocket},
 };
 
-use super::manifest::{self, Manifest};
+use super::manifest::Manifest;
 use super::s3;
 
 // Make our own error that wraps `anyhow::Error`.
@@ -60,7 +58,6 @@ pub async fn run(address: std::net::SocketAddr) {
     let app = Router::new()
         .route("/health", get(health_handler))
         .route("/courses", get(courses_handler))
-        .route("/wind-reports/since/{since_ms}", get(reports_since_handler))
         .route("/multiplayer/races", get(races_handler))
         .route("/multiplayer/race", any(websocket_handler))
         .layer(CompressionLayer::new())
@@ -91,35 +88,4 @@ async fn courses_handler() -> impl IntoResponse {
 async fn races_handler(State(race_manager): State<RaceManager>) -> impl IntoResponse {
     let races = race_manager.list_races().await;
     Json(races)
-}
-
-#[derive(Clone, Debug, Serialize)]
-#[serde(rename_all = "camelCase")]
-struct WindReportResponse {
-    #[serde(with = "chrono::serde::ts_milliseconds")]
-    time: DateTime<Utc>,
-    png_url: String,
-}
-
-impl From<&manifest::WindReport> for WindReportResponse {
-    fn from(report: &manifest::WindReport) -> Self {
-        WindReportResponse {
-            time: report.time,
-            png_url: report.png_url(),
-        }
-    }
-}
-
-async fn reports_since_handler(Path(since_ms): Path<i64>) -> Result<impl IntoResponse, AppError> {
-    let since = DateTime::from_timestamp_millis(since_ms).unwrap_or_else(Utc::now);
-
-    let manifest = Manifest::load().await?;
-
-    let reports: Vec<WindReportResponse> = manifest
-        .reports_since(since, 100)
-        .into_iter()
-        .map(|r| r.into())
-        .collect();
-
-    Ok(Json(reports))
 }

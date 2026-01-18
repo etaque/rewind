@@ -26,7 +26,7 @@ export function useMultiplayer(
 
   const createMultiplayerClient = useCallback(() => {
     return new MultiplayerClient({
-      onRaceCreated: (raceId, playerId) => {
+      onRaceCreated: (raceId, playerId, windRasterSources) => {
         const course = courseRef.current;
         if (!course) return;
         dispatch({
@@ -34,9 +34,17 @@ export function useMultiplayer(
           raceId,
           playerId,
           course,
+          windRasterSources: windRasterSources,
         });
       },
-      onRaceJoined: (raceId, playerId, players, isCreator, courseKey) => {
+      onRaceJoined: (
+        raceId,
+        playerId,
+        players,
+        isCreator,
+        courseKey,
+        windRasterSources,
+      ) => {
         const course = coursesRef.current?.get(courseKey);
         if (!course) return;
         const playerMap = new Map<string, PeerState>();
@@ -58,6 +66,7 @@ export function useMultiplayer(
           course,
           isCreator,
           players: playerMap,
+          windRasterSources,
         });
       },
       onPlayerJoined: (playerId, playerName) => {

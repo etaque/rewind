@@ -1,3 +1,4 @@
+use anyhow::anyhow;
 use axum::extract::ws::{Message, WebSocket};
 use chrono::{DateTime, Utc};
 use futures::{SinkExt, StreamExt};
@@ -7,7 +8,10 @@ use std::collections::HashMap;
 use std::sync::Arc;
 use tokio::sync::{RwLock, mpsc};
 
-use crate::courses::Course;
+use crate::{
+    courses::Course,
+    manifest::{Manifest, WindReport},
+};
 
 // ============================================================================
 // Message Types
@@ -15,7 +19,7 @@ use crate::courses::Course;
 
 /// Messages sent from client to server
 #[derive(Debug, Clone, Deserialize)]
-#[serde(tag = "type")]
+#[serde(tag = "type", rename_all_fields = "camelCase")]
 pub enum ClientMessage {
     CreateRace {
         course_key: String,
@@ -36,7 +40,7 @@ pub enum ClientMessage {
 
 /// Messages sent from server to client
 #[derive(Debug, Clone, Serialize)]
-#[serde(tag = "type")]
+#[serde(tag = "type", rename_all_fields = "camelCase")]
 pub enum ServerMessage {
     Error {
         message: String,
@@ -44,11 +48,13 @@ pub enum ServerMessage {
     RaceCreated {
         race_id: String,
         player_id: String,
+        wind_raster_sources: Vec<WindRasterSource>,
     },
     RaceJoined {
         race_id: String,
         player_id: String,
         course_key: String,
+        wind_raster_sources: Vec<WindRasterSource>,
         players: Vec<PlayerInfo>,
         is_creator: bool,
     },
@@ -79,7 +85,24 @@ pub enum ServerMessage {
     },
 }
 
+#[derive(Clone, Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct WindRasterSource {
+    #[serde(with = "chrono::serde::ts_milliseconds")]
+    time: DateTime<Utc>,
+    png_url: String,
+}
+
+impl From<&WindReport> for WindRasterSource {
+    fn from(report: &WindReport) -> Self {
+        WindRasterSource {
+            time: report.time,
+            png_url: report.png_url(),
+        }
+    }
+}
 #[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
 pub struct LeaderboardEntry {
     pub player_id: String,
     pub player_name: String,
@@ -87,6 +110,7 @@ pub struct LeaderboardEntry {
 }
 
 #[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
 pub struct PlayerInfo {
     pub id: String,
     pub name: String,
@@ -116,6 +140,7 @@ impl Player {
 #[derive(Debug)]
 pub struct Race {
     pub course: Course,
+    pub wind_raster_sources: Vec<WindRasterSource>,
     pub creator_id: String,
     pub players: HashMap<String, Player>,
     pub max_players: usize,
@@ -125,9 +150,10 @@ pub struct Race {
 }
 
 impl Race {
-    fn new(course: Course, creator_id: String) -> Self {
+    fn new(course: Course, wind_raster_sources: Vec<WindRasterSource>, creator_id: String) -> Self {
         Race {
             course,
+            wind_raster_sources,
             creator_id,
             players: HashMap::new(),
             max_players: 10,
@@ -141,12 +167,12 @@ impl Race {
         self.race_start_time.is_some()
     }
 
-    fn add_player(&mut self, player: Player) -> Result<(), String> {
+    fn add_player(&mut self, player: Player) -> anyhow::Result<()> {
         if self.race_started() {
-            return Err("Race has already started".to_string());
+            return Err(anyhow!("Race has already started"));
         }
         if self.players.len() >= self.max_players {
-            return Err("Race is full".to_string());
+            return Err(anyhow!("Race is full"));
         }
         self.players.insert(player.id.clone(), player);
         self.last_activity = Utc::now();
@@ -321,14 +347,21 @@ impl RaceManager {
         player_id: String,
         player_name: String,
         tx: mpsc::UnboundedSender<ServerMessage>,
-    ) -> Result<String, String> {
+    ) -> anyhow::Result<(String, Vec<WindRasterSource>)> {
         let course = crate::courses::all()
             .into_iter()
             .find(|c| c.key == course_key)
-            .ok_or_else(|| "Course not found".to_string())?;
+            .ok_or(anyhow!("Course not found"))?;
+
+        let manifest = Manifest::load().await?;
+        let rasters: Vec<WindRasterSource> = manifest
+            .for_course(&course)
+            .iter()
+            .map(|r| r.into())
+            .collect();
 
         let race_id = generate_race_id();
-        let mut race = Race::new(course, player_id.clone());
+        let mut race = Race::new(course, rasters.clone(), player_id.clone());
 
         let player = Player {
             id: player_id.clone(),
@@ -344,7 +377,7 @@ impl RaceManager {
         let mut player_races = self.player_races.write().await;
         player_races.insert(player_id, race_id.clone());
 
-        Ok(race_id)
+        Ok((race_id, rasters))
     }
 
     pub async fn join_race(
@@ -353,11 +386,9 @@ impl RaceManager {
         player_id: String,
         player_name: String,
         tx: mpsc::UnboundedSender<ServerMessage>,
-    ) -> Result<(Vec<PlayerInfo>, String, bool), String> {
+    ) -> anyhow::Result<(Vec<PlayerInfo>, Vec<WindRasterSource>, String, bool)> {
         let mut races = self.races.write().await;
-        let race = races
-            .get_mut(race_id)
-            .ok_or_else(|| "Race not found".to_string())?;
+        let race = races.get_mut(race_id).ok_or(anyhow!("Race not found"))?;
 
         let player = Player {
             id: player_id.clone(),
@@ -381,7 +412,9 @@ impl RaceManager {
         let mut player_races = self.player_races.write().await;
         player_races.insert(player_id, race_id.to_string());
 
-        Ok((players, course_key, is_creator))
+        let rasters = race.wind_raster_sources.clone();
+
+        Ok((players, rasters, course_key, is_creator))
     }
 
     pub async fn leave_race(&self, player_id: &str) {
@@ -444,27 +477,25 @@ impl RaceManager {
         );
     }
 
-    pub async fn start_race(&self, player_id: &str) -> Result<(), String> {
+    pub async fn start_race(&self, player_id: &str) -> anyhow::Result<()> {
         let player_races = self.player_races.read().await;
         let race_id = player_races
             .get(player_id)
-            .ok_or_else(|| "Player not in a race".to_string())?
+            .ok_or(anyhow!("Player not in a race"))?
             .clone();
         drop(player_races);
 
         // Validate and mark race as started
         {
             let mut races = self.races.write().await;
-            let race = races
-                .get_mut(&race_id)
-                .ok_or_else(|| "Race not found".to_string())?;
+            let race = races.get_mut(&race_id).ok_or(anyhow!("Race not found"))?;
 
             if race.creator_id != player_id {
-                return Err("Only the race creator can start the race".to_string());
+                return Err(anyhow!("Only the race creator can start the race"));
             }
 
             if race.race_started() {
-                return Err("Race has already started".to_string());
+                return Err(anyhow!("Race has already started"));
             }
         }
 
@@ -474,7 +505,7 @@ impl RaceManager {
                 let races = self.races.read().await;
                 if let Some(race) = races.get(&race_id) {
                     if race.players.is_empty() {
-                        return Err("All players left".to_string());
+                        return Err(anyhow!("All players left"));
                     }
                     race.broadcast_all(ServerMessage::RaceCountdown { seconds });
                 }
@@ -603,9 +634,24 @@ mod tests {
         }
     }
 
+    fn make_test_wind_raster() -> WindRasterSource {
+        WindRasterSource {
+            time: DateTime::from_timestamp_millis(1604833200000).unwrap(),
+            png_url: "https://s3/bucket/path/to/png1".to_string(),
+        }
+    }
+
+    fn make_test_race() -> Race {
+        Race::new(
+            make_test_course(),
+            vec![make_test_wind_raster()],
+            "creator-1".to_string(),
+        )
+    }
+
     #[test]
     fn test_race_new() {
-        let race = Race::new(make_test_course(), "creator-1".to_string());
+        let race = make_test_race();
 
         assert_eq!(race.course.key, "vg20");
         assert_eq!(race.creator_id, "creator-1");
@@ -616,7 +662,7 @@ mod tests {
 
     #[test]
     fn test_race_add_player() {
-        let mut race = Race::new(make_test_course(), "creator-1".to_string());
+        let mut race = make_test_race();
         let player = make_test_player("player-1", "Alice");
 
         let result = race.add_player(player);
@@ -628,7 +674,7 @@ mod tests {
 
     #[test]
     fn test_race_add_player_updates_activity() {
-        let mut race = Race::new(make_test_course(), "creator-1".to_string());
+        let mut race = make_test_race();
         let initial_activity = race.last_activity;
 
         // Small delay to ensure time difference
@@ -642,19 +688,19 @@ mod tests {
 
     #[test]
     fn test_race_add_player_fails_when_race_started() {
-        let mut race = Race::new(make_test_course(), "creator-1".to_string());
+        let mut race = make_test_race();
         race.race_start_time = Some(Utc::now().timestamp_millis());
 
         let player = make_test_player("player-1", "Alice");
         let result = race.add_player(player);
 
         assert!(result.is_err());
-        assert_eq!(result.unwrap_err(), "Race has already started");
+        assert_eq!(result.unwrap_err().to_string(), "Race has already started");
     }
 
     #[test]
     fn test_race_add_player_fails_when_full() {
-        let mut race = Race::new(make_test_course(), "creator-1".to_string());
+        let mut race = make_test_race();
 
         // Add max_players
         for i in 0..race.max_players {
@@ -667,12 +713,12 @@ mod tests {
         let result = race.add_player(extra_player);
 
         assert!(result.is_err());
-        assert_eq!(result.unwrap_err(), "Race is full");
+        assert_eq!(result.unwrap_err().to_string(), "Race is full");
     }
 
     #[test]
     fn test_race_remove_player() {
-        let mut race = Race::new(make_test_course(), "creator-1".to_string());
+        let mut race = make_test_race();
         let player = make_test_player("player-1", "Alice");
         race.add_player(player).unwrap();
 
@@ -685,7 +731,7 @@ mod tests {
 
     #[test]
     fn test_race_remove_nonexistent_player() {
-        let mut race = Race::new(make_test_course(), "creator-1".to_string());
+        let mut race = make_test_race();
 
         let removed = race.remove_player("nonexistent");
 
@@ -694,7 +740,7 @@ mod tests {
 
     #[test]
     fn test_race_is_expired_empty_and_old() {
-        let mut race = Race::new(make_test_course(), "creator-1".to_string());
+        let mut race = make_test_race();
         // Set last activity to 6 minutes ago
         race.last_activity = Utc::now() - chrono::Duration::minutes(6);
 
@@ -703,7 +749,7 @@ mod tests {
 
     #[test]
     fn test_race_is_not_expired_with_players() {
-        let mut race = Race::new(make_test_course(), "creator-1".to_string());
+        let mut race = make_test_race();
         race.last_activity = Utc::now() - chrono::Duration::minutes(6);
 
         // Add a player
@@ -716,7 +762,7 @@ mod tests {
 
     #[test]
     fn test_race_is_not_expired_recent_activity() {
-        let race = Race::new(make_test_course(), "creator-1".to_string());
+        let race = make_test_race();
         // Fresh race with no players
 
         // Should not be expired because activity is recent
@@ -725,7 +771,7 @@ mod tests {
 
     #[test]
     fn test_race_get_player_infos() {
-        let mut race = Race::new(make_test_course(), "creator-1".to_string());
+        let mut race = make_test_race();
         race.add_player(make_test_player("p1", "Alice")).unwrap();
         race.add_player(make_test_player("p2", "Bob")).unwrap();
 
@@ -756,7 +802,7 @@ mod tests {
             .await;
 
         assert!(result.is_ok());
-        let race_id = result.unwrap();
+        let (race_id, _) = result.unwrap();
         assert_eq!(race_id.len(), 6);
 
         // Verify race exists
@@ -771,7 +817,7 @@ mod tests {
         let (tx2, _rx2) = mpsc::unbounded_channel();
 
         // Create race
-        let race_id = manager
+        let (race_id, _) = manager
             .create_race(
                 "vg20".to_string(),
                 "player-1".to_string(),
@@ -787,8 +833,9 @@ mod tests {
             .await;
 
         assert!(result.is_ok());
-        let (players, course_key, is_creator) = result.unwrap();
+        let (players, rasters, course_key, is_creator) = result.unwrap();
         assert_eq!(course_key, "vg20");
+        assert!(rasters.is_empty());
         assert!(!is_creator);
         assert_eq!(players.len(), 2); // Alice and Bob
     }
@@ -803,7 +850,10 @@ mod tests {
             .await;
 
         assert!(result.is_err());
-        assert_eq!(result.unwrap_err(), "Race not found");
+        assert_eq!(
+            result.unwrap_err().to_string(),
+            "Race not found".to_string()
+        );
     }
 
     #[tokio::test]
@@ -811,7 +861,7 @@ mod tests {
         let manager = RaceManager::new();
         let (tx, _rx) = mpsc::unbounded_channel();
 
-        let race_id = manager
+        let (race_id, _) = manager
             .create_race(
                 "vg20".to_string(),
                 "player-1".to_string(),
@@ -865,7 +915,7 @@ mod tests {
         let manager = RaceManager::new();
         let (tx, _rx) = mpsc::unbounded_channel();
 
-        let race_id = manager
+        let (race_id, _) = manager
             .create_race(
                 "vg20".to_string(),
                 "player-1".to_string(),
@@ -913,8 +963,17 @@ pub async fn handle_websocket(ws: WebSocket, manager: RaceManager) {
         match result {
             Ok(msg) => match msg {
                 Message::Text(text) => {
-                    if let Ok(client_msg) = serde_json::from_str::<ClientMessage>(&text) {
-                        handle_client_message(&manager, &player_id, tx.clone(), client_msg).await;
+                    // log text
+                    log::info!("Received message: {}", text);
+                    match serde_json::from_str::<ClientMessage>(&text) {
+                        Ok(client_msg) => {
+                            log::info!("Decoded message: {:?}", client_msg);
+                            handle_client_message(&manager, &player_id, tx.clone(), client_msg)
+                                .await;
+                        }
+                        Err(err) => {
+                            log::error!("Failed to decode message: {}", err);
+                        }
                     }
                 }
                 Message::Close(_) => break,
@@ -935,7 +994,7 @@ async fn handle_client_message(
     tx: mpsc::UnboundedSender<ServerMessage>,
     message: ClientMessage,
 ) {
-    let result: Result<(), String> = match message {
+    let result: anyhow::Result<()> = match message {
         ClientMessage::CreateRace {
             course_key,
             player_name,
@@ -944,10 +1003,11 @@ async fn handle_client_message(
                 .create_race(course_key, player_id.to_string(), player_name, tx.clone())
                 .await
             {
-                Ok(race_id) => {
+                Ok((race_id, rasters)) => {
                     let _ = tx.send(ServerMessage::RaceCreated {
                         race_id,
                         player_id: player_id.to_string(),
+                        wind_raster_sources: rasters,
                     });
                     Ok(())
                 }
@@ -963,11 +1023,12 @@ async fn handle_client_message(
                 .join_race(&race_id, player_id.to_string(), player_name, tx.clone())
                 .await
             {
-                Ok((players, course_key, is_creator)) => {
+                Ok((players, rasters, course_key, is_creator)) => {
                     let _ = tx.send(ServerMessage::RaceJoined {
                         race_id,
                         player_id: player_id.to_string(),
                         course_key,
+                        wind_raster_sources: rasters,
                         players,
                         is_creator,
                     });
@@ -992,10 +1053,10 @@ async fn handle_client_message(
         }
     };
 
-    if let Err(error_message) = result {
-        log::error!("Failed to handle client message: {}", error_message);
+    if let Err(error) = result {
+        log::error!("Failed to handle client message: {}", error.to_string());
         let _ = tx.send(ServerMessage::Error {
-            message: error_message,
+            message: error.to_string(),
         });
     }
 }

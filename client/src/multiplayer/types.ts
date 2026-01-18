@@ -1,44 +1,50 @@
-import { LngLat } from "../models";
+import { LngLat, WindRasterSource } from "../models";
 
 // ============================================================================
 // Signaling Messages (match server/src/multiplayer.rs)
 // ============================================================================
 
 export type ClientMessage =
-  | { type: "CreateRace"; course_key: string; player_name: string }
-  | { type: "JoinRace"; race_id: string; player_name: string }
+  | { type: "CreateRace"; courseKey: string; playerName: string }
+  | { type: "JoinRace"; raceId: string; playerName: string }
   | { type: "LeaveRace" }
   | { type: "StartRace" }
   | { type: "PositionUpdate"; lng: number; lat: number; heading: number };
 
 export type LeaderboardEntry = {
-  player_id: string;
-  player_name: string;
-  distance_to_finish: number;
+  playerId: string;
+  playerName: string;
+  distanceToFinish: number;
 };
 
 export type ServerMessage =
   | { type: "Error"; message: string }
-  | { type: "RaceCreated"; race_id: string; player_id: string }
+  | {
+      type: "RaceCreated";
+      raceId: string;
+      playerId: string;
+      windRasterSources: WindRasterSource[];
+    }
   | {
       type: "RaceJoined";
-      race_id: string;
-      player_id: string;
-      course_key: string;
+      raceId: string;
+      playerId: string;
+      courseKey: string;
       players: PlayerInfo[];
-      is_creator: boolean;
+      windRasterSources: WindRasterSource[];
+      isCreator: boolean;
     }
-  | { type: "PlayerJoined"; player_id: string; player_name: string }
-  | { type: "PlayerLeft"; player_id: string }
+  | { type: "PlayerJoined"; playerId: string; playerName: string }
+  | { type: "PlayerLeft"; playerId: string }
   | { type: "RaceCountdown"; seconds: number }
-  | { type: "RaceStarted"; start_time: number; course_key: string }
+  | { type: "RaceStarted"; startTime: number; courseKey: string }
   | {
       type: "PositionUpdate";
-      player_id: string;
+      playerId: string;
       lng: number;
       lat: number;
       heading: number;
-      race_time: number;
+      raceTime: number;
     }
   | { type: "RaceEnded"; reason: string }
   | { type: "Leaderboard"; entries: LeaderboardEntry[] };
@@ -71,13 +77,18 @@ export type RaceState = {
 };
 
 export type MultiplayerCallbacks = {
-  onRaceCreated: (raceId: string, playerId: string) => void;
+  onRaceCreated: (
+    raceId: string,
+    playerId: string,
+    windRasterSources: WindRasterSource[],
+  ) => void;
   onRaceJoined: (
     raceId: string,
     playerId: string,
     players: PlayerInfo[],
     isCreator: boolean,
     courseKey: string,
+    windRasterSources: WindRasterSource[],
   ) => void;
   onPlayerJoined: (playerId: string, playerName: string) => void;
   onPlayerLeft: (playerId: string) => void;

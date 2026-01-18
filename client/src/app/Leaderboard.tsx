@@ -24,17 +24,17 @@ export default function Leaderboard({ entries, myPlayerId }: Props) {
       </div>
       <div className="flex flex-col gap-1">
         {entries.map((entry, index) => {
-          const isMe = entry.player_id === myPlayerId;
+          const isMe = entry.playerId === myPlayerId;
           return (
             <div
-              key={entry.player_id}
+              key={entry.playerId}
               className={`flex justify-between gap-4 ${isMe ? "text-pink-400" : ""}`}
             >
               <span>
-                {index + 1}. {entry.player_name}
+                {index + 1}. {entry.playerName}
               </span>
               <span className="text-gray-400">
-                {formatDistance(entry.distance_to_finish)}
+                {formatDistance(entry.distanceToFinish)}
               </span>
             </div>
           );
