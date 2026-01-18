@@ -962,20 +962,14 @@ pub async fn handle_websocket(ws: WebSocket, manager: RaceManager) {
     while let Some(result) = ws_rx.next().await {
         match result {
             Ok(msg) => match msg {
-                Message::Text(text) => {
-                    // log text
-                    log::info!("Received message: {}", text);
-                    match serde_json::from_str::<ClientMessage>(&text) {
-                        Ok(client_msg) => {
-                            log::info!("Decoded message: {:?}", client_msg);
-                            handle_client_message(&manager, &player_id, tx.clone(), client_msg)
-                                .await;
-                        }
-                        Err(err) => {
-                            log::error!("Failed to decode message: {}", err);
-                        }
+                Message::Text(text) => match serde_json::from_str::<ClientMessage>(&text) {
+                    Ok(client_msg) => {
+                        handle_client_message(&manager, &player_id, tx.clone(), client_msg).await;
                     }
-                }
+                    Err(err) => {
+                        log::error!("Failed to decode message: {}", err);
+                    }
+                },
                 Message::Close(_) => break,
                 _ => {}
             },
