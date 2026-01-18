@@ -46,6 +46,8 @@ export class SphereView {
 
   moving = false;
 
+  private zoom: d3.ZoomBehavior<HTMLElement, unknown>;
+
   constructor(node: HTMLElement, course: Course) {
     this.course = course;
     this.node = node;
@@ -99,8 +101,8 @@ export class SphereView {
 
     const initialScale = this.projection.scale();
 
-    const zoom = d3
-      .zoom()
+    this.zoom = d3
+      .zoom<HTMLElement, unknown>()
       .scaleExtent([0.8, 8])
       .on("start", (e: d3.D3ZoomEvent<HTMLElement, unknown>) => {
         this.moving = true;
@@ -143,8 +145,7 @@ export class SphereView {
         this.render();
       });
 
-    // @ts-ignore
-    d3.select(this.node).call(zoom);
+    d3.select<HTMLElement, unknown>(this.node).call(this.zoom);
 
     // Click handler to print lng/lat coordinates
     d3.select(this.node).on("click", (e: MouseEvent) => {
@@ -213,21 +214,8 @@ export class SphereView {
 
   zoomToMax() {
     const maxScale = 8;
-    this.projection.scale(
-      (this.projection.scale() * maxScale) / this.getCurrentZoomRatio(),
-    );
-    this.particles.reset();
-    this.render();
-  }
-
-  private getCurrentZoomRatio(): number {
-    const currentScale = this.projection.scale();
-    // Calculate default scale for current size
-    const tempProjection = d3
-      .geoOrthographic()
-      .fitSize([this.width, this.height], sphere);
-    const defaultScale = tempProjection.scale();
-    return currentScale / defaultScale;
+    const selection = d3.select<HTMLElement, unknown>(this.node);
+    this.zoom.scaleTo(selection, maxScale);
   }
 
   resize() {
