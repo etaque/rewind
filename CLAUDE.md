@@ -21,20 +21,24 @@ client/
 │   │   ├── App.tsx             # Main component, state orchestration
 │   │   ├── Hud.tsx             # In-game HUD (position, speed, wind)
 │   │   ├── CursorWind.tsx      # Wind info tooltip following cursor
-│   │   ├── LobbyScreen.tsx     # Multiplayer lobby UI
+│   │   ├── RaceChoiceScreen.tsx # Race creation/joining UI
+│   │   ├── Leaderboard.tsx     # Race standings display
 │   │   ├── state.ts            # useReducer state management
 │   │   ├── tick.ts             # Game physics tick (boat movement, TWA)
 │   │   ├── tack.ts             # Tacking maneuver calculations
 │   │   ├── twa-lock.ts         # TWA lock toggle logic
+│   │   ├── vmg-lock.ts         # VMG lock calculations
 │   │   ├── polar.ts            # Boat speed from polar diagram
 │   │   ├── land.ts             # Land collision detection
+│   │   ├── projected-path.ts   # Future boat path projection
+│   │   ├── wind-context.ts     # Wind report context management
 │   │   ├── hooks/              # Custom React hooks
 │   │   │   ├── useKeyboardControls.ts  # Arrow keys, space for boat control
 │   │   │   ├── useGameLoop.ts          # Animation loop, wind refresh
-│   │   │   └── useMultiplayer.ts       # WebRTC manager and callbacks
-│   │   └── lobby/              # Lobby UI components
+│   │   │   └── useMultiplayer.ts       # Multiplayer client callbacks
+│   │   └── race/               # Race UI components
 │   │       ├── PlayerList.tsx
-│   │       ├── AvailableLobbies.tsx
+│   │       ├── AvailableRaces.tsx
 │   │       ├── CountdownDisplay.tsx
 │   │       └── PlayerNameInput.tsx
 │   ├── sphere/                 # 3D globe rendering
@@ -49,9 +53,9 @@ client/
 │   │   ├── shaders.ts          # WebGL vertex/fragment shaders
 │   │   ├── scene.ts            # Scene configuration (projection, dimensions)
 │   │   └── versor.ts           # Quaternion math for 3D rotation
-│   ├── multiplayer/            # WebRTC multiplayer
-│   │   ├── webrtc-manager.ts   # Peer connection management
-│   │   ├── signaling.ts        # WebSocket signaling client
+│   ├── multiplayer/            # Multiplayer networking
+│   │   ├── client.ts           # WebSocket multiplayer client
+│   │   ├── signaling.ts        # WebSocket signaling utilities
 │   │   └── types.ts            # Multiplayer types
 │   ├── models.ts               # TypeScript types (LngLat, WindSpeed, Course, etc.)
 │   ├── interpolated-wind.ts    # Wind interpolation between reports
@@ -67,21 +71,23 @@ client/
 
 #### State Management
 
-Uses `useReducer` with a three-state machine (`src/app/state.ts`):
+Uses `useReducer` with a four-state machine (`src/app/state.ts`):
 
 | State | Description |
 |-------|-------------|
-| **Idle** | Initial state, auto-creates lobby |
-| **Loading** | In lobby, fetching wind reports, waiting for race start |
+| **Idle** | Initial state, no active race |
+| **Loading** | In race lobby, wind raster sources loaded, waiting for race start |
+| **Countdown** | Race countdown in progress (3-2-1), zoom to max triggered |
 | **Playing** | Active race session with animation loop |
 
 Key Actions:
-- `LOBBY_CREATED`, `LOBBY_JOINED` - Multiplayer lobby management
+- `RACE_CREATED`, `RACE_JOINED` - Multiplayer race management
 - `PLAYER_JOINED`, `PLAYER_LEFT` - Player roster updates
-- `COUNTDOWN`, `RACE_STARTED` - Race start sequence
-- `REPORTS_LOADED` - Wind data ready
+- `COUNTDOWN` - Race countdown sequence (transitions Loading → Countdown → Playing)
+- `START_PLAYING` - Transition to playing state
 - `TICK` - Game physics update
-- `TURN`, `TACK`, `TOGGLE_TWA_LOCK` - Boat controls
+- `TURN`, `TACK`, `TOGGLE_TWA_LOCK`, `VMG_LOCK` - Boat controls
+- `SYNC_RACE_TIME`, `RACE_ENDED`, `LEADERBOARD_UPDATE` - Race synchronization
 
 #### 3D Rendering Layers
 
@@ -171,38 +177,41 @@ server/
 |--------|------|-------------|
 | GET | `/health` | S3 health check |
 | GET | `/courses` | List available race courses |
-| GET | `/wind-reports/since/{timestamp_ms}` | List wind reports after timestamp (reads from manifest.json in S3) |
-| GET | `/multiplayer/lobbies` | List active lobbies |
-| WS | `/multiplayer/lobby` | WebSocket for multiplayer signaling |
+| GET | `/multiplayer/races` | List active races |
+| WS | `/multiplayer/race` | WebSocket for multiplayer signaling |
 
 #### Multiplayer Signaling (`multiplayer.rs`)
 
-WebSocket-based lobby system for peer-to-peer racing:
+WebSocket-based race system for multiplayer racing:
 
 **State Management:**
-- `LobbyManager` - Thread-safe state with `Arc<RwLock<HashMap<String, Lobby>>>`
-- `Lobby` - Players, course key, race state, activity timestamp
-- `Player` - ID, name, mpsc channel for outbound messages
+- `RaceManager` - Thread-safe state with `Arc<RwLock<HashMap<String, Race>>>`
+- `Race` - Course, wind raster sources, players, race state, activity timestamp
+- `Player` - ID, name, mpsc channel for outbound messages, position
 
 **Client → Server Messages:**
-- `CreateLobby { course_key, player_name }` - Create new lobby
-- `JoinLobby { lobby_id, player_name }` - Join existing lobby
-- `LeaveLobby` - Leave current lobby
-- `Offer/Answer/IceCandidate` - WebRTC signaling forwarding
-- `StartRace` - Start race (creator only, requires 2+ players)
+- `CreateRace { course_key, player_name }` - Create new race
+- `JoinRace { race_id, player_name }` - Join existing race
+- `LeaveRace` - Leave current race
+- `StartRace` - Start race (creator only)
+- `PositionUpdate { lng, lat, heading }` - Broadcast boat position
 
 **Server → Client Messages:**
-- `LobbyCreated/LobbyJoined` - Lobby state responses
+- `RaceCreated { race_id, player_id, wind_raster_sources }` - Race created response
+- `RaceJoined { race_id, player_id, course_key, wind_raster_sources, players, is_creator }` - Race joined response
 - `PlayerJoined/PlayerLeft` - Player notifications
-- `Offer/Answer/IceCandidate` - Forwarded WebRTC signaling
 - `RaceCountdown { seconds }` - 3-2-1 countdown
-- `RaceStarted { start_time, course_key }` - Synchronized race start
+- `PositionUpdate { player_id, lng, lat, heading }` - Other player positions
+- `SyncRaceTime { race_time }` - Server time synchronization
+- `RaceEnded { reason }` - Race completion notification
+- `Leaderboard { entries }` - Current race standings
 
 **Features:**
-- 6-character hex lobby IDs
-- Max 10 players per lobby
+- 6-character hex race IDs
+- Max 10 players per race
 - Race locking (no joins after start)
-- 5-minute expiration for empty lobbies
+- 5-minute expiration for empty races
+- Wind raster sources sent on race create/join
 
 #### S3 Storage
 
@@ -281,14 +290,14 @@ cd server && cargo run -- import-grib-range --from 2020-11-01 --to 2021-01-27
 
 ## Key Data Flow
 
-1. Client loads → auto-creates multiplayer lobby via WebSocket
-2. Wind reports fetched from server (reads manifest.json from S3), wind texture displayed during lobby
-3. Host starts race → countdown → all players begin simultaneously
+1. Client loads → creates/joins multiplayer race via WebSocket
+2. Server sends wind raster sources on race create/join, wind texture displayed during lobby
+3. Host starts race → countdown (zoom to max) → all players begin simultaneously
 4. Game loop ticks via `requestAnimationFrame`:
    - Query wind at boat position using interpolated wind data
    - Calculate boat speed from polar diagram (TWS + TWA → BSP)
-   - Update boat position, broadcast to peers via WebRTC
-5. Ghost boats rendered for other players in the race
+   - Update boat position, broadcast to server via WebSocket
+5. Server broadcasts position updates to other players, ghost boats rendered
 
 ## Speed Polars
 

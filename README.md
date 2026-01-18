@@ -5,7 +5,7 @@ Multiplayer sailing game: offshore races against real historical wind conditions
 ## Features
 
 - **Real wind data** - Historical GRIB wind forecasts from Vendée Globe 2020
-- **Multiplayer** - WebRTC peer-to-peer racing with lobby system
+- **Multiplayer** - WebSocket-based racing with server-authoritative positions
 - **Realistic physics** - IMOCA 60 polar diagrams for boat speed
 - **3D globe** - Interactive Earth with wind visualization (particles + heatmap)
 - **Boat controls** - Arrow keys to steer, space to tack, up arrow to lock TWA
@@ -67,12 +67,11 @@ npm run dev
 - Vite
 - D3.js for globe projection and zoom/pan
 - WebGL for wind texture rendering
-- WebRTC for peer-to-peer multiplayer
 - Tailwind CSS
 
 **Server:**
 - Rust with Tokio async runtime
-- Warp web framework (HTTP + WebSocket)
+- Axum web framework (HTTP + WebSocket)
 - S3 for wind raster storage
 
 ## Infrastructure
@@ -145,9 +144,9 @@ Deploy:
 
 ## Scripts
 
-Import Vendée Globe 2020 GRIB files:
+Import GRIB files for courses defined in server:
 
 ```bash
 fly ssh console
-rewind import-grib-range --from 2020-11-01 --to 2021-01-27
+rewind import-courses-gribs
 ```
