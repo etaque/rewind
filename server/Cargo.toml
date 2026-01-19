@@ -26,6 +26,9 @@ object_store = { version = "0.13.0", features = ["aws"] }
 grib = "0.7"
 png = "0.17"
 
+# Database
+rusqlite = { version = "0.32", features = ["bundled"] }
+
 # Utils
 anyhow = "1"
 rand = "0.9"

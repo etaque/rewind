@@ -10,7 +10,7 @@ use tokio::sync::{RwLock, mpsc};
 
 use crate::{
     courses::Course,
-    manifest::{Manifest, WindReport},
+    wind_reports::{self, WindReport},
 };
 
 // ============================================================================
@@ -294,28 +294,29 @@ impl RaceManager {
                 tokio::time::sleep(tokio::time::Duration::from_secs(1)).await;
                 let races = races_clone.read().await;
                 for (race_id, race) in races.iter() {
-                    if let Some(start_time) = race.race_start_time
-                        && !race.race_ended
-                    {
-                        // Calculate race time (ms since race start)
-                        let now = Utc::now().timestamp_millis();
-                        let race_time = race.course.race_time(now - start_time);
+                    match race.race_start_time {
+                        Some(start_time) if !race.race_ended => {
+                            // Calculate race time (ms since race start)
+                            let now = Utc::now().timestamp_millis();
+                            let race_time = race.course.race_time(now - start_time);
 
-                        race.broadcast_all(ServerMessage::SyncRaceTime { race_time });
+                            race.broadcast_all(ServerMessage::SyncRaceTime { race_time });
 
-                        // Check if race time exceeded max
-                        if race_time >= race.course.max_finish_time() {
-                            {
-                                let mut races = races_clone.write().await;
-                                if let Some(race) = races.get_mut(race_id) {
-                                    race.race_ended = true;
+                            // Check if race time exceeded max
+                            if race_time >= race.course.max_finish_time() {
+                                {
+                                    let mut races = races_clone.write().await;
+                                    if let Some(race) = races.get_mut(race_id) {
+                                        race.race_ended = true;
+                                    }
                                 }
+                                race.broadcast_all(ServerMessage::RaceEnded {
+                                    reason: "Time limit reached".to_string(),
+                                });
+                                return;
                             }
-                            race.broadcast_all(ServerMessage::RaceEnded {
-                                reason: "Time limit reached".to_string(),
-                            });
-                            return;
                         }
+                        _ => {}
                     }
                 }
             }
@@ -353,12 +354,8 @@ impl RaceManager {
             .find(|c| c.key == course_key)
             .ok_or(anyhow!("Course not found"))?;
 
-        let manifest = Manifest::load().await?;
-        let rasters: Vec<WindRasterSource> = manifest
-            .for_course(&course)
-            .iter()
-            .map(|r| r.into())
-            .collect();
+        let reports = wind_reports::get_reports_for_course(&course)?;
+        let rasters: Vec<WindRasterSource> = reports.iter().map(|r| r.into()).collect();
 
         let race_id = generate_race_id();
         let mut race = Race::new(course, rasters.clone(), player_id.clone());

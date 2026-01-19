@@ -1,5 +1,6 @@
 use once_cell::sync::Lazy;
 use serde::Deserialize;
+use std::env;
 
 #[derive(Debug, Deserialize)]
 pub struct S3Config {
@@ -18,17 +19,44 @@ impl S3Config {
     }
 }
 
-#[derive(Debug, Deserialize)]
+impl Default for S3Config {
+    fn default() -> Self {
+        S3Config {
+            grib_bucket: "grib-files".to_string(),
+            raster_bucket: "wind-rasters".to_string(),
+            endpoint: "http://localhost:9000".to_string(),
+            region: "us-east-1".to_string(),
+            access_key: "test".to_string(),
+            secret_key: "test".to_string(),
+        }
+    }
+}
+
+#[derive(Debug)]
 pub struct Config {
-    #[serde(flatten)]
     pub s3: S3Config,
+    pub db_path: String,
 }
 
 pub static CONFIG: Lazy<Config> = Lazy::new(|| {
-    envy::prefixed("REWIND_S3_")
-        .from_env::<S3Config>()
-        .map(|s3| Config { s3 })
-        .expect("Missing S3 config. Required env vars: REWIND_S3_GRIB_BUCKET, REWIND_S3_RASTER_BUCKET, REWIND_S3_ENDPOINT, REWIND_S3_REGION, REWIND_S3_ACCESS_KEY, REWIND_S3_SECRET_KEY")
+    let s3 = if cfg!(test) {
+        // Use default config for tests
+        S3Config::default()
+    } else {
+        envy::prefixed("REWIND_S3_")
+            .from_env::<S3Config>()
+            .expect("Missing S3 config. Required env vars: REWIND_S3_GRIB_BUCKET, REWIND_S3_RASTER_BUCKET, REWIND_S3_ENDPOINT, REWIND_S3_REGION, REWIND_S3_ACCESS_KEY, REWIND_S3_SECRET_KEY")
+    };
+
+    let db_path = env::var("REWIND_DB_PATH").unwrap_or_else(|_| {
+        if cfg!(test) {
+            ":memory:".to_string()
+        } else {
+            "./rewind.db".to_string()
+        }
+    });
+
+    Config { s3, db_path }
 });
 
 pub fn config() -> &'static Config {

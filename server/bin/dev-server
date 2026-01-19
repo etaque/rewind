@@ -3,5 +3,6 @@ set -e
 cd `dirname "$0"`/..
 
 export RUST_LOG=info
+export REWIND_DB_PATH="${REWIND_DB_PATH:-./rewind.db}"
 
 cargo watch -x 'run -- http'

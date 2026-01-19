@@ -17,7 +17,10 @@ services:
       REWIND_S3_REGION: us-east-1
       REWIND_S3_ACCESS_KEY: rewind
       REWIND_S3_SECRET_KEY: rewindpass
+      REWIND_DB_PATH: /data/rewind.db
       RUST_LOG: info
+    volumes:
+      - server-data:/data
 
   minio:
     image: minio/minio:latest
@@ -64,3 +67,4 @@ services:
 
 volumes:
   minio-data:
+  server-data:

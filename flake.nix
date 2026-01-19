@@ -37,6 +37,8 @@
           buildInputs = with pkgs; [
             flyctl
 
+            litecli
+
             # Rust
             rustToolchain
             cargo-watch

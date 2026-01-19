@@ -1,0 +1,252 @@
+use crate::config::config;
+use crate::courses::Course;
+use crate::db::with_connection;
+use crate::s3;
+use anyhow::Result;
+use chrono::serde::ts_milliseconds;
+use chrono::{DateTime, NaiveDate, TimeDelta, Utc};
+use futures::TryStreamExt;
+use object_store::ObjectStore;
+use serde::{Deserialize, Serialize};
+
+#[derive(Clone, Debug, Deserialize, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct WindReport {
+    #[serde(with = "ts_milliseconds")]
+    pub time: DateTime<Utc>,
+    pub grib_path: String,
+    pub png_path: String,
+}
+
+impl WindReport {
+    pub fn png_url(&self) -> String {
+        config().s3.raster_url(&self.png_path)
+    }
+}
+
+/// Get the total count of wind reports in the database
+pub fn get_report_count() -> Result<i64> {
+    with_connection(|conn| {
+        let count: i64 =
+            conn.query_row("SELECT COUNT(*) FROM wind_reports", [], |row| row.get(0))?;
+        Ok(count)
+    })
+}
+
+/// Check if a report exists for the given time
+pub fn report_exists(time: DateTime<Utc>) -> Result<bool> {
+    with_connection(|conn| {
+        let time_ms = time.timestamp_millis();
+        let count: i64 = conn.query_row(
+            "SELECT COUNT(*) FROM wind_reports WHERE time = ?",
+            [time_ms],
+            |row| row.get(0),
+        )?;
+        Ok(count > 0)
+    })
+}
+
+/// Insert a wind report if it doesn't already exist (by time)
+/// Returns true if the report was inserted, false if it already existed
+pub fn insert_wind_report(report: &WindReport) -> Result<bool> {
+    with_connection(|conn| {
+        let time_ms = report.time.timestamp_millis();
+        let result = conn.execute(
+            "INSERT OR IGNORE INTO wind_reports (time, grib_path, png_path) VALUES (?, ?, ?)",
+            (&time_ms, &report.grib_path, &report.png_path),
+        )?;
+        Ok(result > 0)
+    })
+}
+
+/// Get reports for a given course (within time range)
+pub fn get_reports_for_course(course: &Course) -> Result<Vec<WindReport>> {
+    with_connection(|conn| {
+        let since = course.start_time - TimeDelta::days(1).num_milliseconds();
+        let until = course.max_finish_time();
+
+        let mut stmt = conn.prepare(
+            "SELECT time, grib_path, png_path FROM wind_reports
+             WHERE time >= ? AND time <= ?
+             ORDER BY time",
+        )?;
+
+        let reports = stmt
+            .query_map([since, until], |row| {
+                let time_ms: i64 = row.get(0)?;
+                let time = DateTime::from_timestamp_millis(time_ms)
+                    .unwrap_or_else(|| DateTime::UNIX_EPOCH);
+                Ok(WindReport {
+                    time,
+                    grib_path: row.get(1)?,
+                    png_path: row.get(2)?,
+                })
+            })?
+            .collect::<Result<Vec<_>, _>>()?;
+
+        Ok(reports)
+    })
+}
+
+/// Rebuild database from S3 listing of PNG files
+pub async fn rebuild_from_s3() -> Result<()> {
+    let client = s3::raster_client();
+    let mut inserted_count = 0;
+    let mut skipped_count = 0;
+
+    // Clear existing reports
+    with_connection(|conn| {
+        conn.execute("DELETE FROM wind_reports", [])?;
+        Ok(())
+    })?;
+
+    // List all objects in the raster bucket
+    let list = client.list(None);
+    let objects: Vec<_> = list.try_collect().await?;
+
+    for meta in objects {
+        let path = meta.location.to_string();
+
+        // Skip non-PNG files
+        if !path.ends_with("/uv.png") {
+            continue;
+        }
+
+        // Parse path: YYYY/MMDD/hour/forecast/uv.png
+        match parse_png_path(&path) {
+            Some(report) => {
+                insert_wind_report(&report)?;
+                inserted_count += 1;
+            }
+            None => {
+                log::warn!("Skipping PNG file with unexpected path format: {}", path);
+                skipped_count += 1;
+            }
+        }
+    }
+
+    log::info!(
+        "Rebuilt database: inserted {} wind reports, skipped {} files",
+        inserted_count,
+        skipped_count
+    );
+
+    Ok(())
+}
+
+/// Parse a PNG path like "2020/1101/0/3/uv.png" into a WindReport
+fn parse_png_path(path: &str) -> Option<WindReport> {
+    // Expected format: YYYY/MMDD/hour/forecast/uv.png
+    let parts: Vec<&str> = path.split('/').collect();
+    if parts.len() != 5 {
+        return None;
+    }
+
+    let year: i32 = parts[0].parse().ok()?;
+    let month: u32 = parts[1][0..2].parse().ok()?;
+    let day_of_month: u32 = parts[1][2..4].parse().ok()?;
+    let hour: i16 = parts[2].parse().ok()?;
+    let forecast: i16 = parts[3].parse().ok()?;
+
+    let date = NaiveDate::from_ymd_opt(year, month, day_of_month)?;
+    let target_time =
+        date.and_hms_opt(hour as u32, 0, 0)?.and_utc() + TimeDelta::hours(forecast.into());
+
+    // Reconstruct grib path
+    let grib_path = format!(
+        "{}/{:02}{:02}/{}/gfs.t{:02}z.pgrb2full.0p50.f{:03}.grib2",
+        year, month, day_of_month, hour, hour, forecast
+    );
+
+    Some(WindReport {
+        time: target_time,
+        grib_path,
+        png_path: path.to_string(),
+    })
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    // =========================================================================
+    // parse_png_path tests
+    // =========================================================================
+
+    #[test]
+    fn test_parse_png_path_valid() {
+        let report = parse_png_path("2020/1101/0/3/uv.png").unwrap();
+
+        assert_eq!(report.png_path, "2020/1101/0/3/uv.png");
+        assert_eq!(
+            report.grib_path,
+            "2020/1101/0/gfs.t00z.pgrb2full.0p50.f003.grib2"
+        );
+        // Nov 1, 2020 00:00 UTC + 3h forecast = Nov 1, 2020 03:00 UTC
+        assert_eq!(report.time.to_rfc3339(), "2020-11-01T03:00:00+00:00");
+    }
+
+    #[test]
+    fn test_parse_png_path_different_hour() {
+        let report = parse_png_path("2020/1115/12/6/uv.png").unwrap();
+
+        assert_eq!(
+            report.grib_path,
+            "2020/1115/12/gfs.t12z.pgrb2full.0p50.f006.grib2"
+        );
+        // Nov 15, 2020 12:00 UTC + 6h = Nov 15, 2020 18:00 UTC
+        assert_eq!(report.time.to_rfc3339(), "2020-11-15T18:00:00+00:00");
+    }
+
+    #[test]
+    fn test_parse_png_path_forecast_crosses_midnight() {
+        // Hour 18 + forecast 6 = next day 00:00
+        let report = parse_png_path("2020/1231/18/6/uv.png").unwrap();
+
+        // Dec 31, 2020 18:00 + 6h = Jan 1, 2021 00:00
+        assert_eq!(report.time.to_rfc3339(), "2021-01-01T00:00:00+00:00");
+    }
+
+    #[test]
+    fn test_parse_png_path_leap_year() {
+        let report = parse_png_path("2020/0229/6/3/uv.png").unwrap();
+
+        assert_eq!(report.time.to_rfc3339(), "2020-02-29T09:00:00+00:00");
+    }
+
+    #[test]
+    fn test_parse_png_path_invalid_leap_year() {
+        // 2021 is not a leap year
+        let result = parse_png_path("2021/0229/6/3/uv.png");
+        assert!(result.is_none());
+    }
+
+    #[test]
+    fn test_parse_png_path_wrong_segment_count() {
+        assert!(parse_png_path("2020/1101/0/uv.png").is_none()); // missing forecast
+        assert!(parse_png_path("2020/1101/0/3/extra/uv.png").is_none()); // too many
+        assert!(parse_png_path("uv.png").is_none()); // just filename
+    }
+
+    #[test]
+    fn test_parse_png_path_invalid_year() {
+        assert!(parse_png_path("abcd/1101/0/3/uv.png").is_none());
+    }
+
+    #[test]
+    fn test_parse_png_path_invalid_month() {
+        assert!(parse_png_path("2020/1301/0/3/uv.png").is_none()); // month 13
+        assert!(parse_png_path("2020/0001/0/3/uv.png").is_none()); // month 0
+    }
+
+    #[test]
+    fn test_parse_png_path_invalid_day() {
+        assert!(parse_png_path("2020/1132/0/3/uv.png").is_none()); // day 32
+        assert!(parse_png_path("2020/1100/0/3/uv.png").is_none()); // day 0
+    }
+
+    #[test]
+    fn test_parse_png_path_invalid_hour() {
+        assert!(parse_png_path("2020/1101/25/3/uv.png").is_none()); // hour 25
+    }
+}

@@ -4,17 +4,21 @@ use cli::{Cli, Command};
 mod cli;
 mod config;
 mod courses;
+mod db;
 mod grib_png;
 mod grib_store;
-mod manifest;
 mod multiplayer;
 mod s3;
 mod server;
+mod wind_reports;
 
 #[tokio::main]
 async fn main() {
     dotenvy::dotenv().ok();
     env_logger::init();
+
+    // Initialize database
+    db::init_db().expect("Failed to initialize database");
 
     let args = Cli::parse();
 
@@ -27,9 +31,8 @@ async fn main() {
             grib_store::import_courses_gribs().await.unwrap();
         }
         Command::RebuildManifest => {
-            let manifest = manifest::Manifest::rebuild_from_s3().await.unwrap();
-            manifest.save().await.unwrap();
-            println!("Manifest saved.");
+            wind_reports::rebuild_from_s3().await.unwrap();
+            println!("Database rebuilt from S3.");
         }
     }
 }

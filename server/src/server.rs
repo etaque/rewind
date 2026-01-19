@@ -13,9 +13,9 @@ use tower_http::{compression::CompressionLayer, cors::CorsLayer};
 use crate::{
     courses,
     multiplayer::{RaceManager, handle_websocket},
+    wind_reports,
 };
 
-use super::manifest::Manifest;
 use super::s3;
 
 // Make our own error that wraps `anyhow::Error`.
@@ -75,10 +75,10 @@ async fn health_handler() -> Result<String, AppError> {
     let health_path = S3Path::from("/healthcheck");
     s3.put(&health_path, Bytes::new().into()).await?;
 
-    // Check manifest is readable from raster bucket
-    let manifest = Manifest::load().await?;
+    // Check database is readable
+    let report_count = wind_reports::get_report_count()?;
 
-    Ok(format!("OK ({} wind reports)", manifest.reports.len()))
+    Ok(format!("OK ({} wind reports)", report_count))
 }
 
 async fn courses_handler() -> impl IntoResponse {

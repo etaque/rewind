@@ -1,12 +1,12 @@
 use crate::cli::GribRangeArgs;
 use crate::courses;
 use crate::grib_png::grib_to_uv_png;
-use crate::manifest::{Manifest, WindReport};
 use crate::s3;
+use crate::wind_reports::{self, WindReport};
 use anyhow::anyhow;
 use bytes::Bytes;
 use chrono::{DateTime, Days, NaiveDate, TimeDelta, Utc};
-use object_store::{aws, ObjectStoreExt};
+use object_store::{ObjectStoreExt, aws};
 
 // Hours of the day when GRIB files are generated (0, 6, 12, 18)
 const HOURS: [i16; 4] = [0, 6, 12, 18];
@@ -20,9 +20,8 @@ pub async fn import_grib_range(args: GribRangeArgs) -> anyhow::Result<()> {
     let grib_s3 = s3::grib_client();
     let raster_s3 = s3::raster_client();
 
-    // Load existing manifest
-    let mut manifest = Manifest::load().await?;
-    println!("Loaded manifest with {} reports", manifest.reports.len());
+    let report_count = wind_reports::get_report_count()?;
+    println!("Database has {} reports", report_count);
 
     let mut current_day = args.from;
     let end_day = args.to.checked_add_days(Days::new(1)).unwrap();
@@ -30,23 +29,14 @@ pub async fn import_grib_range(args: GribRangeArgs) -> anyhow::Result<()> {
     while current_day < end_day {
         for hour in HOURS {
             for forecast in FORECASTS {
-                handle_grib(
-                    &mut manifest,
-                    &grib_s3,
-                    &raster_s3,
-                    current_day,
-                    hour,
-                    forecast,
-                )
-                .await?;
+                handle_grib(&grib_s3, &raster_s3, current_day, hour, forecast).await?;
             }
         }
         current_day = current_day.checked_add_days(Days::new(1)).unwrap();
     }
 
-    // Save updated manifest
-    manifest.save().await?;
-    println!("Saved manifest with {} reports", manifest.reports.len());
+    let report_count = wind_reports::get_report_count()?;
+    println!("Database now has {} reports", report_count);
 
     println!("Finished.");
     Ok(())
@@ -90,7 +80,6 @@ fn grib_path(day: NaiveDate, hour: i16, forecast: i16) -> String {
 }
 
 async fn handle_grib(
-    manifest: &mut Manifest,
     grib_s3: &aws::AmazonS3,
     raster_s3: &aws::AmazonS3,
     day: NaiveDate,
@@ -100,8 +89,8 @@ async fn handle_grib(
     let target_time =
         day.and_hms_opt(hour as u32, 0, 0).unwrap().and_utc() + TimeDelta::hours(forecast.into());
 
-    // Check if already in manifest
-    if manifest.reports.iter().any(|r| r.time == target_time) {
+    // Check if already in database
+    if wind_reports::report_exists(target_time)? {
         println!(
             "  {} ... skipped (already exists)",
             grib_path(day, hour, forecast)
@@ -148,7 +137,7 @@ async fn handle_grib(
         png_path,
     };
 
-    manifest.add_report(report);
+    wind_reports::insert_wind_report(&report)?;
 
     println!("ok");
     Ok(())
@@ -167,7 +156,7 @@ async fn download_grib(url: &str) -> anyhow::Result<Bytes> {
             return Err(anyhow!(format!(
                 "GRIB download failed with status: {}",
                 status
-            )))
+            )));
         }
     };
 
