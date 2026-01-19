@@ -45,7 +45,7 @@ pub fn all() -> Vec<Course> {
                 lng: -61.53,
                 lat: 16.23,
             },
-            time_factor: 2000,
+            time_factor: 5000,
             max_days: 21,
         },
         Course {
@@ -62,7 +62,7 @@ pub fn all() -> Vec<Course> {
                 lng: -1.788456535301071,
                 lat: 46.470243284275966,
             },
-            time_factor: 2000,
+            time_factor: 10000,
             max_days: 90,
         },
     ]
