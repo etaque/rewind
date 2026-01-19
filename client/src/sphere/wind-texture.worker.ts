@@ -194,23 +194,26 @@ function bilinear(
 // HSL to RGB conversion (replaces D3 color scale)
 function windColor(speed: number): [number, number, number] {
   let h: number;
-  let s = 1;
-  let l = 0.5;
+  let s = 0.6;
+  let l = 0.45;
 
-  if (speed < 35) {
-    // Blue to green
-    h = 240 - (speed / 35) * 120;
-  } else if (speed < 70) {
-    // Green to red
-    h = 120 - ((speed - 35) / 35) * 120;
-  } else if (speed < 100) {
-    // Red to pink
-    h = 360 - ((speed - 70) / 30) * 60;
+  if (speed < 8) {
+    // Light winds: Blue to green (0-16 knots)
+    h = 240 - (speed / 8) * 120;
+  } else if (speed < 15) {
+    // Moderate winds: Green to yellow (16-30 knots)
+    h = 120 - ((speed - 8) / 7) * 60;
+  } else if (speed < 25) {
+    // Strong winds: Yellow to red (30-50 knots)
+    h = 60 - ((speed - 15) / 10) * 60;
+  } else if (speed < 35) {
+    // Storm winds: Red to pink (50-70 knots)
+    h = 360 - ((speed - 25) / 10) * 60;
   } else {
-    // Pink to white
+    // Extreme: Pink to white (70+ knots)
     h = 300;
-    l = 0.5 + ((speed - 100) / 100) * 0.5;
-    if (l > 1) l = 1;
+    l = 0.45 + ((speed - 35) / 15) * 0.4;
+    if (l > 0.85) l = 0.85;
   }
 
   return hslToRgb(h, s, l);
