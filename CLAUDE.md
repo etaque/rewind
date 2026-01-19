@@ -102,9 +102,9 @@ The `SphereView` class orchestrates all layers, handles D3 zoom/pan with quatern
 #### Wind Data Flow
 
 ```
-Page loads → fetch /wind-reports/since/{time} → REPORTS_LOADED
-    → InterpolatedWind.update(currentReport, nextReports)
-    → WindRaster.load(pngUrl) → fetch directly from S3
+Race created/joined → Server queries SQLite for course wind reports
+    → Server sends wind raster sources via WebSocket
+    → Client loads WindRaster.load(pngUrl) → fetch directly from S3
     → Decode RGB to u,v components → SphereView.updateWind()
     → Animation loop: query interpolatedWind.speedAt(position, time) every 100ms
 ```
@@ -150,7 +150,7 @@ When a particle's age exceeds MAX_AGE, it respawns at a new random position with
 
 ### Server (`server/`)
 
-Rust with Tokio async runtime, Warp HTTP framework, and S3 for all storage (no database).
+Rust with Tokio async runtime, Axum HTTP framework, SQLite for wind report inventory, and S3 for file storage.
 
 #### Directory Structure
 
@@ -159,15 +159,17 @@ server/
 ├── src/
 │   ├── main.rs             # CLI entry point (clap), dispatches to commands
 │   ├── cli.rs              # Command definitions (Http, ImportGribRange)
-│   ├── server.rs           # Warp routes and handlers
-│   ├── config.rs           # Environment configuration (S3, etc.)
+│   ├── server.rs           # Axum routes and handlers
+│   ├── config.rs           # Environment configuration (S3, database path)
+│   ├── db.rs               # SQLite database initialization and connection
 │   ├── courses.rs          # Race course definitions (start/finish, time factor)
-│   ├── manifest.rs         # Wind report manifest (JSON in S3)
+│   ├── wind_reports.rs     # Wind report inventory (SQLite storage)
 │   ├── multiplayer.rs      # WebSocket signaling for multiplayer races
 │   ├── s3.rs               # S3 client configuration
 │   ├── grib_store.rs       # GRIB file import and S3 storage
 │   └── grib_png.rs         # GRIB to PNG conversion
-├── Cargo.toml              # Dependencies (warp, tokio, object_store, etc.)
+├── Cargo.toml              # Dependencies (axum, tokio, rusqlite, object_store, etc.)
+├── fly.toml                # Fly.io deployment configuration
 └── bin/                    # Shell scripts (container, dev-server)
 ```
 
@@ -213,33 +215,38 @@ WebSocket-based race system for multiplayer racing:
 - 5-minute expiration for empty races
 - Wind raster sources sent on race create/join
 
-#### S3 Storage
+#### Storage
 
-All data is stored in S3 (no database required):
+**SQLite Database (`wind_reports` table):**
+
+Wind report inventory is stored in a local SQLite database:
+
+```sql
+CREATE TABLE wind_reports (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    time INTEGER NOT NULL UNIQUE,  -- Unix timestamp in milliseconds
+    grib_path TEXT NOT NULL,
+    png_path TEXT NOT NULL,
+    created_at INTEGER NOT NULL
+);
+```
+
+Database location configured via `REWIND_DB_PATH` environment variable (default: `./rewind.db`).
+
+**S3 Buckets:**
 
 | Bucket | Purpose | Access |
 |--------|---------|--------|
 | `grib-files` | Raw GRIB files downloaded from NOAA | Private (server cache) |
-| `wind-rasters` | Processed UV PNG files + manifest.json | Public read (client access) |
-
-**Manifest file (`manifest.json`):**
-```json
-{
-  "reports": [
-    {"time": 1604210400000, "gribPath": "2020/1101/0/3/gfs...", "pngPath": "2020/1101/0/3/uv.png"},
-    ...
-  ]
-}
-```
-
-The manifest is updated on each GRIB import and read by the server to serve `/wind-reports/since/{time}`.
+| `wind-rasters` | Processed UV PNG files | Public read (client access) |
 
 **PNG format:** 720×360 pixels (0.5° resolution), RGB where R=u, G=v components encoded as `(value + 30) * 255 / 60`
 
 #### Key Dependencies
 
 - **tokio 1.x** - Async runtime with full features
-- **warp 0.3** - HTTP framework with WebSocket support
+- **axum 0.8** - HTTP framework with WebSocket support
+- **rusqlite** - SQLite database (bundled)
 - **object_store** - S3 client (MinIO compatible)
 - **grib** - GRIB2 file parsing
 - **png** - PNG encoding
@@ -286,6 +293,7 @@ cd server && ./bin/dev-server               # With cargo-watch auto-reload
 ### Data Import
 ```bash
 cd server && cargo run -- import-grib-range --from 2020-11-01 --to 2021-01-27
+cd server && cargo run -- rebuild-manifest    # Rebuild database from S3 PNG files
 ```
 
 ## Key Data Flow

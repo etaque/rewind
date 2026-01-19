@@ -72,6 +72,7 @@ npm run dev
 **Server:**
 - Rust with Tokio async runtime
 - Axum web framework (HTTP + WebSocket)
+- SQLite for wind report inventory
 - S3 for wind raster storage
 
 ## Infrastructure
@@ -107,6 +108,9 @@ After `terraform apply`, add DNS records in your DNS provider:
 cd server
 fly launch --no-deploy
 
+# Create volume for SQLite database
+fly volumes create rewind_data --region cdg --size 1
+
 # Set secrets
 fly secrets set \
   RUST_LOG=info \
@@ -117,6 +121,8 @@ fly secrets set \
   REWIND_S3_ACCESS_KEY=<from terraform> \
   REWIND_S3_SECRET_KEY=<from terraform>
 ```
+
+The `fly.toml` is pre-configured to mount the volume at `/data` with `REWIND_DB_PATH=/data/rewind.db`.
 
 ## Deployment
 
@@ -149,4 +155,11 @@ Import GRIB files for courses defined in server:
 ```bash
 fly ssh console
 rewind import-courses-gribs
+```
+
+Rebuild wind report database from existing S3 PNG files:
+
+```bash
+fly ssh console
+rewind rebuild-manifest
 ```
