@@ -1,4 +1,4 @@
-use anyhow::{anyhow, Result};
+use anyhow::{Result, anyhow};
 use bytes::Bytes;
 use grib::Grib2SubmessageDecoder;
 use png::{BitDepth, ColorType, Encoder};
@@ -12,12 +12,15 @@ const CATEGORY_MOMENTUM: u8 = 2;
 const PARAM_U_WIND: u8 = 2;
 const PARAM_V_WIND: u8 = 3;
 
-// Output PNG dimensions (0.5 degree resolution)
-const WIDTH: usize = 720;
-const HEIGHT: usize = 360;
+// Output PNG dimensions for 0.5° resolution (VLM source)
+const WIDTH_05: usize = 720;
+const HEIGHT_05: usize = 360;
+const HEIGHT_05_WITH_POLES: usize = 361;
 
-// Some GRIB files include both poles (-90 to +90 inclusive = 361 rows)
-const HEIGHT_WITH_POLES: usize = 361;
+// Output PNG dimensions for 0.25° resolution (NCAR source)
+const WIDTH_025: usize = 1440;
+const HEIGHT_025: usize = 720;
+const HEIGHT_025_WITH_POLES: usize = 721;
 
 // Wind speed range for normalization (m/s)
 const WIND_MIN: f32 = -30.0;
@@ -75,26 +78,13 @@ pub fn grib_to_uv_png(grib_data: &[u8]) -> Result<Bytes> {
     let u = u_values.ok_or_else(|| anyhow!("U-component wind not found in GRIB"))?;
     let v = v_values.ok_or_else(|| anyhow!("V-component wind not found in GRIB"))?;
 
-    // Handle both 720×360 and 720×361 grids
-    let (u, v) = if u.len() == WIDTH * HEIGHT_WITH_POLES && v.len() == WIDTH * HEIGHT_WITH_POLES {
-        // Skip the last row (south pole at -90°) to get 360 rows
-        (u[..WIDTH * HEIGHT].to_vec(), v[..WIDTH * HEIGHT].to_vec())
-    } else if u.len() == WIDTH * HEIGHT && v.len() == WIDTH * HEIGHT {
-        (u, v)
-    } else {
-        return Err(anyhow!(
-            "Unexpected grid size: U={}, V={}, expected {} or {}",
-            u.len(),
-            v.len(),
-            WIDTH * HEIGHT,
-            WIDTH * HEIGHT_WITH_POLES
-        ));
-    };
+    // Detect resolution from grid size and normalize
+    let (u, v, width, height) = detect_and_normalize_grid(u, v)?;
 
     // Create RGB image data (R=U, G=V, B=0)
-    let mut rgb_data = vec![0u8; WIDTH * HEIGHT * 3];
+    let mut rgb_data = vec![0u8; width * height * 3];
 
-    for i in 0..(WIDTH * HEIGHT) {
+    for i in 0..(width * height) {
         let u_normalized = normalize_wind(u[i]);
         let v_normalized = normalize_wind(v[i]);
 
@@ -104,7 +94,51 @@ pub fn grib_to_uv_png(grib_data: &[u8]) -> Result<Bytes> {
     }
 
     // Encode as PNG
-    encode_png(&rgb_data, WIDTH, HEIGHT)
+    encode_png(&rgb_data, width, height)
+}
+
+/// Detect grid resolution and normalize to standard dimensions.
+/// Returns (u_values, v_values, width, height).
+fn detect_and_normalize_grid(
+    u: Vec<f32>,
+    v: Vec<f32>,
+) -> Result<(Vec<f32>, Vec<f32>, usize, usize)> {
+    let len = u.len();
+
+    // 0.25° resolution (1440×720 or 1440×721)
+    if len == WIDTH_025 * HEIGHT_025_WITH_POLES && v.len() == WIDTH_025 * HEIGHT_025_WITH_POLES {
+        // Skip the last row (south pole) to get 720 rows
+        Ok((
+            u[..WIDTH_025 * HEIGHT_025].to_vec(),
+            v[..WIDTH_025 * HEIGHT_025].to_vec(),
+            WIDTH_025,
+            HEIGHT_025,
+        ))
+    } else if len == WIDTH_025 * HEIGHT_025 && v.len() == WIDTH_025 * HEIGHT_025 {
+        Ok((u, v, WIDTH_025, HEIGHT_025))
+    }
+    // 0.5° resolution (720×360 or 720×361)
+    else if len == WIDTH_05 * HEIGHT_05_WITH_POLES && v.len() == WIDTH_05 * HEIGHT_05_WITH_POLES {
+        // Skip the last row (south pole) to get 360 rows
+        Ok((
+            u[..WIDTH_05 * HEIGHT_05].to_vec(),
+            v[..WIDTH_05 * HEIGHT_05].to_vec(),
+            WIDTH_05,
+            HEIGHT_05,
+        ))
+    } else if len == WIDTH_05 * HEIGHT_05 && v.len() == WIDTH_05 * HEIGHT_05 {
+        Ok((u, v, WIDTH_05, HEIGHT_05))
+    } else {
+        Err(anyhow!(
+            "Unexpected grid size: U={}, V={}. Expected 0.5° ({} or {}) or 0.25° ({} or {})",
+            u.len(),
+            v.len(),
+            WIDTH_05 * HEIGHT_05,
+            WIDTH_05 * HEIGHT_05_WITH_POLES,
+            WIDTH_025 * HEIGHT_025,
+            WIDTH_025 * HEIGHT_025_WITH_POLES
+        ))
+    }
 }
 
 /// Normalize wind speed from -30..30 m/s to 0..255
@@ -205,9 +239,20 @@ mod tests {
     // =========================================================================
 
     #[test]
-    fn test_encode_png_valid_dimensions() {
-        let rgb_data = vec![0u8; 720 * 360 * 3];
-        let result = encode_png(&rgb_data, 720, 360);
+    fn test_encode_png_05_resolution() {
+        let rgb_data = vec![0u8; WIDTH_05 * HEIGHT_05 * 3];
+        let result = encode_png(&rgb_data, WIDTH_05, HEIGHT_05);
+        assert!(result.is_ok());
+
+        let png_bytes = result.unwrap();
+        // PNG magic number check
+        assert_eq!(&png_bytes[0..8], &[137, 80, 78, 71, 13, 10, 26, 10]);
+    }
+
+    #[test]
+    fn test_encode_png_025_resolution() {
+        let rgb_data = vec![0u8; WIDTH_025 * HEIGHT_025 * 3];
+        let result = encode_png(&rgb_data, WIDTH_025, HEIGHT_025);
         assert!(result.is_ok());
 
         let png_bytes = result.unwrap();
@@ -220,5 +265,65 @@ mod tests {
         let rgb_data = vec![255u8; 10 * 10 * 3]; // White 10x10 image
         let result = encode_png(&rgb_data, 10, 10);
         assert!(result.is_ok());
+    }
+
+    // =========================================================================
+    // Grid detection tests
+    // =========================================================================
+
+    #[test]
+    fn test_detect_grid_05_resolution() {
+        let u = vec![0.0f32; WIDTH_05 * HEIGHT_05];
+        let v = vec![0.0f32; WIDTH_05 * HEIGHT_05];
+        let result = detect_and_normalize_grid(u, v);
+        assert!(result.is_ok());
+        let (_, _, width, height) = result.unwrap();
+        assert_eq!(width, WIDTH_05);
+        assert_eq!(height, HEIGHT_05);
+    }
+
+    #[test]
+    fn test_detect_grid_05_with_poles() {
+        let u = vec![0.0f32; WIDTH_05 * HEIGHT_05_WITH_POLES];
+        let v = vec![0.0f32; WIDTH_05 * HEIGHT_05_WITH_POLES];
+        let result = detect_and_normalize_grid(u, v);
+        assert!(result.is_ok());
+        let (u_out, v_out, width, height) = result.unwrap();
+        assert_eq!(width, WIDTH_05);
+        assert_eq!(height, HEIGHT_05);
+        assert_eq!(u_out.len(), WIDTH_05 * HEIGHT_05);
+        assert_eq!(v_out.len(), WIDTH_05 * HEIGHT_05);
+    }
+
+    #[test]
+    fn test_detect_grid_025_resolution() {
+        let u = vec![0.0f32; WIDTH_025 * HEIGHT_025];
+        let v = vec![0.0f32; WIDTH_025 * HEIGHT_025];
+        let result = detect_and_normalize_grid(u, v);
+        assert!(result.is_ok());
+        let (_, _, width, height) = result.unwrap();
+        assert_eq!(width, WIDTH_025);
+        assert_eq!(height, HEIGHT_025);
+    }
+
+    #[test]
+    fn test_detect_grid_025_with_poles() {
+        let u = vec![0.0f32; WIDTH_025 * HEIGHT_025_WITH_POLES];
+        let v = vec![0.0f32; WIDTH_025 * HEIGHT_025_WITH_POLES];
+        let result = detect_and_normalize_grid(u, v);
+        assert!(result.is_ok());
+        let (u_out, v_out, width, height) = result.unwrap();
+        assert_eq!(width, WIDTH_025);
+        assert_eq!(height, HEIGHT_025);
+        assert_eq!(u_out.len(), WIDTH_025 * HEIGHT_025);
+        assert_eq!(v_out.len(), WIDTH_025 * HEIGHT_025);
+    }
+
+    #[test]
+    fn test_detect_grid_invalid_size() {
+        let u = vec![0.0f32; 100];
+        let v = vec![0.0f32; 100];
+        let result = detect_and_normalize_grid(u, v);
+        assert!(result.is_err());
     }
 }

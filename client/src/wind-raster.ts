@@ -3,9 +3,7 @@ import * as utils from "./utils";
 import type { WorkerResponse } from "./wind-raster.worker";
 import WindRasterWorker from "./wind-raster.worker?worker";
 
-const pixelWidth = 720;
 const windScale = 30;
-const pixelSize = 0.5; // 1px == 0.5°
 const latAmplitude = 180;
 const channels = 4; // RGBA
 
@@ -14,6 +12,12 @@ type RasterData = {
   width: number;
   height: number;
 };
+
+// Compute pixel size (degrees per pixel) from raster dimensions
+function getPixelSize(width: number): number {
+  // 720px = 0.5° resolution, 1440px = 0.25° resolution
+  return 360 / width;
+}
 
 export default class WindRaster {
   readonly time: number;
@@ -30,10 +34,12 @@ export default class WindRaster {
   }
 
   speedAt(position: LngLat): WindSpeed | null {
-    const floatingPix = posToPixel(position);
+    const { width } = this.raster;
+    const pixelSize = getPixelSize(width);
+    const floatingPix = posToPixel(position, pixelSize);
     const vectorGetter = (offset: number) => (p: Pixel) =>
       colorToSpeed(
-        this.raster.data[pixelToIndex(reframePixel(p, pixelWidth)) + offset],
+        this.raster.data[pixelToIndex(reframePixel(p, width), width) + offset],
       );
     if (floatingPix) {
       return {
@@ -43,6 +49,21 @@ export default class WindRaster {
     } else {
       return null;
     }
+  }
+
+  /** Get the resolution in degrees per pixel */
+  get pixelSize(): number {
+    return getPixelSize(this.raster.width);
+  }
+
+  /** Get the width of the raster in pixels */
+  get width(): number {
+    return this.raster.width;
+  }
+
+  /** Get the height of the raster in pixels */
+  get height(): number {
+    return this.raster.height;
   }
 }
 
@@ -61,10 +82,10 @@ function loadImageData(url: string): Promise<RasterData> {
   });
 }
 
-const pixelToIndex = ({ x, y }: Pixel): number =>
-  (pixelWidth * y + x) * channels;
+const pixelToIndex = ({ x, y }: Pixel, width: number): number =>
+  (width * y + x) * channels;
 
-const posToPixel = ({ lng, lat }: LngLat): Pixel | null => {
+const posToPixel = ({ lng, lat }: LngLat, pixelSize: number): Pixel | null => {
   if (lat < -latAmplitude / 2 || lat > latAmplitude / 2) {
     return null;
   } else {
