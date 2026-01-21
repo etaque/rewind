@@ -152,18 +152,16 @@ impl Default for NcarSource {
 
 /// S3 path for NCAR GRIB files (filtered wind data).
 ///
-/// Uses a different path structure to distinguish from VLM source:
-/// `ncar/{year}/{mmdd}/{hour}/wind.grib2`
+/// Path structure: `ncar/{year}/{mmdd}/{hour}/wind.grib2`
 pub fn ncar_grib_path(day: NaiveDate, hour: u32) -> String {
     format!("ncar/{}/{}/wind.grib2", day.format("%Y/%m%d"), hour)
 }
 
 /// S3 path for NCAR UV PNG rasters.
 ///
-/// Uses same structure as VLM but with forecast=0 (analysis data).
-/// `{year}/{mmdd}/{hour}/0/uv.png`
+/// Path structure: `ncar/{year}/{mmdd}/{hour}/uv.png`
 pub fn ncar_raster_path(day: NaiveDate, hour: u32) -> String {
-    format!("{}/{}/0/uv.png", day.format("%Y/%m%d"), hour)
+    format!("ncar/{}/{}/uv.png", day.format("%Y/%m%d"), hour)
 }
 
 #[cfg(test)]
@@ -208,6 +206,6 @@ mod tests {
     fn test_ncar_raster_path() {
         let day = NaiveDate::from_ymd_opt(2024, 1, 15).unwrap();
         let path = ncar_raster_path(day, 6);
-        assert_eq!(path, "2024/0115/6/0/uv.png");
+        assert_eq!(path, "ncar/2024/0115/6/uv.png");
     }
 }

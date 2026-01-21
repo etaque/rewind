@@ -1,5 +1,5 @@
 use clap::Parser;
-use cli::{Cli, Command, DataSource};
+use cli::{Cli, Command};
 
 mod cli;
 mod config;
@@ -31,10 +31,7 @@ async fn main() {
             grib_store::import_grib_range(range_args).await.unwrap();
         }
         Command::ImportCoursesGribs => {
-            // Default to VLM source for backwards compatibility
-            grib_store::import_courses_gribs(DataSource::Vlm)
-                .await
-                .unwrap();
+            grib_store::import_courses_gribs().await.unwrap();
         }
         Command::RebuildManifest => {
             wind_reports::rebuild_from_s3().await.unwrap();

@@ -9,6 +9,9 @@ use futures::TryStreamExt;
 use object_store::ObjectStore;
 use serde::{Deserialize, Serialize};
 
+/// GFS data source identifier
+pub const SOURCE_NCAR: &str = "ncar";
+
 #[derive(Clone, Debug, Deserialize, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct WindReport {
@@ -16,6 +19,12 @@ pub struct WindReport {
     pub time: DateTime<Utc>,
     pub grib_path: String,
     pub png_path: String,
+    #[serde(default = "default_source")]
+    pub source: String,
+}
+
+fn default_source() -> String {
+    SOURCE_NCAR.to_string()
 }
 
 impl WindReport {
@@ -52,8 +61,8 @@ pub fn insert_wind_report(report: &WindReport) -> Result<bool> {
     with_connection(|conn| {
         let time_ms = report.time.timestamp_millis();
         let result = conn.execute(
-            "INSERT OR IGNORE INTO wind_reports (time, grib_path, png_path) VALUES (?, ?, ?)",
-            (&time_ms, &report.grib_path, &report.png_path),
+            "INSERT OR IGNORE INTO wind_reports (time, grib_path, png_path, source) VALUES (?, ?, ?, ?)",
+            (&time_ms, &report.grib_path, &report.png_path, &report.source),
         )?;
         Ok(result > 0)
     })
@@ -66,7 +75,7 @@ pub fn get_reports_for_course(course: &Course) -> Result<Vec<WindReport>> {
         let until = course.max_finish_time();
 
         let mut stmt = conn.prepare(
-            "SELECT time, grib_path, png_path FROM wind_reports
+            "SELECT time, grib_path, png_path, source FROM wind_reports
              WHERE time >= ? AND time <= ?
              ORDER BY time",
         )?;
@@ -80,6 +89,7 @@ pub fn get_reports_for_course(course: &Course) -> Result<Vec<WindReport>> {
                     time,
                     grib_path: row.get(1)?,
                     png_path: row.get(2)?,
+                    source: row.get(3)?,
                 })
             })?
             .collect::<Result<Vec<_>, _>>()?;
@@ -100,8 +110,9 @@ pub async fn rebuild_from_s3() -> Result<()> {
         Ok(())
     })?;
 
-    // List all objects in the raster bucket
-    let list = client.list(None);
+    // List all objects in the raster bucket under ncar/ prefix
+    let prefix = object_store::path::Path::from("ncar");
+    let list = client.list(Some(&prefix));
     let objects: Vec<_> = list.try_collect().await?;
 
     for meta in objects {
@@ -112,8 +123,8 @@ pub async fn rebuild_from_s3() -> Result<()> {
             continue;
         }
 
-        // Parse path: YYYY/MMDD/hour/forecast/uv.png
-        match parse_png_path(&path) {
+        // Parse path: ncar/YYYY/MMDD/hour/uv.png
+        match parse_ncar_png_path(&path) {
             Some(report) => {
                 insert_wind_report(&report)?;
                 inserted_count += 1;
@@ -134,34 +145,34 @@ pub async fn rebuild_from_s3() -> Result<()> {
     Ok(())
 }
 
-/// Parse a PNG path like "2020/1101/0/3/uv.png" into a WindReport
-fn parse_png_path(path: &str) -> Option<WindReport> {
-    // Expected format: YYYY/MMDD/hour/forecast/uv.png
+/// Parse an NCAR PNG path like "ncar/2020/1101/0/uv.png" into a WindReport
+fn parse_ncar_png_path(path: &str) -> Option<WindReport> {
+    // Expected format: ncar/YYYY/MMDD/hour/uv.png
     let parts: Vec<&str> = path.split('/').collect();
-    if parts.len() != 5 {
+    if parts.len() != 5 || parts[0] != "ncar" {
         return None;
     }
 
-    let year: i32 = parts[0].parse().ok()?;
-    let month: u32 = parts[1][0..2].parse().ok()?;
-    let day_of_month: u32 = parts[1][2..4].parse().ok()?;
-    let hour: i16 = parts[2].parse().ok()?;
-    let forecast: i16 = parts[3].parse().ok()?;
+    let year: i32 = parts[1].parse().ok()?;
+    let month: u32 = parts[2][0..2].parse().ok()?;
+    let day_of_month: u32 = parts[2][2..4].parse().ok()?;
+    let hour: u32 = parts[3].parse().ok()?;
 
     let date = NaiveDate::from_ymd_opt(year, month, day_of_month)?;
-    let target_time =
-        date.and_hms_opt(hour as u32, 0, 0)?.and_utc() + TimeDelta::hours(forecast.into());
+    // NCAR uses f000 (analysis), so target time = date + hour
+    let target_time = date.and_hms_opt(hour, 0, 0)?.and_utc();
 
     // Reconstruct grib path
     let grib_path = format!(
-        "{}/{:02}{:02}/{}/gfs.t{:02}z.pgrb2full.0p50.f{:03}.grib2",
-        year, month, day_of_month, hour, hour, forecast
+        "ncar/{}/{:02}{:02}/{}/wind.grib2",
+        year, month, day_of_month, hour
     );
 
     Some(WindReport {
         time: target_time,
         grib_path,
         png_path: path.to_string(),
+        source: SOURCE_NCAR.to_string(),
     })
 }
 
@@ -170,83 +181,75 @@ mod tests {
     use super::*;
 
     // =========================================================================
-    // parse_png_path tests
+    // parse_ncar_png_path tests
     // =========================================================================
 
     #[test]
-    fn test_parse_png_path_valid() {
-        let report = parse_png_path("2020/1101/0/3/uv.png").unwrap();
+    fn test_parse_ncar_png_path_valid() {
+        let report = parse_ncar_png_path("ncar/2020/1101/0/uv.png").unwrap();
 
-        assert_eq!(report.png_path, "2020/1101/0/3/uv.png");
-        assert_eq!(
-            report.grib_path,
-            "2020/1101/0/gfs.t00z.pgrb2full.0p50.f003.grib2"
-        );
-        // Nov 1, 2020 00:00 UTC + 3h forecast = Nov 1, 2020 03:00 UTC
-        assert_eq!(report.time.to_rfc3339(), "2020-11-01T03:00:00+00:00");
+        assert_eq!(report.png_path, "ncar/2020/1101/0/uv.png");
+        assert_eq!(report.grib_path, "ncar/2020/1101/0/wind.grib2");
+        assert_eq!(report.source, "ncar");
+        // Nov 1, 2020 00:00 UTC (NCAR uses f000, no forecast offset)
+        assert_eq!(report.time.to_rfc3339(), "2020-11-01T00:00:00+00:00");
     }
 
     #[test]
-    fn test_parse_png_path_different_hour() {
-        let report = parse_png_path("2020/1115/12/6/uv.png").unwrap();
+    fn test_parse_ncar_png_path_different_hour() {
+        let report = parse_ncar_png_path("ncar/2020/1115/12/uv.png").unwrap();
 
-        assert_eq!(
-            report.grib_path,
-            "2020/1115/12/gfs.t12z.pgrb2full.0p50.f006.grib2"
-        );
-        // Nov 15, 2020 12:00 UTC + 6h = Nov 15, 2020 18:00 UTC
-        assert_eq!(report.time.to_rfc3339(), "2020-11-15T18:00:00+00:00");
+        assert_eq!(report.grib_path, "ncar/2020/1115/12/wind.grib2");
+        // Nov 15, 2020 12:00 UTC
+        assert_eq!(report.time.to_rfc3339(), "2020-11-15T12:00:00+00:00");
     }
 
     #[test]
-    fn test_parse_png_path_forecast_crosses_midnight() {
-        // Hour 18 + forecast 6 = next day 00:00
-        let report = parse_png_path("2020/1231/18/6/uv.png").unwrap();
+    fn test_parse_ncar_png_path_leap_year() {
+        let report = parse_ncar_png_path("ncar/2020/0229/6/uv.png").unwrap();
 
-        // Dec 31, 2020 18:00 + 6h = Jan 1, 2021 00:00
-        assert_eq!(report.time.to_rfc3339(), "2021-01-01T00:00:00+00:00");
+        assert_eq!(report.time.to_rfc3339(), "2020-02-29T06:00:00+00:00");
     }
 
     #[test]
-    fn test_parse_png_path_leap_year() {
-        let report = parse_png_path("2020/0229/6/3/uv.png").unwrap();
-
-        assert_eq!(report.time.to_rfc3339(), "2020-02-29T09:00:00+00:00");
-    }
-
-    #[test]
-    fn test_parse_png_path_invalid_leap_year() {
+    fn test_parse_ncar_png_path_invalid_leap_year() {
         // 2021 is not a leap year
-        let result = parse_png_path("2021/0229/6/3/uv.png");
+        let result = parse_ncar_png_path("ncar/2021/0229/6/uv.png");
         assert!(result.is_none());
     }
 
     #[test]
-    fn test_parse_png_path_wrong_segment_count() {
-        assert!(parse_png_path("2020/1101/0/uv.png").is_none()); // missing forecast
-        assert!(parse_png_path("2020/1101/0/3/extra/uv.png").is_none()); // too many
-        assert!(parse_png_path("uv.png").is_none()); // just filename
+    fn test_parse_ncar_png_path_wrong_segment_count() {
+        assert!(parse_ncar_png_path("ncar/2020/1101/uv.png").is_none()); // missing hour
+        assert!(parse_ncar_png_path("ncar/2020/1101/0/extra/uv.png").is_none()); // too many
+        assert!(parse_ncar_png_path("uv.png").is_none()); // just filename
     }
 
     #[test]
-    fn test_parse_png_path_invalid_year() {
-        assert!(parse_png_path("abcd/1101/0/3/uv.png").is_none());
+    fn test_parse_ncar_png_path_wrong_prefix() {
+        assert!(parse_ncar_png_path("vlm/2020/1101/0/uv.png").is_none());
+        assert!(parse_ncar_png_path("2020/1101/0/3/uv.png").is_none()); // old VLM format
     }
 
     #[test]
-    fn test_parse_png_path_invalid_month() {
-        assert!(parse_png_path("2020/1301/0/3/uv.png").is_none()); // month 13
-        assert!(parse_png_path("2020/0001/0/3/uv.png").is_none()); // month 0
+    fn test_parse_ncar_png_path_invalid_year() {
+        assert!(parse_ncar_png_path("ncar/abcd/1101/0/uv.png").is_none());
     }
 
     #[test]
-    fn test_parse_png_path_invalid_day() {
-        assert!(parse_png_path("2020/1132/0/3/uv.png").is_none()); // day 32
-        assert!(parse_png_path("2020/1100/0/3/uv.png").is_none()); // day 0
+    fn test_parse_ncar_png_path_invalid_month() {
+        assert!(parse_ncar_png_path("ncar/2020/1301/0/uv.png").is_none()); // month 13
+        assert!(parse_ncar_png_path("ncar/2020/0001/0/uv.png").is_none()); // month 0
     }
 
     #[test]
-    fn test_parse_png_path_invalid_hour() {
-        assert!(parse_png_path("2020/1101/25/3/uv.png").is_none()); // hour 25
+    fn test_parse_ncar_png_path_invalid_day() {
+        assert!(parse_ncar_png_path("ncar/2020/1132/0/uv.png").is_none()); // day 32
+        assert!(parse_ncar_png_path("ncar/2020/1100/0/uv.png").is_none()); // day 0
+    }
+
+    #[test]
+    fn test_parse_ncar_png_path_invalid_hour() {
+        assert!(parse_ncar_png_path("ncar/2020/1101/25/uv.png").is_none()); // hour 25
     }
 }
