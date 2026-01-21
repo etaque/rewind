@@ -1,5 +1,5 @@
 use chrono::NaiveDate;
-use clap::{Parser, Subcommand, ValueEnum};
+use clap::{Parser, Subcommand};
 
 #[derive(Debug, Parser)]
 #[command(about = "Rewind CLI.")]
@@ -21,16 +21,6 @@ pub enum Command {
     RebuildManifest,
 }
 
-/// Data source for GFS wind data.
-#[derive(Debug, Clone, Default, ValueEnum)]
-pub enum DataSource {
-    /// VLM.org mirror (0.5° resolution, forecasts f003/f006)
-    #[default]
-    Vlm,
-    /// NCAR THREDDS (0.25° resolution, analysis f000)
-    Ncar,
-}
-
 #[derive(Debug, Parser)]
 pub struct GribRangeArgs {
     /// Start date (inclusive)
@@ -39,7 +29,4 @@ pub struct GribRangeArgs {
     /// End date (inclusive)
     #[arg(long)]
     pub to: NaiveDate,
-    /// Data source to use
-    #[arg(long, default_value = "vlm")]
-    pub source: DataSource,
 }

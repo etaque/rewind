@@ -18,6 +18,7 @@ static DB: Lazy<Mutex<Connection>> = Lazy::new(|| {
             time INTEGER NOT NULL UNIQUE,
             grib_path TEXT NOT NULL,
             png_path TEXT NOT NULL,
+            source TEXT NOT NULL DEFAULT 'ncar',
             created_at INTEGER NOT NULL DEFAULT (strftime('%s', 'now') * 1000)
         );
 
