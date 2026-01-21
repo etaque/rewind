@@ -16,11 +16,15 @@ const OUTPUT_WIDTH = 4096 / 4;
 const OUTPUT_HEIGHT = 2048 / 4;
 
 // Wind raster constants (must match wind-raster.ts)
-const RASTER_PIXEL_WIDTH = 720;
 const WIND_SCALE = 30;
-const PIXEL_SIZE = 0.5;
 const LAT_AMPLITUDE = 180;
 const CHANNELS = 4;
+
+// Compute pixel size (degrees per pixel) from raster dimensions
+function getPixelSize(width: number): number {
+  // 720px = 0.5° resolution, 1440px = 0.25° resolution
+  return 360 / width;
+}
 
 self.onmessage = (e: MessageEvent<WorkerRequest>) => {
   const {
@@ -118,31 +122,43 @@ function speedAt(
   lng: number,
   lat: number,
 ): { u: number; v: number } | null {
-  const floatingPix = posToPixel(lng, lat);
+  const pixelSize = getPixelSize(rasterWidth);
+  const floatingPix = posToPixel(lng, lat, pixelSize);
   if (!floatingPix) return null;
 
   const u = bilinear(floatingPix, (p) =>
-    colorToSpeed(rasterData[pixelToIndex(reframePixel(p, rasterWidth)) + 0]),
+    colorToSpeed(
+      rasterData[pixelToIndex(reframePixel(p, rasterWidth), rasterWidth) + 0],
+    ),
   );
   const v = bilinear(floatingPix, (p) =>
-    colorToSpeed(rasterData[pixelToIndex(reframePixel(p, rasterWidth)) + 1]),
+    colorToSpeed(
+      rasterData[pixelToIndex(reframePixel(p, rasterWidth), rasterWidth) + 1],
+    ),
   );
 
   return { u, v };
 }
 
-function posToPixel(lng: number, lat: number): { x: number; y: number } | null {
+function posToPixel(
+  lng: number,
+  lat: number,
+  pixelSize: number,
+): { x: number; y: number } | null {
   if (lat < -LAT_AMPLITUDE / 2 || lat > LAT_AMPLITUDE / 2) {
     return null;
   }
   return {
-    x: toGribLongitude(lng) / PIXEL_SIZE,
-    y: (LAT_AMPLITUDE / 2 - lat) / PIXEL_SIZE,
+    x: toGribLongitude(lng) / pixelSize,
+    y: (LAT_AMPLITUDE / 2 - lat) / pixelSize,
   };
 }
 
-function pixelToIndex({ x, y }: { x: number; y: number }): number {
-  return (RASTER_PIXEL_WIDTH * y + x) * CHANNELS;
+function pixelToIndex(
+  { x, y }: { x: number; y: number },
+  width: number,
+): number {
+  return (width * y + x) * CHANNELS;
 }
 
 function colorToSpeed(n: number): number {
