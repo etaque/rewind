@@ -5,17 +5,29 @@
 
 use crate::grib_stream::{Grib2StreamParser, is_wind_message};
 use crate::s3_multipart::S3MultipartUploader;
-use anyhow::{Context, Result};
+use anyhow::Result;
 use chrono::NaiveDate;
 use futures::StreamExt;
 use object_store::aws::AmazonS3;
+use rand::Rng;
 use std::io::{self, Write};
+use std::time::Duration;
+use tokio::time::sleep;
 
 /// NCAR THREDDS base URL for GFS 0.25° data (ds084.1 dataset).
 const NCAR_BASE_URL: &str = "https://thredds.rda.ucar.edu/thredds/fileServer/files/g/d084001";
 
 /// Hours of the day when GFS analysis files are available (00, 06, 12, 18 UTC).
 pub const NCAR_HOURS: [u32; 4] = [0, 6, 12, 18];
+
+/// Maximum number of retry attempts for NCAR downloads.
+const MAX_RETRIES: u32 = 4;
+
+/// Base delay for exponential backoff (2 seconds).
+const BASE_DELAY_MS: u64 = 2000;
+
+/// Maximum jitter to add to backoff delay (as fraction of delay, e.g., 0.25 = ±25%).
+const JITTER_FACTOR: f64 = 0.25;
 
 /// NCAR data source for streaming wind data downloads.
 pub struct NcarSource {
@@ -46,10 +58,26 @@ impl NcarSource {
         )
     }
 
+    /// Calculate backoff delay with jitter for a given attempt.
+    ///
+    /// Uses exponential backoff: base_delay * 2^attempt
+    /// Adds random jitter of ±JITTER_FACTOR to prevent thundering herd.
+    fn backoff_with_jitter(attempt: u32) -> Duration {
+        let base_delay = BASE_DELAY_MS * 2u64.pow(attempt);
+        let jitter_range = (base_delay as f64 * JITTER_FACTOR) as u64;
+        let jitter = rand::rng().random_range(0..=jitter_range * 2) as i64 - jitter_range as i64;
+        let delay_ms = (base_delay as i64 + jitter).max(0) as u64;
+        Duration::from_millis(delay_ms)
+    }
+
     /// Stream download GFS data, filter for wind components, and upload to S3.
     ///
     /// Returns the number of bytes uploaded (filtered wind data only).
     /// Returns Ok(0) if the file is not found (404).
+    ///
+    /// Uses exponential backoff with jitter for retrying on network errors
+    /// and server errors (5xx). Will retry up to MAX_RETRIES times.
+    /// Retries cover both the initial connection and mid-stream failures.
     pub async fn download_wind_data(
         &self,
         date: NaiveDate,
@@ -58,31 +86,83 @@ impl NcarSource {
         s3_key: &str,
     ) -> Result<usize> {
         let url = Self::build_url(date, hour);
+        let mut last_error = None;
 
+        for attempt in 0..=MAX_RETRIES {
+            if attempt > 0 {
+                let delay = Self::backoff_with_jitter(attempt - 1);
+                log::warn!(
+                    "Retry attempt {}/{} for {} after {:?}",
+                    attempt,
+                    MAX_RETRIES,
+                    url,
+                    delay
+                );
+                print!("\r  Retrying ({}/{})...", attempt, MAX_RETRIES);
+                let _ = io::stdout().flush();
+                sleep(delay).await;
+            }
+
+            match self
+                .try_download_wind_data(&url, s3_client, s3_key)
+                .await
+            {
+                Ok(result) => return Ok(result),
+                Err(DownloadError::NotFound) => {
+                    log::info!("NCAR file not found: {}", url);
+                    return Ok(0);
+                }
+                Err(DownloadError::NonRetryable(e)) => {
+                    return Err(e);
+                }
+                Err(DownloadError::Retryable(e)) => {
+                    log::warn!("Retryable error for {}: {}", url, e);
+                    last_error = Some(e);
+                }
+            }
+        }
+
+        Err(last_error.unwrap_or_else(|| {
+            anyhow::anyhow!("Failed to download {} after {} retries", url, MAX_RETRIES)
+        }))
+    }
+
+    /// Attempt a single download. Returns a DownloadError to indicate retry behavior.
+    async fn try_download_wind_data(
+        &self,
+        url: &str,
+        s3_client: &AmazonS3,
+        s3_key: &str,
+    ) -> std::result::Result<usize, DownloadError> {
+        // Initiate the HTTP request
         let response = self
             .client
-            .get(&url)
+            .get(url)
             .send()
             .await
-            .context("Failed to initiate download")?;
+            .map_err(|e| DownloadError::Retryable(anyhow::anyhow!("Connection failed: {}", e)))?;
 
-        match response.status() {
-            reqwest::StatusCode::OK => {}
-            reqwest::StatusCode::NOT_FOUND => {
-                log::info!("NCAR file not found: {}", url);
-                return Ok(0);
-            }
-            status => {
-                return Err(anyhow::anyhow!(
-                    "NCAR download failed with status: {}",
-                    status
-                ));
-            }
+        let status = response.status();
+        if status == reqwest::StatusCode::NOT_FOUND {
+            return Err(DownloadError::NotFound);
+        } else if status.is_server_error() {
+            return Err(DownloadError::Retryable(anyhow::anyhow!(
+                "Server error: {}",
+                status
+            )));
+        } else if !status.is_success() {
+            return Err(DownloadError::NonRetryable(anyhow::anyhow!(
+                "HTTP error: {}",
+                status
+            )));
         }
 
         let content_length = response.content_length();
 
-        let mut uploader = S3MultipartUploader::new(s3_client, s3_key).await?;
+        let mut uploader = S3MultipartUploader::new(s3_client, s3_key)
+            .await
+            .map_err(|e| DownloadError::Retryable(anyhow::anyhow!("S3 upload init failed: {}", e)))?;
+
         let mut parser = Grib2StreamParser::new();
         let mut stream = response.bytes_stream();
         let mut total_downloaded: usize = 0;
@@ -90,36 +170,52 @@ impl NcarSource {
         let mut total_messages: usize = 0;
         let mut wind_messages: usize = 0;
 
-        while let Some(chunk_result) = stream.next().await {
-            let chunk = chunk_result.context("Error reading response chunk")?;
-            total_downloaded += chunk.len();
+        // Stream and process chunks
+        let stream_result: std::result::Result<(), DownloadError> = async {
+            while let Some(chunk_result) = stream.next().await {
+                let chunk = chunk_result.map_err(|e| {
+                    DownloadError::Retryable(anyhow::anyhow!("Stream read failed: {}", e))
+                })?;
+                total_downloaded += chunk.len();
 
-            // Parse chunk and extract complete GRIB messages
-            let messages = parser.feed(&chunk);
-            total_messages += messages.len();
+                // Parse chunk and extract complete GRIB messages
+                let messages = parser.feed(&chunk);
+                total_messages += messages.len();
 
-            for msg in messages {
-                // Filter for wind messages only
-                if is_wind_message(&msg) {
-                    uploader.write(&msg).await?;
-                    total_uploaded += msg.len();
-                    wind_messages += 1;
+                for msg in messages {
+                    // Filter for wind messages only
+                    if is_wind_message(&msg) {
+                        uploader.write(&msg).await.map_err(|e| {
+                            DownloadError::Retryable(anyhow::anyhow!("S3 write failed: {}", e))
+                        })?;
+                        total_uploaded += msg.len();
+                        wind_messages += 1;
+                    }
                 }
-            }
 
-            // In-place progress display (like gfs-wind-downloader)
-            if let Some(total) = content_length {
-                let pct = (total_downloaded as f64 / total as f64) * 100.0;
-                print!(
-                    "\r  Downloaded: {pct:.1}% | Messages: {total_messages} total, {wind_messages} wind"
-                );
-            } else {
-                print!(
-                    "\r  Downloaded: {} bytes | Messages: {total_messages} total, {wind_messages} wind",
-                    total_downloaded
-                );
+                // In-place progress display
+                if let Some(total) = content_length {
+                    let pct = (total_downloaded as f64 / total as f64) * 100.0;
+                    print!(
+                        "\r  Downloaded: {pct:.1}% | Messages: {total_messages} total, {wind_messages} wind"
+                    );
+                } else {
+                    print!(
+                        "\r  Downloaded: {} bytes | Messages: {total_messages} total, {wind_messages} wind",
+                        total_downloaded
+                    );
+                }
+                let _ = io::stdout().flush();
             }
-            let _ = io::stdout().flush();
+            Ok(())
+        }
+        .await;
+
+        // Handle stream errors - abort upload and propagate
+        if let Err(e) = stream_result {
+            println!(); // Clear progress line
+            let _ = uploader.abort().await; // Best effort abort
+            return Err(e);
         }
 
         // Clear the progress line and print completion
@@ -127,7 +223,10 @@ impl NcarSource {
 
         // Complete the upload
         if total_uploaded > 0 {
-            uploader.complete().await?;
+            uploader
+                .complete()
+                .await
+                .map_err(|e| DownloadError::Retryable(anyhow::anyhow!("S3 complete failed: {}", e)))?;
             println!(
                 "  Completed: {} wind messages extracted from {} total ({} KB, {:.1}% of original)",
                 wind_messages,
@@ -136,12 +235,24 @@ impl NcarSource {
                 (total_uploaded as f64 / total_downloaded as f64) * 100.0
             );
         } else {
-            uploader.abort().await?;
+            uploader.abort().await.map_err(|e| {
+                DownloadError::Retryable(anyhow::anyhow!("S3 abort failed: {}", e))
+            })?;
             println!("  No wind messages found");
         }
 
         Ok(total_uploaded)
     }
+}
+
+/// Internal error type to distinguish retryable vs non-retryable failures.
+enum DownloadError {
+    /// File not found (404) - not an error, just means file doesn't exist
+    NotFound,
+    /// Retryable error (network issues, server errors, mid-stream failures)
+    Retryable(anyhow::Error),
+    /// Non-retryable error (client errors like 4xx except 404)
+    NonRetryable(anyhow::Error),
 }
 
 impl Default for NcarSource {
