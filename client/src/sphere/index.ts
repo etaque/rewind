@@ -215,7 +215,10 @@ export class SphereView {
   zoomToMax() {
     const maxScale = 8;
     const selection = d3.select<HTMLElement, unknown>(this.node);
+    // Rotate to course start position
+    this.projection.rotate([-this.position.lng, -this.position.lat]);
     this.zoom.scaleTo(selection, maxScale);
+    this.render();
   }
 
   resize() {
