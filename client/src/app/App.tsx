@@ -15,6 +15,7 @@ import { CountdownDisplay } from "./race";
 import { currentWindContext } from "./wind-context";
 import { calculateTWA } from "./polar";
 import { getWindDirection, getWindSpeedKnots } from "../utils";
+import FinishOverlay from "./FinishOverlay";
 
 const serverUrl = import.meta.env.REWIND_SERVER_URL;
 
@@ -272,6 +273,7 @@ export default function App() {
             <Leaderboard
               entries={state.leaderboard}
               myPlayerId={state.race.myPlayerId}
+              courseStartTime={state.session.course.startTime}
             />
             <PolarDiagram
               tws={getWindSpeedKnots(state.session.windSpeed)}
@@ -281,6 +283,12 @@ export default function App() {
               )}
               bsp={state.session.boatSpeed}
             />
+            {state.session.finishTime !== null && (
+              <FinishOverlay
+                finishTime={state.session.finishTime}
+                courseStartTime={state.session.course.startTime}
+              />
+            )}
           </>
         )}
       </div>

@@ -15,6 +15,7 @@ export type LeaderboardEntry = {
   playerId: string;
   playerName: string;
   distanceToFinish: number;
+  finishTime: number | null;
 };
 
 export type ServerMessage =

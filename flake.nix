@@ -38,6 +38,7 @@
             flyctl
 
             litecli
+            watch
 
             # Rust
             rustToolchain

@@ -1,9 +1,14 @@
-import { geoDistance, geoPath } from "d3-geo";
+import { geoCircle, geoDistance, geoPath } from "d3-geo";
 import { Course, LngLat } from "../models";
 import { Scene } from "./scene";
 
 // Fixed screen radius in pixels
 const MARKER_RADIUS_PX = 8;
+
+// Finish area radius in nautical miles
+const FINISH_AREA_NM = 10;
+// Convert nautical miles to degrees (1 degree ≈ 60 nm)
+const FINISH_AREA_DEGREES = FINISH_AREA_NM / 60;
 
 export default class CourseLine {
   canvas: HTMLCanvasElement;
@@ -26,6 +31,9 @@ export default class CourseLine {
     if (start.lng !== finish.lng || start.lat !== finish.lat) {
       this.drawLine(scene, context, start, finish);
     }
+
+    // Draw finish area (dotted circle)
+    this.drawFinishArea(scene, context, finish);
 
     // Draw start marker (red)
     this.drawCircle(scene, context, start, "#ef4444");
@@ -61,6 +69,27 @@ export default class CourseLine {
     context.setLineDash([6, 8]);
     context.beginPath();
     path(line);
+    context.stroke();
+    context.setLineDash([]);
+  }
+
+  private drawFinishArea(
+    scene: Scene,
+    context: CanvasRenderingContext2D,
+    position: LngLat,
+  ) {
+    const path = geoPath(scene.projection, context);
+
+    // Create a geographic circle centered on the finish point
+    const circle = geoCircle()
+      .center([position.lng, position.lat])
+      .radius(FINISH_AREA_DEGREES);
+
+    context.strokeStyle = "rgba(34, 197, 94, 0.6)"; // green-500 with opacity
+    context.lineWidth = 1.5;
+    context.setLineDash([4, 4]);
+    context.beginPath();
+    path(circle());
     context.stroke();
     context.setLineDash([]);
   }

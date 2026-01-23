@@ -3,6 +3,7 @@ import { LeaderboardEntry } from "../multiplayer/types";
 type Props = {
   entries: LeaderboardEntry[];
   myPlayerId: string;
+  courseStartTime: number;
 };
 
 function formatDistance(nm: number): string {
@@ -12,7 +13,25 @@ function formatDistance(nm: number): string {
   return `${Math.round(nm)} nm`;
 }
 
-export default function Leaderboard({ entries, myPlayerId }: Props) {
+function formatRaceTime(finishTime: number, startTime: number): string {
+  const elapsedMs = finishTime - startTime;
+  const days = Math.floor(elapsedMs / (24 * 60 * 60 * 1000));
+  const hours = Math.floor(
+    (elapsedMs % (24 * 60 * 60 * 1000)) / (60 * 60 * 1000),
+  );
+  const minutes = Math.floor((elapsedMs % (60 * 60 * 1000)) / (60 * 1000));
+
+  if (days > 0) {
+    return `${days}d ${hours}h ${minutes}m`;
+  }
+  return `${hours}h ${minutes}m`;
+}
+
+export default function Leaderboard({
+  entries,
+  myPlayerId,
+  courseStartTime,
+}: Props) {
   if (entries.length === 0) {
     return null;
   }
@@ -25,6 +44,7 @@ export default function Leaderboard({ entries, myPlayerId }: Props) {
       <div className="flex flex-col gap-1">
         {entries.map((entry, index) => {
           const isMe = entry.playerId === myPlayerId;
+          const isFinished = entry.finishTime !== null;
           return (
             <div
               key={entry.playerId}
@@ -32,9 +52,12 @@ export default function Leaderboard({ entries, myPlayerId }: Props) {
             >
               <span>
                 {index + 1}. {entry.playerName}
+                {isFinished && " \u2713"}
               </span>
-              <span className="text-gray-400">
-                {formatDistance(entry.distanceToFinish)}
+              <span className={isFinished ? "text-green-400" : "text-gray-400"}>
+                {isFinished
+                  ? formatRaceTime(entry.finishTime!, courseStartTime)
+                  : formatDistance(entry.distanceToFinish)}
               </span>
             </div>
           );

@@ -51,6 +51,7 @@ export type Session = {
   currentSource: WindRasterSource | null;
   nextSources: WindRasterSource[];
   windSpeed: WindSpeed;
+  finishTime: number | null; // null = racing, number = finished at race time
 };
 
 export type AppAction =
@@ -120,6 +121,7 @@ function createPlayingState(
       currentSource: currentSource,
       nextSources: nextSources,
       windSpeed: { u: 0, v: 0 },
+      finishTime: null,
     },
   };
 }
@@ -287,12 +289,20 @@ export function appReducer(state: AppState, action: AppAction): AppState {
         raceEndedReason: action.reason,
       };
 
-    case "LEADERBOARD_UPDATE":
+    case "LEADERBOARD_UPDATE": {
       if (state.tag !== "Playing") return state;
+      const myEntry = action.entries.find(
+        (e) => e.playerId === state.race.myPlayerId,
+      );
       return {
         ...state,
         leaderboard: action.entries,
+        session: {
+          ...state.session,
+          finishTime: myEntry?.finishTime ?? state.session.finishTime,
+        },
       };
+    }
 
     default:
       return state;

@@ -28,6 +28,7 @@ function makeSession(overrides: Partial<Session> = {}): Session {
     windSpeed: { u: 0, v: -10 }, // Wind from north by default
     currentSource: null,
     nextSources: [],
+    finishTime: null,
     ...overrides,
   };
 }

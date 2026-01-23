@@ -88,6 +88,7 @@ function makePlayingState(
       currentSource: testWindRasterSources[0],
       nextSources: [testWindRasterSources[1]],
       windSpeed: { u: 5, v: -10 },
+      finishTime: null,
       ...sessionOverrides,
     },
   };

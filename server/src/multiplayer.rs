@@ -107,6 +107,7 @@ pub struct LeaderboardEntry {
     pub player_id: String,
     pub player_name: String,
     pub distance_to_finish: f64,
+    pub finish_time: Option<i64>,
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -126,6 +127,7 @@ pub struct Player {
     pub name: String,
     pub tx: mpsc::UnboundedSender<ServerMessage>,
     pub position: Option<(f64, f64)>, // (lng, lat)
+    pub finish_time: Option<i64>,     // None = racing, Some(time) = finished
 }
 
 impl Player {
@@ -211,29 +213,44 @@ impl Race {
         self.players.is_empty() && inactive_duration.num_minutes() >= 5
     }
 
-    fn compute_leaderboard(&self) -> Vec<LeaderboardEntry> {
+    fn compute_leaderboard(&mut self, race_time: i64) -> Vec<LeaderboardEntry> {
+        const FINISH_THRESHOLD_NM: f64 = 10.0;
+
         let mut entries: Vec<LeaderboardEntry> = self
             .players
-            .values()
+            .values_mut()
             .filter_map(|player| {
-                player.position.map(|(lng, lat)| LeaderboardEntry {
+                let (lng, lat) = player.position?;
+                let distance =
+                    haversine_distance(lat, lng, self.course.finish.lat, self.course.finish.lng);
+
+                // Detect finish (if not already finished and within threshold)
+                if player.finish_time.is_none() && distance <= FINISH_THRESHOLD_NM {
+                    player.finish_time = Some(race_time);
+                }
+
+                Some(LeaderboardEntry {
                     player_id: player.id.clone(),
                     player_name: player.name.clone(),
-                    distance_to_finish: haversine_distance(
-                        lat,
-                        lng,
-                        self.course.finish.lat,
-                        self.course.finish.lng,
-                    ),
+                    distance_to_finish: if player.finish_time.is_some() {
+                        0.0
+                    } else {
+                        distance
+                    },
+                    finish_time: player.finish_time,
                 })
             })
             .collect();
 
-        // Sort by distance (closest first)
-        entries.sort_by(|a, b| {
-            a.distance_to_finish
+        // Sort: finished first (by time), then by distance
+        entries.sort_by(|a, b| match (&a.finish_time, &b.finish_time) {
+            (Some(ta), Some(tb)) => ta.cmp(tb),
+            (Some(_), None) => std::cmp::Ordering::Less,
+            (None, Some(_)) => std::cmp::Ordering::Greater,
+            (None, None) => a
+                .distance_to_finish
                 .partial_cmp(&b.distance_to_finish)
-                .unwrap_or(std::cmp::Ordering::Equal)
+                .unwrap_or(std::cmp::Ordering::Equal),
         });
 
         entries
@@ -327,10 +344,16 @@ impl RaceManager {
         tokio::spawn(async move {
             loop {
                 tokio::time::sleep(tokio::time::Duration::from_secs(2)).await;
-                let races = races_clone.read().await;
-                for race in races.values() {
+                let mut races = races_clone.write().await;
+                for race in races.values_mut() {
                     if race.race_started() && !race.race_ended {
-                        let leaderboard = race.compute_leaderboard();
+                        // Calculate current race time
+                        let now = Utc::now().timestamp_millis();
+                        let race_time = race
+                            .race_start_time
+                            .map(|start| race.course.race_time(now - start))
+                            .unwrap_or(0);
+                        let leaderboard = race.compute_leaderboard(race_time);
                         race.broadcast_all(ServerMessage::Leaderboard {
                             entries: leaderboard,
                         });
@@ -365,6 +388,7 @@ impl RaceManager {
             name: player_name,
             tx,
             position: None,
+            finish_time: None,
         };
         race.add_player(player)?;
 
@@ -392,6 +416,7 @@ impl RaceManager {
             name: player_name.clone(),
             tx,
             position: None,
+            finish_time: None,
         };
 
         // Notify existing players before adding new one
@@ -609,6 +634,7 @@ mod tests {
             name: name.to_string(),
             tx,
             position: None,
+            finish_time: None,
         }
     }
 
