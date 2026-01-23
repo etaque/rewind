@@ -89,12 +89,8 @@ async fn handle_ncar_grib(
     let target_time = day.and_hms_opt(hour, 0, 0).unwrap().and_utc();
     let label = format!("{} h{:02}", day, hour);
 
-    // Check if already in database
+    // Check if already in database - skip silently
     if wind_reports::report_exists(target_time)? {
-        let pb = multi_progress.add(ProgressBar::new(100));
-        pb.set_style(progress_style_done());
-        pb.set_prefix(label);
-        pb.finish_with_message("skipped (exists)");
         return Ok(());
     }
 
@@ -119,8 +115,7 @@ async fn handle_ncar_grib(
                 .await?;
 
             if bytes_uploaded.is_none() {
-                pb.set_style(progress_style_done());
-                pb.finish_with_message("skipped (not found)");
+                pb.finish_and_clear();
                 return Ok(());
             }
 
@@ -153,8 +148,7 @@ async fn handle_ncar_grib(
 
     wind_reports::upsert_wind_report(&report)?;
 
-    pb.set_style(progress_style_done());
-    pb.finish_with_message("done");
+    pb.finish_and_clear();
 
     Ok(())
 }
@@ -164,10 +158,4 @@ fn progress_style_downloading() -> ProgressStyle {
         .template("{prefix:>15} [{bar:30.cyan/blue}] {percent:>3}% {msg}")
         .expect("Invalid progress style template")
         .progress_chars("=>-")
-}
-
-fn progress_style_done() -> ProgressStyle {
-    ProgressStyle::default_bar()
-        .template("{prefix:>15} {msg}")
-        .expect("Invalid progress style template")
 }
