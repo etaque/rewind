@@ -57,11 +57,12 @@ pub fn report_exists(time: DateTime<Utc>) -> Result<bool> {
 
 /// Insert a wind report if it doesn't already exist (by time)
 /// Returns true if the report was inserted, false if it already existed
-pub fn insert_wind_report(report: &WindReport) -> Result<bool> {
+pub fn upsert_wind_report(report: &WindReport) -> Result<bool> {
     with_connection(|conn| {
         let time_ms = report.time.timestamp_millis();
         let result = conn.execute(
-            "INSERT OR IGNORE INTO wind_reports (time, grib_path, png_path, source) VALUES (?, ?, ?, ?)",
+            "INSERT INTO wind_reports (time, grib_path, png_path, source) VALUES (?, ?, ?, ?)
+            ON CONFLICT(time) DO UPDATE SET grib_path=excluded.grib_path, png_path=excluded.png_path, source=excluded.source",
             (&time_ms, &report.grib_path, &report.png_path, &report.source),
         )?;
         Ok(result > 0)
@@ -99,16 +100,18 @@ pub fn get_reports_for_course(course: &Course) -> Result<Vec<WindReport>> {
 }
 
 /// Rebuild database from S3 listing of PNG files
-pub async fn rebuild_from_s3() -> Result<()> {
+pub async fn rebuild_from_s3(truncate: bool) -> Result<()> {
     let client = s3::raster_client();
     let mut inserted_count = 0;
     let mut skipped_count = 0;
 
     // Clear existing reports
-    with_connection(|conn| {
-        conn.execute("DELETE FROM wind_reports", [])?;
-        Ok(())
-    })?;
+    if truncate {
+        with_connection(|conn| {
+            conn.execute("DELETE FROM wind_reports", [])?;
+            Ok(())
+        })?;
+    }
 
     // List all objects in the raster bucket under ncar/ prefix
     let prefix = object_store::path::Path::from("ncar");
@@ -126,7 +129,7 @@ pub async fn rebuild_from_s3() -> Result<()> {
         // Parse path: ncar/YYYY/MMDD/hour/uv.png
         match parse_ncar_png_path(&path) {
             Some(report) => {
-                insert_wind_report(&report)?;
+                upsert_wind_report(&report)?;
                 inserted_count += 1;
             }
             None => {

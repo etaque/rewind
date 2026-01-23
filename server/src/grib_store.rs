@@ -1,15 +1,12 @@
-use crate::cli::GribRangeArgs;
-use crate::courses;
 use crate::grib_png::grib_to_uv_png;
 use crate::ncar_source::{NCAR_HOURS, NcarSource, ncar_grib_path, ncar_raster_path};
 use crate::s3;
 use crate::wind_reports::{self, SOURCE_NCAR, WindReport};
-use anyhow::anyhow;
-use chrono::{DateTime, Days, NaiveDate, Utc};
+use chrono::{Days, NaiveDate};
 use object_store::{ObjectStoreExt, aws};
 
 /// Import all GRIB files for a date range from NCAR
-pub async fn import_grib_range(args: GribRangeArgs) -> anyhow::Result<()> {
+pub async fn import_grib_range(from: NaiveDate, to: NaiveDate) -> anyhow::Result<()> {
     let grib_s3 = s3::grib_client();
     let raster_s3 = s3::raster_client();
     let ncar = NcarSource::new();
@@ -18,8 +15,8 @@ pub async fn import_grib_range(args: GribRangeArgs) -> anyhow::Result<()> {
     println!("Database has {} reports", report_count);
     println!("Using NCAR THREDDS source (0.25° resolution)");
 
-    let mut current_day = args.from;
-    let end_day = args.to.checked_add_days(Days::new(1)).unwrap();
+    let mut current_day = from;
+    let end_day = to.checked_add_days(Days::new(1)).unwrap();
 
     while current_day < end_day {
         for hour in NCAR_HOURS {
@@ -44,14 +41,15 @@ async fn handle_ncar_grib(
     hour: u32,
 ) -> anyhow::Result<()> {
     let target_time = day.and_hms_opt(hour, 0, 0).unwrap().and_utc();
+    let prefix = format!("  {} h{:02} ...", day, hour);
 
     // Check if already in database
     if wind_reports::report_exists(target_time)? {
-        println!("  {} hour {:02} ... skipped (already exists)", day, hour);
+        println!("{prefix} skipped");
         return Ok(());
     }
 
-    print!("  {} hour {:02} ... ", day, hour);
+    print!("{prefix}");
 
     let grib_path = ncar_grib_path(day, hour);
 
@@ -64,7 +62,7 @@ async fn handle_ncar_grib(
         Err(_) => {
             // Download and filter from NCAR
             let bytes_uploaded = ncar
-                .download_wind_data(day, hour, grib_s3, &grib_path)
+                .download_wind_data(day, hour, grib_s3, &grib_path, &prefix)
                 .await?;
 
             if bytes_uploaded.is_none() {
@@ -95,30 +93,7 @@ async fn handle_ncar_grib(
         source: SOURCE_NCAR.to_string(),
     };
 
-    wind_reports::insert_wind_report(&report)?;
-
-    println!("ok");
-    Ok(())
-}
-
-/// Import GRIB files for all courses (1 day before start to max_days after)
-pub async fn import_courses_gribs() -> anyhow::Result<()> {
-    for course in courses::all() {
-        println!("Importing GRIBs for course: {}", course.name);
-
-        // Convert start_time (ms) to DateTime
-        let start_time = DateTime::<Utc>::from_timestamp_millis(course.start_time)
-            .ok_or_else(|| anyhow!("Invalid start_time for course {}", course.key))?;
-
-        // Start 1 day before, end at max_days after start
-        let from = start_time.date_naive() - Days::new(1);
-        let to = start_time.date_naive() + Days::new(course.max_days as u64);
-
-        println!("  Date range: {} to {}", from, to);
-
-        let args = GribRangeArgs { from, to };
-        import_grib_range(args).await?;
-    }
+    wind_reports::upsert_wind_report(&report)?;
 
     Ok(())
 }

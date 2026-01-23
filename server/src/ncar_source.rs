@@ -61,10 +61,11 @@ impl NcarSource {
         hour: u32,
         s3_client: &AmazonS3,
         s3_key: &str,
+        prefix: &str,
     ) -> Result<Option<usize>> {
         let url = Self::build_url(date, hour);
 
-        let f = || self.try_download_wind_data(&url, s3_client, s3_key);
+        let f = || self.try_download_wind_data(&url, s3_client, s3_key, &prefix);
 
         return with_retry(f, &RetryConfig::default())
             .await
@@ -79,6 +80,7 @@ impl NcarSource {
         url: &str,
         s3_client: &AmazonS3,
         s3_key: &str,
+        prefix: &str,
     ) -> std::result::Result<Option<usize>, RetryError> {
         // Initiate the HTTP request
         let response = self
@@ -142,14 +144,7 @@ impl NcarSource {
                 // In-place progress display
                 if let Some(total) = content_length {
                     let pct = (total_downloaded as f64 / total as f64) * 100.0;
-                    print!(
-                        "\r  Downloaded: {pct:.1}% | Messages: {total_messages} total, {wind_messages} wind"
-                    );
-                } else {
-                    print!(
-                        "\r  Downloaded: {} bytes | Messages: {total_messages} total, {wind_messages} wind",
-                        total_downloaded
-                    );
+                    print!("\r{prefix} {pct:.1}%");
                 }
                 let _ = io::stdout().flush();
             }
@@ -164,29 +159,22 @@ impl NcarSource {
             return Err(e);
         }
 
-        // Clear the progress line and print completion
-        println!();
-
         // Complete the upload
         if total_uploaded > 0 {
             uploader
                 .complete()
                 .await
                 .map_err(|e| RetryError::Retryable(anyhow::anyhow!("S3 complete failed: {}", e)))?;
-            println!(
-                "  Completed: {} wind messages extracted from {} total ({} KB, {:.1}% of original)",
-                wind_messages,
-                total_messages,
-                total_uploaded / 1024,
-                (total_uploaded as f64 / total_downloaded as f64) * 100.0
-            );
+            print!("\r{prefix} ok    ") // erase pct
         } else {
             uploader
                 .abort()
                 .await
                 .map_err(|e| RetryError::Retryable(anyhow::anyhow!("S3 abort failed: {}", e)))?;
-            println!("  No wind messages found");
+            print!("\r{prefix} no wind messages found");
         }
+
+        println!();
 
         Ok(Some(total_uploaded))
     }
