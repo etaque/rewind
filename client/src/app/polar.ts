@@ -14,6 +14,43 @@ const twaValues = Object.keys(polar[twsValues[0]])
   .map(Number)
   .sort((a, b) => a - b);
 
+// Cache max polar speed (computed once)
+let cachedMaxPolarSpeed: number | null = null;
+
+/**
+ * Get the polar curve (BSP values for all TWA angles) at a given TWS.
+ * Uses interpolation between TWS values for smooth curves.
+ * @param tws True Wind Speed in knots
+ * @returns Array of { twa, bsp } points for plotting
+ */
+export function getPolarCurve(
+  tws: number,
+): Array<{ twa: number; bsp: number }> {
+  return twaValues.map((twa) => ({
+    twa,
+    bsp: getBoatSpeed(tws, twa),
+  }));
+}
+
+/**
+ * Get the maximum BSP in the polar data (for scaling).
+ * Result is cached after first computation.
+ * @returns Maximum boat speed in knots
+ */
+export function getMaxPolarSpeed(): number {
+  if (cachedMaxPolarSpeed !== null) {
+    return cachedMaxPolarSpeed;
+  }
+  let max = 0;
+  for (const twsKey of Object.keys(polar)) {
+    for (const twaKey of Object.keys(polar[twsKey])) {
+      max = Math.max(max, polar[twsKey][twaKey]);
+    }
+  }
+  cachedMaxPolarSpeed = max;
+  return max;
+}
+
 /**
  * Calculate boat speed from polar diagram using bilinear interpolation.
  * @param tws True Wind Speed in knots

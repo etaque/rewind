@@ -6,12 +6,15 @@ import { Course } from "../models";
 import Hud from "./Hud";
 import CursorWind from "./CursorWind";
 import Leaderboard from "./Leaderboard";
+import PolarDiagram from "./PolarDiagram";
 import { initLandData } from "./land";
 import RaceChoiceScreen from "./RaceChoiceScreen";
 import { useKeyboardControls, useGameLoop, useMultiplayer } from "./hooks";
 import { computeProjectedPath } from "./projected-path";
 import { CountdownDisplay } from "./race";
 import { currentWindContext } from "./wind-context";
+import { calculateTWA } from "./polar";
+import { getWindDirection, getWindSpeedKnots } from "../utils";
 
 const serverUrl = import.meta.env.REWIND_SERVER_URL;
 
@@ -269,6 +272,14 @@ export default function App() {
             <Leaderboard
               entries={state.leaderboard}
               myPlayerId={state.race.myPlayerId}
+            />
+            <PolarDiagram
+              tws={getWindSpeedKnots(state.session.windSpeed)}
+              twa={calculateTWA(
+                state.session.heading,
+                getWindDirection(state.session.windSpeed),
+              )}
+              bsp={state.session.boatSpeed}
             />
           </>
         )}
