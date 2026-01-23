@@ -10,6 +10,7 @@ mod grib_store;
 mod grib_stream;
 mod multiplayer;
 mod ncar_source;
+mod retry;
 mod s3;
 mod s3_multipart;
 mod server;

@@ -67,7 +67,7 @@ async fn handle_ncar_grib(
                 .download_wind_data(day, hour, grib_s3, &grib_path)
                 .await?;
 
-            if bytes_uploaded == 0 {
+            if bytes_uploaded.is_none() {
                 println!("skipped (not found or no wind data)");
                 return Ok(());
             }
