@@ -9,8 +9,8 @@ use crate::s3_multipart::S3MultipartUploader;
 use anyhow::Result;
 use chrono::NaiveDate;
 use futures::StreamExt;
+use indicatif::ProgressBar;
 use object_store::aws::AmazonS3;
-use std::io::{self, Write};
 
 /// NCAR THREDDS base URL for GFS 0.25° data (ds084.1 dataset).
 const NCAR_BASE_URL: &str = "https://thredds.rda.ucar.edu/thredds/fileServer/files/g/d084001";
@@ -61,11 +61,11 @@ impl NcarSource {
         hour: u32,
         s3_client: &AmazonS3,
         s3_key: &str,
-        prefix: &str,
+        progress: &ProgressBar,
     ) -> Result<Option<usize>> {
         let url = Self::build_url(date, hour);
 
-        let f = || self.try_download_wind_data(&url, s3_client, s3_key, &prefix);
+        let f = || self.try_download_wind_data(&url, s3_client, s3_key, progress);
 
         return with_retry(f, &RetryConfig::default())
             .await
@@ -80,7 +80,7 @@ impl NcarSource {
         url: &str,
         s3_client: &AmazonS3,
         s3_key: &str,
-        prefix: &str,
+        progress: &ProgressBar,
     ) -> std::result::Result<Option<usize>, RetryError> {
         // Initiate the HTTP request
         let response = self
@@ -105,7 +105,9 @@ impl NcarSource {
             )));
         }
 
-        let content_length = response.content_length();
+        let content_length = response.content_length().unwrap_or(0);
+        progress.set_length(content_length);
+        progress.set_position(0);
 
         let mut uploader = S3MultipartUploader::new(s3_client, s3_key)
             .await
@@ -113,10 +115,8 @@ impl NcarSource {
 
         let mut parser = Grib2StreamParser::new();
         let mut stream = response.bytes_stream();
-        let mut total_downloaded: usize = 0;
+        let mut total_downloaded: u64 = 0;
         let mut total_uploaded: usize = 0;
-        let mut total_messages: usize = 0;
-        let mut wind_messages: usize = 0;
 
         // Stream and process chunks
         let stream_result: std::result::Result<(), RetryError> = async {
@@ -124,11 +124,10 @@ impl NcarSource {
                 let chunk = chunk_result.map_err(|e| {
                     RetryError::Retryable(anyhow::anyhow!("Stream read failed: {}", e))
                 })?;
-                total_downloaded += chunk.len();
+                total_downloaded += chunk.len() as u64;
 
                 // Parse chunk and extract complete GRIB messages
                 let messages = parser.feed(&chunk);
-                total_messages += messages.len();
 
                 for msg in messages {
                     // Filter for wind messages only
@@ -137,16 +136,11 @@ impl NcarSource {
                             RetryError::Retryable(anyhow::anyhow!("S3 write failed: {}", e))
                         })?;
                         total_uploaded += msg.len();
-                        wind_messages += 1;
                     }
                 }
 
-                // In-place progress display
-                if let Some(total) = content_length {
-                    let pct = (total_downloaded as f64 / total as f64) * 100.0;
-                    print!("\r{prefix} {pct:.1}%");
-                }
-                let _ = io::stdout().flush();
+                // Update progress bar
+                progress.set_position(total_downloaded);
             }
             Ok(())
         }
@@ -154,7 +148,6 @@ impl NcarSource {
 
         // Handle stream errors - abort upload and propagate
         if let Err(e) = stream_result {
-            println!(); // Clear progress line
             let _ = uploader.abort().await; // Best effort abort
             return Err(e);
         }
@@ -165,16 +158,12 @@ impl NcarSource {
                 .complete()
                 .await
                 .map_err(|e| RetryError::Retryable(anyhow::anyhow!("S3 complete failed: {}", e)))?;
-            print!("\r{prefix} ok    ") // erase pct
         } else {
             uploader
                 .abort()
                 .await
                 .map_err(|e| RetryError::Retryable(anyhow::anyhow!("S3 abort failed: {}", e)))?;
-            print!("\r{prefix} no wind messages found");
         }
-
-        println!();
 
         Ok(Some(total_uploaded))
     }

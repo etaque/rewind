@@ -22,6 +22,8 @@ pub enum Command {
         #[arg(long)]
         /// End date (inclusive)
         to: Option<NaiveDate>,
+        #[arg(short, long, default_value_t = 2)]
+        concurrency: usize,
         #[arg(long, default_value_t = false)]
         /// Pull existing GRIB files from S3
         pull_s3: bool,
