@@ -92,68 +92,60 @@ export default function RaceChoiceScreen({
       <h1 className="logo mb-6">Re:wind</h1>
 
       <div className="bg-slate-900 bg-opacity-90 rounded-lg p-8 max-w-md w-full mx-4 space-y-6">
-        {!inRace ? (
-          <div className="text-center text-slate-400 py-4">Connecting...</div>
-        ) : (
-          <>
-            <PlayerNameInput
-              value={playerName}
-              onChange={handlePlayerNameChange}
-            />
+        <PlayerNameInput value={playerName} onChange={handlePlayerNameChange} />
 
-            {isCreator && courses.length > 1 && (
-              <div className="space-y-2">
-                <label className="text-slate-400 text-sm">Course</label>
-                <select
-                  value={selectedCourseKey || ""}
-                  onChange={(e) => onCourseChange(e.target.value)}
-                  className="w-full bg-slate-800 text-white rounded-lg px-4 py-3 border border-slate-700 focus:border-blue-500 focus:outline-none"
-                >
-                  {courses.map((course) => (
-                    <option key={course.key} value={course.key}>
-                      {course.name}
-                    </option>
-                  ))}
-                </select>
-              </div>
-            )}
-
-            <PlayerList
-              players={playerList}
-              myPlayerId={myPlayerId}
-              isCreator={isCreator}
-              totalPlayers={totalPlayers}
-            />
-
-            <div className="space-y-4">
-              {isCreator && (
+        {isCreator && courses.length > 1 && (
+          <div className="space-y-2">
+            <label className="text-slate-400 text-sm">Course</label>
+            <div className="flex flex-col gap-2">
+              {courses.map((course) => (
                 <button
-                  onClick={onStartRace}
-                  className="w-full bg-gradient-to-r from-green-400 to-blue-500 hover:from-green-500 hover:to-blue-600 text-white py-3 px-6 rounded-lg font-semibold transition-all"
+                  key={course.key}
+                  onClick={() => onCourseChange(course.key)}
+                  className={`w-full text-left px-4 py-2 rounded-lg border transition-all ${
+                    selectedCourseKey === course.key
+                      ? "bg-blue-600 border-blue-500 text-white"
+                      : "bg-slate-800 border-slate-700 text-slate-300 hover:border-slate-600 hover:text-white"
+                  }`}
                 >
-                  {totalPlayers < 2 ? "Start Solo" : "Start Race"}
+                  {course.name}
                 </button>
-              )}
-              {!isCreator && (
-                <div className="text-center text-slate-400 py-3">
-                  Waiting for host to start the race...
-                </div>
-              )}
-
-              <AvailableRaces
-                races={availableRaces}
-                onJoinRace={handleJoinRace}
-              />
-
-              <button
-                onClick={onLeaveRace}
-                className="w-full text-slate-400 hover:text-white py-2 transition-all"
-              >
-                Leave Race
-              </button>
+              ))}
             </div>
-          </>
+          </div>
         )}
+
+        <PlayerList
+          players={playerList}
+          myPlayerId={myPlayerId}
+          isCreator={isCreator}
+          totalPlayers={totalPlayers}
+        />
+
+        <div className="space-y-4">
+          {isCreator && (
+            <button
+              onClick={onStartRace}
+              className="w-full bg-gradient-to-r from-green-400 to-blue-500 hover:from-green-500 hover:to-blue-600 text-white py-3 px-6 rounded-lg font-semibold transition-all"
+            >
+              {totalPlayers < 2 ? "Start Solo" : "Start Race"}
+            </button>
+          )}
+          {!isCreator && (
+            <div className="text-center text-slate-400 py-3">
+              Waiting for host to start the race...
+            </div>
+          )}
+
+          <AvailableRaces races={availableRaces} onJoinRace={handleJoinRace} />
+
+          <button
+            onClick={onLeaveRace}
+            className="w-full text-slate-400 hover:text-white py-2 transition-all"
+          >
+            Leave Race
+          </button>
+        </div>
       </div>
     </div>
   );
