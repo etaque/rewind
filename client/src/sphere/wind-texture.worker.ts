@@ -207,57 +207,76 @@ function bilinear(
   }
 }
 
-// HSL to RGB conversion (replaces D3 color scale)
+// OKLab color space for perceptually uniform gradients
+type OKLab = { L: number; a: number; b: number };
+
+// Color stops in OKLab space (pre-converted from desired RGB colors)
+// Blue (light winds) -> Green -> Yellow -> Red -> Pink -> White (extreme)
+const COLOR_STOPS: { speed: number; color: OKLab }[] = [
+  { speed: 0, color: { L: 0.55, a: -0.08, b: -0.15 } }, // Blue
+  { speed: 8, color: { L: 0.55, a: -0.14, b: 0.1 } }, // Green
+  { speed: 15, color: { L: 0.75, a: -0.03, b: 0.16 } }, // Yellow
+  { speed: 25, color: { L: 0.55, a: 0.15, b: 0.1 } }, // Red
+  { speed: 35, color: { L: 0.65, a: 0.15, b: -0.05 } }, // Pink
+  { speed: 45, color: { L: 0.9, a: 0.02, b: -0.02 } }, // Near white
+];
+
 function windColor(speed: number): [number, number, number] {
-  let h: number;
-  let s = 0.6;
-  let l = 0.45;
-
-  if (speed < 8) {
-    // Light winds: Blue to green (0-16 knots)
-    h = 240 - (speed / 8) * 120;
-  } else if (speed < 15) {
-    // Moderate winds: Green to yellow (16-30 knots)
-    h = 120 - ((speed - 8) / 7) * 60;
-  } else if (speed < 25) {
-    // Strong winds: Yellow to red (30-50 knots)
-    h = 60 - ((speed - 15) / 10) * 60;
-  } else if (speed < 35) {
-    // Storm winds: Red to pink (50-70 knots)
-    h = 360 - ((speed - 25) / 10) * 60;
-  } else {
-    // Extreme: Pink to white (70+ knots)
-    h = 300;
-    l = 0.45 + ((speed - 35) / 15) * 0.4;
-    if (l > 0.85) l = 0.85;
+  // Find the two color stops to interpolate between
+  let i = 0;
+  while (i < COLOR_STOPS.length - 1 && COLOR_STOPS[i + 1].speed < speed) {
+    i++;
   }
 
-  return hslToRgb(h, s, l);
-}
-
-function hslToRgb(h: number, s: number, l: number): [number, number, number] {
-  h = h / 360;
-
-  let r: number, g: number, b: number;
-
-  if (s === 0) {
-    r = g = b = l;
-  } else {
-    const q = l < 0.5 ? l * (1 + s) : l + s - l * s;
-    const p = 2 * l - q;
-    r = hueToRgb(p, q, h + 1 / 3);
-    g = hueToRgb(p, q, h);
-    b = hueToRgb(p, q, h - 1 / 3);
+  if (i >= COLOR_STOPS.length - 1) {
+    // Beyond last stop, clamp to last color
+    return oklabToRgb(COLOR_STOPS[COLOR_STOPS.length - 1].color);
   }
 
-  return [Math.round(r * 255), Math.round(g * 255), Math.round(b * 255)];
+  const stop0 = COLOR_STOPS[i];
+  const stop1 = COLOR_STOPS[i + 1];
+  const t = (speed - stop0.speed) / (stop1.speed - stop0.speed);
+
+  // Interpolate in OKLab space
+  const color: OKLab = {
+    L: stop0.color.L + (stop1.color.L - stop0.color.L) * t,
+    a: stop0.color.a + (stop1.color.a - stop0.color.a) * t,
+    b: stop0.color.b + (stop1.color.b - stop0.color.b) * t,
+  };
+
+  return oklabToRgb(color);
 }
 
-function hueToRgb(p: number, q: number, t: number): number {
-  if (t < 0) t += 1;
-  if (t > 1) t -= 1;
-  if (t < 1 / 6) return p + (q - p) * 6 * t;
-  if (t < 1 / 2) return q;
-  if (t < 2 / 3) return p + (q - p) * (2 / 3 - t) * 6;
-  return p;
+// Convert OKLab to linear RGB, then to sRGB
+function oklabToRgb(lab: OKLab): [number, number, number] {
+  // OKLab -> LMS
+  const l_ = lab.L + 0.3963377774 * lab.a + 0.2158037573 * lab.b;
+  const m_ = lab.L - 0.1055613458 * lab.a - 0.0638541728 * lab.b;
+  const s_ = lab.L - 0.0894841775 * lab.a - 1.291485548 * lab.b;
+
+  const l = l_ * l_ * l_;
+  const m = m_ * m_ * m_;
+  const s = s_ * s_ * s_;
+
+  // LMS -> linear RGB
+  const lr = +4.0767416621 * l - 3.3077115913 * m + 0.2309699292 * s;
+  const lg = -1.2684380046 * l + 2.6097574011 * m - 0.3413193965 * s;
+  const lb = -0.0041960863 * l - 0.7034186147 * m + 1.707614701 * s;
+
+  // Linear RGB -> sRGB (gamma correction)
+  const r = Math.round(linearToSrgb(lr) * 255);
+  const g = Math.round(linearToSrgb(lg) * 255);
+  const b = Math.round(linearToSrgb(lb) * 255);
+
+  return [clamp(r, 0, 255), clamp(g, 0, 255), clamp(b, 0, 255)];
+}
+
+function linearToSrgb(x: number): number {
+  if (x <= 0) return 0;
+  if (x >= 1) return 1;
+  return x <= 0.0031308 ? 12.92 * x : 1.055 * Math.pow(x, 1 / 2.4) - 0.055;
+}
+
+function clamp(x: number, min: number, max: number): number {
+  return x < min ? min : x > max ? max : x;
 }
