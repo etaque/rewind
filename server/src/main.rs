@@ -29,15 +29,14 @@ async fn main() {
 
     match args.cmd {
         Command::Http { address } => server::run(address).await,
-        Command::Sync {
+        Command::RebuildDb { truncate } => {
+            wind_reports::rebuild_from_s3(truncate).await.unwrap();
+        }
+        Command::PullGribs {
             from,
             to,
             concurrency,
-            pull_s3,
         } => {
-            if pull_s3 {
-                wind_reports::rebuild_from_s3(false).await.unwrap();
-            }
             grib_store::import_grib_range(from, to.unwrap_or(Utc::now().date_naive()), concurrency)
                 .await
                 .unwrap()

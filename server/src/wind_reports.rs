@@ -108,16 +108,19 @@ pub fn get_reports_for_course(course: &Course) -> Result<Vec<WindReport>> {
 
 /// Rebuild database from S3 listing of PNG files
 pub async fn rebuild_from_s3(truncate: bool) -> Result<()> {
+    println!("Rebuilding DB from S3 buckets listings");
     let client = s3::raster_client();
     let mut inserted_count = 0;
     let mut skipped_count = 0;
 
     // Clear existing reports
     if truncate {
+        println!("Truncating wind_reports...");
         with_connection(|conn| {
             conn.execute("DELETE FROM wind_reports", [])?;
             Ok(())
         })?;
+        println!("Done.")
     }
 
     // List all objects in the raster bucket under ncar/ prefix
@@ -146,10 +149,9 @@ pub async fn rebuild_from_s3(truncate: bool) -> Result<()> {
         }
     }
 
-    log::info!(
-        "Rebuilt database: inserted {} wind reports, skipped {} files",
-        inserted_count,
-        skipped_count
+    println!(
+        "Rebuilt database: upserted {} wind reports, skipped {} files",
+        inserted_count, skipped_count
     );
 
     Ok(())
