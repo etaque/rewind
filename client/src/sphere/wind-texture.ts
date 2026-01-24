@@ -71,8 +71,8 @@ export default class Texture {
   render(scene: Scene, params: WindTextureParams) {
     const { currentRaster, nextRaster, interpolationFactor } = params;
 
-    // Quantize interpolation factor to avoid too frequent updates (every ~20% change)
-    const quantizedFactor = Math.round(interpolationFactor * 5) / 5;
+    // Quantize interpolation factor to avoid too frequent updates (every ~10% change)
+    const quantizedFactor = Math.round(interpolationFactor * 10) / 10;
 
     const needsNewTexture =
       currentRaster.time !== this.renderedCurrentTime ||
