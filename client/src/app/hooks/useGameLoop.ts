@@ -74,5 +74,6 @@ export function useGameLoop(
 
     animationId = requestAnimationFrame(tick);
     return () => cancelAnimationFrame(animationId);
-  }, [isPlaying, session?.clock, dispatch, refs]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isPlaying]);
 }
