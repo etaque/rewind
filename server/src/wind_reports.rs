@@ -42,16 +42,23 @@ pub fn get_report_count() -> Result<i64> {
     })
 }
 
-/// Check if a report exists for the given time
-pub fn report_exists(time: DateTime<Utc>) -> Result<bool> {
+/// Get all report times in a date range (for filtering import tasks)
+pub fn get_existing_times(
+    from: DateTime<Utc>,
+    to: DateTime<Utc>,
+) -> Result<std::collections::HashSet<i64>> {
     with_connection(|conn| {
-        let time_ms = time.timestamp_millis();
-        let count: i64 = conn.query_row(
-            "SELECT COUNT(*) FROM wind_reports WHERE time = ?",
-            [time_ms],
-            |row| row.get(0),
-        )?;
-        Ok(count > 0)
+        let from_ms = from.timestamp_millis();
+        let to_ms = to.timestamp_millis();
+
+        let mut stmt =
+            conn.prepare("SELECT time FROM wind_reports WHERE time >= ? AND time <= ?")?;
+
+        let times: std::collections::HashSet<i64> = stmt
+            .query_map([from_ms, to_ms], |row| row.get(0))?
+            .collect::<Result<_, _>>()?;
+
+        Ok(times)
     })
 }
 

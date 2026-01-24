@@ -22,25 +22,51 @@ pub async fn import_grib_range(
     println!("Database has {} reports", report_count);
     println!("Using NCAR THREDDS source (0.25° resolution)");
 
-    // Collect all (day, hour) pairs to process
+    // Get existing report times to filter out already-imported files
+    let from_time = from.and_hms_opt(0, 0, 0).unwrap().and_utc();
+    let end_day = to.checked_add_days(Days::new(1)).unwrap();
+    let to_time = end_day.and_hms_opt(0, 0, 0).unwrap().and_utc();
+    let existing_times = wind_reports::get_existing_times(from_time, to_time)?;
+
+    // Collect (day, hour) pairs that need processing
     let mut tasks: Vec<(NaiveDate, u32)> = Vec::new();
     let mut current_day = from;
-    let end_day = to.checked_add_days(Days::new(1)).unwrap();
+    let mut skipped_count = 0;
 
     while current_day < end_day {
         for hour in NCAR_HOURS {
-            tasks.push((current_day, hour));
+            let time = current_day.and_hms_opt(hour, 0, 0).unwrap().and_utc();
+            if existing_times.contains(&time.timestamp_millis()) {
+                skipped_count += 1;
+            } else {
+                tasks.push((current_day, hour));
+            }
         }
         current_day = current_day.checked_add_days(Days::new(1)).unwrap();
     }
 
     let total_tasks = tasks.len();
-    println!(
-        "Processing {} GRIB files (max {} concurrent)\n",
-        total_tasks, max_concurrency
-    );
+    if skipped_count > 0 {
+        println!("Skipping {} existing reports", skipped_count);
+    }
+    if total_tasks == 0 {
+        println!("Nothing to import.");
+        return Ok(());
+    }
 
     let multi_progress = Arc::new(MultiProgress::new());
+
+    // Global progress bar (total files)
+    let global_pb = multi_progress.add(ProgressBar::new(total_tasks as u64));
+    global_pb.set_style(
+        ProgressStyle::default_bar()
+            .template("[{bar:40.green/dim}] {pos}/{len} files ({eta} remaining)")
+            .expect("Invalid progress style template")
+            .progress_chars("=>-"),
+    );
+    // Tick to force initial render
+    global_pb.tick();
+    let global_pb = Arc::new(global_pb);
 
     // Process tasks with bounded concurrency
     let results: Vec<anyhow::Result<()>> = stream::iter(tasks)
@@ -49,12 +75,20 @@ pub async fn import_grib_range(
             let grib_s3 = Arc::clone(&grib_s3);
             let raster_s3 = Arc::clone(&raster_s3);
             let mp = Arc::clone(&multi_progress);
+            let gpb = Arc::clone(&global_pb);
 
-            async move { handle_ncar_grib(&ncar, &grib_s3, &raster_s3, day, hour, &mp).await }
+            async move {
+                let result =
+                    handle_ncar_grib(&ncar, &grib_s3, &raster_s3, day, hour, &mp, &gpb).await;
+                gpb.inc(1);
+                result
+            }
         })
         .buffer_unordered(max_concurrency)
         .collect()
         .await;
+
+    global_pb.finish_and_clear();
 
     // Check for errors
     let mut error_count = 0;
@@ -85,16 +119,13 @@ async fn handle_ncar_grib(
     day: NaiveDate,
     hour: u32,
     multi_progress: &MultiProgress,
+    global_pb: &ProgressBar,
 ) -> anyhow::Result<()> {
     let target_time = day.and_hms_opt(hour, 0, 0).unwrap().and_utc();
     let label = format!("{} h{:02}", day, hour);
 
-    // Check if already in database - skip silently
-    if wind_reports::report_exists(target_time)? {
-        return Ok(());
-    }
-
-    let pb = multi_progress.add(ProgressBar::new(100));
+    // Insert after global progress bar to keep it at the top
+    let pb = multi_progress.insert_after(global_pb, ProgressBar::new(100));
     pb.set_style(progress_style_downloading());
     pb.set_prefix(label.clone());
     pb.set_message("checking cache...");
