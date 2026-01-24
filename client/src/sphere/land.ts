@@ -28,14 +28,14 @@ export default class Land {
     context.clearRect(0, 0, this.canvas.width, this.canvas.height);
     context.scale(scene.dpr, scene.dpr);
 
-    context.strokeStyle = "rgba(255, 255, 255, 0.8)";
-    context.fillStyle = "rgba(0, 0, 0, 0.1)";
+    context.strokeStyle = "rgba(200, 180, 140, 0.5)";
+    context.fillStyle = "rgba(34, 45, 34, 0.6)";
     context.beginPath();
     path(this.land);
     context.stroke();
     context.fill();
 
-    context.strokeStyle = "rgba(221, 221, 221, 0.2)";
+    context.strokeStyle = "rgba(255, 255, 255, 0.08)";
     context.beginPath();
     path(graticule);
     context.stroke();
