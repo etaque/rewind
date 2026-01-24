@@ -9,7 +9,6 @@ const ALPHA_DECAY = 0.95;
 const ALPHA_THRESHOLD = 10; // Clear pixels with alpha below this (0-255)
 const CLEAR_INTERVAL = 30; // Apply threshold every N frames
 const TRAVEL_SPEED = 45;
-const FPS = 60;
 
 type Particle = {
   pix: Pixel;
@@ -57,56 +56,51 @@ export default class Particles {
       if (previous) {
         const delta = timestamp - previous;
 
-        if (delta >= 1000 / FPS) {
-          context.save();
-          context.scale(dpr, dpr);
-          context.beginPath();
-          context.strokeStyle = "rgba(210,210,210,0.7)";
+        context.save();
+        context.scale(dpr, dpr);
+        context.beginPath();
+        context.strokeStyle = "rgba(210,210,210,0.7)";
 
-          this.particles.forEach((p) =>
-            moveParticle(
-              p,
-              delta,
-              context,
-              this.scene!,
-              this.wind!,
-              this.interpolationFactor,
-            ),
+        this.particles.forEach((p) =>
+          moveParticle(
+            p,
+            delta,
+            context,
+            this.scene!,
+            this.wind!,
+            this.interpolationFactor,
+          ),
+        );
+
+        context.stroke();
+        context.restore();
+
+        context.globalAlpha = ALPHA_DECAY;
+        context.globalCompositeOperation = "copy";
+        context.drawImage(context.canvas, 0, 0);
+        context.globalAlpha = 1.0;
+        context.globalCompositeOperation = "source-over";
+
+        // Periodically clear low-alpha pixels to prevent ghost accumulation
+        frameCount++;
+        if (frameCount >= CLEAR_INTERVAL) {
+          frameCount = 0;
+          const imageData = context.getImageData(
+            0,
+            0,
+            this.canvas.width,
+            this.canvas.height,
           );
-
-          context.stroke();
-          context.restore();
-
-          context.globalAlpha = ALPHA_DECAY;
-          context.globalCompositeOperation = "copy";
-          context.drawImage(context.canvas, 0, 0);
-          context.globalAlpha = 1.0;
-          context.globalCompositeOperation = "source-over";
-
-          // Periodically clear low-alpha pixels to prevent ghost accumulation
-          frameCount++;
-          if (frameCount >= CLEAR_INTERVAL) {
-            frameCount = 0;
-            const imageData = context.getImageData(
-              0,
-              0,
-              this.canvas.width,
-              this.canvas.height,
-            );
-            const data = imageData.data;
-            for (let i = 3; i < data.length; i += 4) {
-              if (data[i] < ALPHA_THRESHOLD) {
-                data[i] = 0;
-              }
+          const data = imageData.data;
+          for (let i = 3; i < data.length; i += 4) {
+            if (data[i] < ALPHA_THRESHOLD) {
+              data[i] = 0;
             }
-            context.putImageData(imageData, 0, 0);
           }
-
-          previous = timestamp;
+          context.putImageData(imageData, 0, 0);
         }
-      } else {
-        previous = timestamp;
       }
+      previous = timestamp;
       this.rafId = requestAnimationFrame(tick);
     };
     this.rafId = requestAnimationFrame(tick);
