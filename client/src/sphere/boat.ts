@@ -29,7 +29,7 @@ export default class Boat {
     context.beginPath();
     path(boatPolygon);
 
-    context.fillStyle = "#f472b6";
+    context.fillStyle = "#374151";
     context.fill();
     context.strokeStyle = "#ffffff";
     context.lineWidth = 1.5;

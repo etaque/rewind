@@ -2,7 +2,7 @@ import type { Polygon } from "geojson";
 import { LngLat } from "../models";
 
 // Boat size in screen pixels (approximate)
-export const BOAT_SIZE_PX = 64;
+export const BOAT_SIZE_PX = 48;
 // Reference scale at which BOAT_SIZE_PX is the target size
 export const REFERENCE_SCALE = 4000;
 
@@ -23,12 +23,13 @@ export function createBoatPolygon(
   heading: number,
   sizeKm: number,
 ): Polygon {
-  // Triangle vertices relative to center (in local coords, before rotation):
+  // Asteroids-style arrow vertices relative to center (in local coords, before rotation):
   // Counter-clockwise winding for GeoJSON exterior ring
   const vertices = [
-    { dx: 0, dy: sizeKm }, // Tip (forward)
-    { dx: sizeKm * 0.6, dy: -sizeKm * 0.6 }, // Bottom right
-    { dx: -sizeKm * 0.6, dy: -sizeKm * 0.6 }, // Bottom left
+    { dx: 0, dy: sizeKm }, // Nose (forward)
+    { dx: sizeKm * 0.75, dy: -sizeKm }, // Back right
+    { dx: 0, dy: -sizeKm * 0.75 }, // Back center indent
+    { dx: -sizeKm * 0.75, dy: -sizeKm }, // Back left
   ];
 
   // Convert heading to radians (0 = north, clockwise)
