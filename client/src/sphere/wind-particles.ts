@@ -6,8 +6,6 @@ import * as utils from "../utils";
 const MAX_AGE = 1200;
 const PARTICLES_COUNT = 1000;
 const ALPHA_DECAY = 0.95;
-const ALPHA_THRESHOLD = 10; // Clear pixels with alpha below this (0-255)
-const CLEAR_INTERVAL = 30; // Apply threshold every N frames
 const TRAVEL_SPEED = 45;
 
 type Particle = {
@@ -45,10 +43,9 @@ export default class Particles {
     this.paused = false;
     this.particles = generateParticles(scene);
 
-    const context = this.canvas.getContext("2d", { willReadFrequently: true })!;
+    const context = this.canvas.getContext("2d")!;
     const dpr = this.dpr;
     let previous: number;
-    let frameCount = 0;
 
     const tick = (timestamp: number) => {
       if (this.paused || !this.wind || !this.scene) return;
@@ -80,25 +77,6 @@ export default class Particles {
         context.drawImage(context.canvas, 0, 0);
         context.globalAlpha = 1.0;
         context.globalCompositeOperation = "source-over";
-
-        // Periodically clear low-alpha pixels to prevent ghost accumulation
-        frameCount++;
-        if (frameCount >= CLEAR_INTERVAL) {
-          frameCount = 0;
-          const imageData = context.getImageData(
-            0,
-            0,
-            this.canvas.width,
-            this.canvas.height,
-          );
-          const data = imageData.data;
-          for (let i = 3; i < data.length; i += 4) {
-            if (data[i] < ALPHA_THRESHOLD) {
-              data[i] = 0;
-            }
-          }
-          context.putImageData(imageData, 0, 0);
-        }
       }
       previous = timestamp;
       this.rafId = requestAnimationFrame(tick);
