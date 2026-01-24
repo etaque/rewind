@@ -7,7 +7,7 @@ const MAX_AGE = 1200;
 const PARTICLES_COUNT = 1000;
 const ALPHA_DECAY = 0.95;
 const TRAVEL_SPEED = 45;
-const FPS = 30;
+const FPS = 60;
 
 type Particle = {
   pix: Pixel;
@@ -19,6 +19,7 @@ type Particle = {
 export default class Particles {
   canvas: HTMLCanvasElement;
   particles: Particle[] = [];
+  dpr: number;
 
   rafId?: number;
   paused = false;
@@ -27,8 +28,9 @@ export default class Particles {
   interpolationFactor: number = 0;
   scene?: Scene;
 
-  constructor(canvas: HTMLCanvasElement) {
+  constructor(canvas: HTMLCanvasElement, dpr: number = 1) {
     this.canvas = canvas;
+    this.dpr = dpr;
   }
 
   show(scene: Scene, wind: InterpolatedWind, interpolationFactor: number) {
@@ -43,6 +45,7 @@ export default class Particles {
     this.particles = generateParticles(scene);
 
     const context = this.canvas.getContext("2d")!;
+    const dpr = this.dpr;
     let previous: number;
 
     const tick = (timestamp: number) => {
@@ -52,6 +55,8 @@ export default class Particles {
         const delta = timestamp - previous;
 
         if (delta >= 1000 / FPS) {
+          context.save();
+          context.scale(dpr, dpr);
           context.beginPath();
           context.strokeStyle = "rgba(210,210,210,0.7)";
 
@@ -67,6 +72,8 @@ export default class Particles {
           );
 
           context.stroke();
+          context.restore();
+
           context.globalAlpha = ALPHA_DECAY;
           context.globalCompositeOperation = "copy";
           context.drawImage(context.canvas, 0, 0);

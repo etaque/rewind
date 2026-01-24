@@ -22,7 +22,11 @@ export default class Land {
     const graticule = d3.geoGraticule10();
     const context = this.canvas.getContext("2d")!;
     const path = d3.geoPath(scene.projection, context);
-    context.clearRect(0, 0, scene.width, scene.height);
+
+    // Clear full canvas (at DPR resolution) and apply DPR scale
+    context.setTransform(1, 0, 0, 1, 0, 0);
+    context.clearRect(0, 0, this.canvas.width, this.canvas.height);
+    context.scale(scene.dpr, scene.dpr);
 
     context.strokeStyle = "rgba(255, 255, 255, 0.8)";
     context.fillStyle = "rgba(0, 0, 0, 0.1)";

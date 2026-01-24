@@ -17,6 +17,11 @@ import CourseLine from "./course-line";
 import ProjectedPath from "./projected-path";
 import { ProjectedPoint } from "../app/projected-path";
 
+/** Get device pixel ratio, capped at 2 for performance */
+function getDPR(): number {
+  return Math.min(window.devicePixelRatio || 1, 2);
+}
+
 export class SphereView {
   readonly course: Course;
   readonly node: HTMLElement;
@@ -63,33 +68,41 @@ export class SphereView {
       .fitSize([this.width, this.height], sphere)
       .scale(500);
 
+    const dpr = getDPR();
+
     const textureCanvas = d3
       .select(this.node)
       .append("canvas")
       .attr("class", "wind-texture fixed opacity-80")
-      .attr("width", this.width)
-      .attr("height", this.height)
+      .style("width", `${this.width}px`)
+      .style("height", `${this.height}px`)
+      .attr("width", this.width * dpr)
+      .attr("height", this.height * dpr)
       .node()!;
 
-    this.windTexture = new WindTexture(textureCanvas);
+    this.windTexture = new WindTexture(textureCanvas, dpr);
     this.windTexture.onTextureReady = () => this.render();
 
     const particlesCanvas = d3
       .select(this.node)
       .append("canvas")
       .attr("class", "wind-particles fixed")
-      .attr("width", this.width)
-      .attr("height", this.height)
+      .style("width", `${this.width}px`)
+      .style("height", `${this.height}px`)
+      .attr("width", this.width * dpr)
+      .attr("height", this.height * dpr)
       .node()!;
 
-    this.particles = new WindParticles(particlesCanvas);
+    this.particles = new WindParticles(particlesCanvas, dpr);
 
     const landCanvas = d3
       .select(this.node)
       .append("canvas")
       .attr("class", "land fixed")
-      .attr("width", this.width)
-      .attr("height", this.height)
+      .style("width", `${this.width}px`)
+      .style("height", `${this.height}px`)
+      .attr("width", this.width * dpr)
+      .attr("height", this.height * dpr)
       .node()!;
 
     this.land = new Land(landCanvas);
@@ -229,11 +242,15 @@ export class SphereView {
     this.width = document.body.clientWidth;
     this.height = document.body.clientHeight;
 
-    // Resize all canvases
+    const dpr = getDPR();
+
+    // Resize all canvases with DPR scaling
     const canvases = this.node.querySelectorAll("canvas");
     canvases.forEach((canvas) => {
-      canvas.width = this.width;
-      canvas.height = this.height;
+      canvas.style.width = `${this.width}px`;
+      canvas.style.height = `${this.height}px`;
+      canvas.width = this.width * dpr;
+      canvas.height = this.height * dpr;
     });
 
     // Calculate what the default scale would be for the new size
@@ -256,12 +273,14 @@ export class SphereView {
   }
 
   render() {
+    const dpr = getDPR();
     const scene = {
       projection: this.projection,
       width: this.width,
       height: this.height,
       sphereRadius: sphereRadius(this.projection),
       sphereCenter: sphereCenter(this.projection),
+      dpr,
     };
 
     this.land.render(scene, this.moving).then(() => {

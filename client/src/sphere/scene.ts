@@ -9,6 +9,7 @@ export type Scene = {
   height: number;
   sphereRadius: number;
   sphereCenter: Pixel;
+  dpr: number;
 };
 
 export const sphereRadius = (projection: d3.GeoProjection): number => {

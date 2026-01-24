@@ -14,6 +14,7 @@ export type WindTextureParams = {
 export default class Texture {
   readonly canvas: HTMLCanvasElement;
   readonly gl: WebGLRenderingContext;
+  readonly dpr: number;
   readonly init: (scene: Scene) => void;
 
   // Track what's currently rendered to avoid unnecessary regeneration
@@ -31,8 +32,9 @@ export default class Texture {
   // Callback to notify when texture is ready (for triggering re-render)
   onTextureReady?: () => void;
 
-  constructor(canvas: HTMLCanvasElement) {
+  constructor(canvas: HTMLCanvasElement, dpr: number = 1) {
     this.canvas = canvas;
+    this.dpr = dpr;
     const gl = canvas.getContext("webgl", { alpha: true })!;
     this.gl = gl;
 
@@ -56,12 +58,13 @@ export default class Texture {
       gl.useProgram(program);
       gl.enableVertexAttribArray(aVertex);
       gl.vertexAttribPointer(aVertex, 2, gl.FLOAT, false, 0, 0);
-      gl.uniform2f(uTranslate, width / 2, height / 2);
+      // uTranslate must be in physical pixels (DPR-scaled) to match gl_FragCoord
+      gl.uniform2f(uTranslate, (width * this.dpr) / 2, (height * this.dpr) / 2);
 
       gl.uniform2fv(uRotate, [lambda, phi]);
-      gl.uniform1f(uScale, sphereRadius(scene.projection));
+      gl.uniform1f(uScale, sphereRadius(scene.projection) * this.dpr);
 
-      gl.viewport(0, 0, width, height);
+      gl.viewport(0, 0, width * this.dpr, height * this.dpr);
     };
   }
 
