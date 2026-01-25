@@ -4,9 +4,9 @@ use crate::s3;
 use crate::wind_reports;
 use chrono::{Days, NaiveDate};
 use futures::stream::{self, StreamExt};
-use indicatif::{MultiProgress, ProgressBar, ProgressStyle};
 use object_store::{ObjectStoreExt, aws};
 use std::sync::Arc;
+use std::sync::atomic::{AtomicUsize, Ordering};
 
 /// Import all GRIB files for a date range from NCAR
 pub async fn import_grib_range(
@@ -53,19 +53,14 @@ pub async fn import_grib_range(
         return Ok(());
     }
 
-    let multi_progress = Arc::new(MultiProgress::new());
-
-    // Global progress bar (total files)
-    let global_pb = multi_progress.add(ProgressBar::new(total_tasks as u64));
-    global_pb.set_style(
-        ProgressStyle::default_bar()
-            .template("[{bar:40.green/dim}] {pos}/{len} files ({eta} remaining)")
-            .expect("Invalid progress style template")
-            .progress_chars("=>-"),
+    println!(
+        "Processing {} files with concurrency {}",
+        total_tasks, max_concurrency
     );
-    // Tick to force initial render
-    global_pb.tick();
-    let global_pb = Arc::new(global_pb);
+
+    // Track progress with atomic counter
+    let completed = Arc::new(AtomicUsize::new(0));
+    let error_count = Arc::new(AtomicUsize::new(0));
 
     // Process tasks with bounded concurrency
     let results: Vec<anyhow::Result<()>> = stream::iter(tasks)
@@ -73,13 +68,27 @@ pub async fn import_grib_range(
             let ncar = Arc::clone(&ncar);
             let grib_s3 = Arc::clone(&grib_s3);
             let raster_s3 = Arc::clone(&raster_s3);
-            let mp = Arc::clone(&multi_progress);
-            let gpb = Arc::clone(&global_pb);
+            let completed = Arc::clone(&completed);
+            let error_count = Arc::clone(&error_count);
 
             async move {
-                let result =
-                    handle_ncar_grib(&ncar, &grib_s3, &raster_s3, day, hour, &mp, &gpb).await;
-                gpb.inc(1);
+                let result = handle_ncar_grib(&ncar, &grib_s3, &raster_s3, day, hour).await;
+
+                let done = completed.fetch_add(1, Ordering::Relaxed) + 1;
+
+                match &result {
+                    Ok(_) => {
+                        println!("[{}/{}] {} h{:02} - done", done, total_tasks, day, hour);
+                    }
+                    Err(e) => {
+                        error_count.fetch_add(1, Ordering::Relaxed);
+                        eprintln!(
+                            "[{}/{}] {} h{:02} - error: {}",
+                            done, total_tasks, day, hour, e
+                        );
+                    }
+                }
+
                 result
             }
         })
@@ -87,22 +96,17 @@ pub async fn import_grib_range(
         .collect()
         .await;
 
-    global_pb.finish_and_clear();
-
-    // Check for errors
-    let mut error_count = 0;
-    for result in results {
-        if let Err(e) = result {
-            error_count += 1;
-            eprintln!("Error: {}", e);
-        }
-    }
+    // Count errors
+    let total_errors = results.iter().filter(|r| r.is_err()).count();
 
     println!();
-    if error_count > 0 {
-        println!("Finished with {} errors.", error_count);
+    if total_errors > 0 {
+        println!(
+            "Finished with {} errors out of {} tasks",
+            total_errors, total_tasks
+        );
     } else {
-        println!("Finished.");
+        println!("Finished successfully: {} files processed", total_tasks);
     }
     Ok(())
 }
@@ -114,39 +118,28 @@ async fn handle_ncar_grib(
     raster_s3: &aws::AmazonS3,
     day: NaiveDate,
     hour: u32,
-    multi_progress: &MultiProgress,
-    global_pb: &ProgressBar,
 ) -> anyhow::Result<()> {
-    let label = format!("{} h{:02}", day, hour);
-
-    // Insert after global progress bar to keep it at the top
-    let pb = multi_progress.insert_after(global_pb, ProgressBar::new(100));
-    pb.set_style(progress_style_downloading());
-    pb.set_prefix(label.clone());
-    pb.set_message("checking cache...");
-
     let grib_path = ncar_grib_path(day, hour);
 
     // Check if filtered GRIB already exists in S3 cache
     let grib_data = match grib_s3.get(&grib_path.as_str().into()).await {
         Ok(result) => {
-            pb.set_message("using cached GRIB");
+            log::debug!("{} h{:02} - using cached GRIB", day, hour);
             result.bytes().await?
         }
         Err(_) => {
-            pb.set_message("downloading...");
+            log::debug!("{} h{:02} - downloading from NCAR", day, hour);
             // Download and filter from NCAR
             let bytes_uploaded = ncar
-                .download_wind_data(day, hour, grib_s3, &grib_path, &pb)
+                .download_wind_data(day, hour, grib_s3, &grib_path)
                 .await?;
 
             if bytes_uploaded.is_none() {
-                pb.finish_and_clear();
+                log::warn!("{} h{:02} - GRIB not found on NCAR", day, hour);
                 return Ok(());
             }
 
             // Read back the uploaded data for PNG conversion
-            pb.set_message("reading from S3...");
             grib_s3
                 .get(&grib_path.as_str().into())
                 .await?
@@ -156,23 +149,12 @@ async fn handle_ncar_grib(
     };
 
     // Generate UV PNG from filtered GRIB
-    pb.set_message("converting to PNG...");
     let png_data = grib_to_uv_png(&grib_data)?;
     let png_path = ncar_raster_path(day, hour);
 
-    pb.set_message("uploading PNG...");
     raster_s3
         .put(&png_path.as_str().into(), png_data.into())
         .await?;
 
-    pb.finish_and_clear();
-
     Ok(())
-}
-
-fn progress_style_downloading() -> ProgressStyle {
-    ProgressStyle::default_bar()
-        .template("{prefix:>15} [{bar:30.cyan/blue}] {percent:>3}% {msg}")
-        .expect("Invalid progress style template")
-        .progress_chars("=>-")
 }

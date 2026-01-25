@@ -9,7 +9,6 @@ use crate::s3_multipart::S3MultipartUploader;
 use anyhow::Result;
 use chrono::NaiveDate;
 use futures::StreamExt;
-use indicatif::ProgressBar;
 use object_store::aws::AmazonS3;
 
 /// NCAR THREDDS base URL for GFS 0.25° data (ds084.1 dataset).
@@ -50,7 +49,7 @@ impl NcarSource {
     /// Stream download GFS data, filter for wind components, and upload to S3.
     ///
     /// Returns the number of bytes uploaded (filtered wind data only).
-    /// Returns Ok(0) if the file is not found (404).
+    /// Returns Ok(None) if the file is not found (404).
     ///
     /// Uses exponential backoff with jitter for retrying on network errors
     /// and server errors (5xx). Will retry up to MAX_RETRIES times.
@@ -61,11 +60,10 @@ impl NcarSource {
         hour: u32,
         s3_client: &AmazonS3,
         s3_key: &str,
-        progress: &ProgressBar,
     ) -> Result<Option<usize>> {
         let url = Self::build_url(date, hour);
 
-        let f = || self.try_download_wind_data(&url, s3_client, s3_key, progress);
+        let f = || self.try_download_wind_data(&url, s3_client, s3_key);
 
         return with_retry(f, &RetryConfig::default())
             .await
@@ -80,7 +78,6 @@ impl NcarSource {
         url: &str,
         s3_client: &AmazonS3,
         s3_key: &str,
-        progress: &ProgressBar,
     ) -> std::result::Result<Option<usize>, RetryError> {
         // Initiate the HTTP request
         let response = self
@@ -104,10 +101,6 @@ impl NcarSource {
                 status
             )));
         }
-
-        let content_length = response.content_length().unwrap_or(0);
-        progress.set_length(content_length);
-        progress.set_position(0);
 
         let mut uploader = S3MultipartUploader::new(s3_client, s3_key)
             .await
@@ -138,9 +131,6 @@ impl NcarSource {
                         total_uploaded += msg.len();
                     }
                 }
-
-                // Update progress bar
-                progress.set_position(total_downloaded);
             }
             Ok(())
         }
