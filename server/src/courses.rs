@@ -71,7 +71,7 @@ pub fn all() -> Vec<Course> {
             // 2024-12-26T13:00:00+11:00 (1pm AEDT Boxing Day) in milliseconds
             start_time: 1735178400000,
             start: LngLat {
-                lng: 151.32,
+                lng: 151.45,
                 lat: -33.86,
             },
             start_heading: 180.0,
