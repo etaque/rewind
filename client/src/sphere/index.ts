@@ -17,6 +17,8 @@ import CourseLine from "./course-line";
 import ProjectedPath from "./projected-path";
 import { ProjectedPoint } from "../app/projected-path";
 
+const MAX_SCALE = 12;
+
 /** Get device pixel ratio, capped at 2 for performance */
 function getDPR(): number {
   return Math.min(window.devicePixelRatio || 1, 2);
@@ -116,7 +118,7 @@ export class SphereView {
 
     this.zoom = d3
       .zoom<HTMLElement, unknown>()
-      .scaleExtent([0.8, 8])
+      .scaleExtent([0.8, MAX_SCALE])
       .on("start", (e: d3.D3ZoomEvent<HTMLElement, unknown>) => {
         this.moving = true;
         this.particles.hide();
@@ -236,11 +238,10 @@ export class SphereView {
   }
 
   zoomToMax() {
-    const maxScale = 8;
     const selection = d3.select<HTMLElement, unknown>(this.node);
     // Rotate to course start position
     this.projection.rotate([-this.position.lng, -this.position.lat]);
-    this.zoom.scaleTo(selection, maxScale);
+    this.zoom.scaleTo(selection, MAX_SCALE);
     this.render();
   }
 
