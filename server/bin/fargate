@@ -28,9 +28,9 @@ case "${1:-}" in
     aws ecr get-login-password --region "$AWS_REGION" --profile "$AWS_PROFILE" | \
       docker login --username AWS --password-stdin "$ECR_URL"
 
-    # Build and push
-    echo "Building Docker image..."
-    docker build -t rewind server/
+    # Build and push for linux/amd64 (Fargate platform)
+    echo "Building Docker image for linux/amd64..."
+    docker build --platform linux/amd64 -t rewind server/
 
     echo "Tagging and pushing..."
     docker tag rewind:latest "$ECR_URL:latest"

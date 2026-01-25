@@ -92,7 +92,6 @@ impl S3MultipartUploader {
             .await
             .context("Failed to complete multipart upload")?;
 
-        log::info!("Completed multipart upload: {}", self.key);
         Ok(())
     }
 

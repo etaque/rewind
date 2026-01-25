@@ -136,8 +136,11 @@ resource "aws_ecs_task_definition" "pull_gribs" {
     environment = [
       { name = "REWIND_S3_ENDPOINT", value = "https://s3.eu-west-3.amazonaws.com" },
       { name = "REWIND_S3_REGION", value = "eu-west-3" },
+      { name = "REWIND_S3_ACCESS_KEY", value = aws_iam_access_key.gribs_uploader.id },
+      { name = "REWIND_S3_SECRET_KEY", value = aws_iam_access_key.gribs_uploader.secret },
       { name = "REWIND_S3_GRIB_BUCKET", value = aws_s3_bucket.gribs.id },
       { name = "REWIND_S3_RASTER_BUCKET", value = aws_s3_bucket.rasters.id },
+      { name = "REWIND_S3_PATHS_BUCKET", value = aws_s3_bucket.paths.id },
       { name = "RUST_LOG", value = "info" },
     ]
 
