@@ -4,6 +4,13 @@ import { Scene } from "./scene";
 import { PeerState } from "../multiplayer/types";
 import { createBoatPolygon, getBoatSizeKm } from "./boat-geometry";
 
+export type RecordedGhostPosition = {
+  name: string;
+  lng: number;
+  lat: number;
+  heading: number;
+};
+
 /**
  * Renders other players' boats on the globe.
  * Similar to Boat but with different styling and support for multiple boats.
@@ -11,6 +18,7 @@ import { createBoatPolygon, getBoatSizeKm } from "./boat-geometry";
 export default class GhostBoats {
   canvas: HTMLCanvasElement;
   peers: Map<string, PeerState> = new Map();
+  recordedGhosts: Map<number, RecordedGhostPosition> = new Map();
 
   constructor(canvas: HTMLCanvasElement) {
     this.canvas = canvas;
@@ -35,6 +43,10 @@ export default class GhostBoats {
 
   removePeer(peerId: string) {
     this.peers.delete(peerId);
+  }
+
+  updateRecordedGhosts(ghosts: Map<number, RecordedGhostPosition>) {
+    this.recordedGhosts = ghosts;
   }
 
   render(scene: Scene) {
@@ -83,6 +95,41 @@ export default class GhostBoats {
         const textY = projected[1] - 20;
         context.strokeText(peer.name, projected[0], textY);
         context.fillText(peer.name, projected[0], textY);
+      }
+    });
+
+    // Render recorded ghosts (from Hall of Fame) with amber color
+    this.recordedGhosts.forEach((ghost) => {
+      const position: LngLat = { lng: ghost.lng, lat: ghost.lat };
+
+      // Check if point is on the visible hemisphere
+      const point: [number, number] = [ghost.lng, ghost.lat];
+      if (geoDistance(center, point) > Math.PI / 2) return;
+
+      // Create boat triangle
+      const boatPolygon = createBoatPolygon(position, ghost.heading, sizeKm);
+
+      context.beginPath();
+      path(boatPolygon);
+
+      // Recorded ghosts have amber/gold color
+      context.fillStyle = "rgba(251, 191, 36, 0.8)"; // amber-400
+      context.fill();
+      context.strokeStyle = "#ffffff";
+      context.lineWidth = 1.5;
+      context.stroke();
+
+      // Draw player name above boat
+      const projected = scene.projection([ghost.lng, ghost.lat]);
+      if (projected) {
+        context.font = "12px sans-serif";
+        context.textAlign = "center";
+        context.fillStyle = "#fbbf24"; // amber-400
+        context.strokeStyle = "#000000";
+        context.lineWidth = 2;
+        const textY = projected[1] - 20;
+        context.strokeText(ghost.name, projected[0], textY);
+        context.fillText(ghost.name, projected[0], textY);
       }
     });
   }

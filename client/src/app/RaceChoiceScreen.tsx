@@ -2,6 +2,8 @@ import { useState, useEffect } from "react";
 import { PeerState } from "../multiplayer/types";
 import { Course } from "../models";
 import { PlayerList, AvailableRaces, PlayerNameInput, RaceInfo } from "./race";
+import HallOfFameList from "./HallOfFameList";
+import { RecordedGhost } from "./App";
 
 const PLAYER_NAME_KEY = "rewind:player_name";
 const serverUrl = import.meta.env.REWIND_SERVER_URL;
@@ -13,11 +15,14 @@ type Props = {
   players: Map<string, PeerState>;
   courses: Course[];
   selectedCourseKey: string | null;
+  recordedGhosts: Map<number, RecordedGhost>;
   onCourseChange: (courseKey: string) => void;
   onCreateRace: (playerName: string) => void;
   onJoinRace: (raceId: string, playerName: string) => void;
   onStartRace: () => void;
   onLeaveRace: () => void;
+  onAddGhost: (entryId: number, playerName: string) => void;
+  onRemoveGhost: (ghostId: number) => void;
 };
 
 export default function RaceChoiceScreen({
@@ -27,11 +32,14 @@ export default function RaceChoiceScreen({
   players,
   courses,
   selectedCourseKey,
+  recordedGhosts,
   onCourseChange,
   onCreateRace,
   onJoinRace,
   onStartRace,
   onLeaveRace,
+  onAddGhost,
+  onRemoveGhost,
 }: Props) {
   const [playerName, setPlayerName] = useState("");
   const [availableRaces, setAvailableRaces] = useState<RaceInfo[]>([]);
@@ -91,60 +99,82 @@ export default function RaceChoiceScreen({
     <div className="fixed inset-0 flex flex-col items-center justify-center bg-black bg-opacity-10">
       <h1 className="logo mb-6">Re:wind</h1>
 
-      <div className="bg-slate-900 bg-opacity-90 rounded-lg p-8 max-w-md w-full mx-4 space-y-6">
-        <PlayerNameInput value={playerName} onChange={handlePlayerNameChange} />
+      <div className="bg-slate-900 bg-opacity-90 rounded-lg p-8 max-w-4xl w-full mx-4 flex gap-8">
+        {/* Left column - Race setup */}
+        <div className="flex-1 space-y-6">
+          <PlayerNameInput
+            value={playerName}
+            onChange={handlePlayerNameChange}
+          />
 
-        {isCreator && courses.length > 1 && (
-          <div className="space-y-2">
-            <label className="text-slate-400 text-sm">Course</label>
-            <div className="flex flex-col gap-2">
-              {courses.map((course) => (
-                <button
-                  key={course.key}
-                  onClick={() => onCourseChange(course.key)}
-                  className={`w-full text-left px-4 py-2 rounded-lg border transition-all ${
-                    selectedCourseKey === course.key
-                      ? "bg-blue-600 border-blue-500 text-white"
-                      : "bg-slate-800 border-slate-700 text-slate-300 hover:border-slate-600 hover:text-white"
-                  }`}
-                >
-                  {course.name}
-                </button>
-              ))}
+          {isCreator && courses.length > 1 && (
+            <div className="space-y-2">
+              <label className="text-slate-400 text-sm">Course</label>
+              <div className="flex flex-col gap-2">
+                {courses.map((course) => (
+                  <button
+                    key={course.key}
+                    onClick={() => onCourseChange(course.key)}
+                    className={`w-full text-left px-4 py-2 rounded-lg border transition-all ${
+                      selectedCourseKey === course.key
+                        ? "bg-blue-600 border-blue-500 text-white"
+                        : "bg-slate-800 border-slate-700 text-slate-300 hover:border-slate-600 hover:text-white"
+                    }`}
+                  >
+                    {course.name}
+                  </button>
+                ))}
+              </div>
             </div>
-          </div>
-        )}
+          )}
 
-        <PlayerList
-          players={playerList}
-          myPlayerId={myPlayerId}
-          isCreator={isCreator}
-          totalPlayers={totalPlayers}
-        />
+          <PlayerList
+            players={playerList}
+            myPlayerId={myPlayerId}
+            isCreator={isCreator}
+            totalPlayers={totalPlayers}
+            recordedGhosts={recordedGhosts}
+            onRemoveGhost={onRemoveGhost}
+          />
 
-        <div className="space-y-4">
-          {isCreator && (
+          <div className="space-y-4">
+            {isCreator && (
+              <button
+                onClick={onStartRace}
+                className="w-full bg-gradient-to-r from-green-400 to-blue-500 hover:from-green-500 hover:to-blue-600 text-white py-3 px-6 rounded-lg font-semibold transition-all"
+              >
+                {totalPlayers < 2 ? "Start Solo" : "Start Race"}
+              </button>
+            )}
+            {!isCreator && (
+              <div className="text-center text-slate-400 py-3">
+                Waiting for host to start the race...
+              </div>
+            )}
+
+            <AvailableRaces
+              races={availableRaces}
+              onJoinRace={handleJoinRace}
+            />
+
             <button
-              onClick={onStartRace}
-              className="w-full bg-gradient-to-r from-green-400 to-blue-500 hover:from-green-500 hover:to-blue-600 text-white py-3 px-6 rounded-lg font-semibold transition-all"
+              onClick={onLeaveRace}
+              className="w-full text-slate-400 hover:text-white py-2 transition-all"
             >
-              {totalPlayers < 2 ? "Start Solo" : "Start Race"}
+              Leave Race
             </button>
-          )}
-          {!isCreator && (
-            <div className="text-center text-slate-400 py-3">
-              Waiting for host to start the race...
-            </div>
-          )}
+          </div>
+        </div>
 
-          <AvailableRaces races={availableRaces} onJoinRace={handleJoinRace} />
-
-          <button
-            onClick={onLeaveRace}
-            className="w-full text-slate-400 hover:text-white py-2 transition-all"
-          >
-            Leave Race
-          </button>
+        {/* Right column - Hall of Fame */}
+        <div className="flex-1">
+          {selectedCourseKey && (
+            <HallOfFameList
+              courseKey={selectedCourseKey}
+              activeGhostIds={new Set(recordedGhosts.keys())}
+              onAddGhost={onAddGhost}
+            />
+          )}
         </div>
       </div>
     </div>

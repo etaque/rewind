@@ -225,6 +225,16 @@ export class SphereView {
     this.render();
   }
 
+  updateRecordedGhosts(
+    ghosts: Map<
+      number,
+      { name: string; lng: number; lat: number; heading: number }
+    >,
+  ) {
+    this.ghostBoats.updateRecordedGhosts(ghosts);
+    this.render();
+  }
+
   zoomToMax() {
     const maxScale = 8;
     const selection = d3.select<HTMLElement, unknown>(this.node);

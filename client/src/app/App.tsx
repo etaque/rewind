@@ -16,6 +16,17 @@ import { currentWindContext } from "./wind-context";
 import { calculateTWA } from "./polar";
 import { getWindDirection, getWindSpeedKnots } from "../utils";
 import FinishOverlay from "./FinishOverlay";
+import {
+  fetchReplayPath,
+  interpolatePosition,
+  type PathPoint,
+} from "../replay-path";
+
+export type RecordedGhost = {
+  id: number;
+  name: string;
+  path: PathPoint[];
+};
 
 const serverUrl = import.meta.env.REWIND_SERVER_URL;
 
@@ -25,6 +36,9 @@ export default function App() {
   const [selectedCourseKey, setSelectedCourseKey] = useState<string | null>(
     null,
   );
+  const [recordedGhosts, setRecordedGhosts] = useState<
+    Map<number, RecordedGhost>
+  >(new Map());
 
   const sphereViewRef = useRef<SphereView | null>(null);
   const interpolatedWindRef = useRef<InterpolatedWind>(new InterpolatedWind());
@@ -86,6 +100,46 @@ export default function App() {
     selectedCourseRef,
     coursesRef,
   );
+
+  // Handle adding a ghost from Hall of Fame
+  const handleAddGhost = useCallback(
+    async (entryId: number, playerName: string) => {
+      // Don't add if already exists
+      if (recordedGhosts.has(entryId)) return;
+
+      try {
+        // Fetch replay URL from server
+        const res = await fetch(`${serverUrl}/replay/${entryId}`);
+        if (!res.ok) throw new Error("Failed to fetch replay info");
+        const { pathUrl } = await res.json();
+
+        // Fetch and decode path
+        const path = await fetchReplayPath(pathUrl);
+        if (path.length === 0) {
+          console.error("Empty replay path");
+          return;
+        }
+
+        setRecordedGhosts((prev) => {
+          const next = new Map(prev);
+          next.set(entryId, { id: entryId, name: playerName, path });
+          return next;
+        });
+      } catch (err) {
+        console.error("Failed to load ghost:", err);
+      }
+    },
+    [recordedGhosts],
+  );
+
+  // Handle removing a ghost
+  const handleRemoveGhost = useCallback((ghostId: number) => {
+    setRecordedGhosts((prev) => {
+      const next = new Map(prev);
+      next.delete(ghostId);
+      return next;
+    });
+  }, []);
 
   // Handle course change - need to leave current race and create new one
   const handleCourseChange = useCallback(
@@ -193,6 +247,60 @@ export default function App() {
     state.tag === "Playing" ? state.session.nextSources[0]?.time : null,
   ]);
 
+  // Update recorded ghost positions based on courseTime
+  useEffect(() => {
+    if (state.tag !== "Playing" || recordedGhosts.size === 0) return;
+    if (!sphereViewRef.current) return;
+
+    const courseTime = state.session.courseTime;
+    const ghostPositions = new Map<
+      number,
+      { name: string; lng: number; lat: number; heading: number }
+    >();
+
+    recordedGhosts.forEach((ghost) => {
+      const pos = interpolatePosition(ghost.path, courseTime);
+      if (pos) {
+        ghostPositions.set(ghost.id, {
+          name: ghost.name,
+          lng: pos.lng,
+          lat: pos.lat,
+          heading: pos.heading,
+        });
+      }
+    });
+
+    sphereViewRef.current.updateRecordedGhosts(ghostPositions);
+  }, [
+    state.tag === "Playing" ? state.session.courseTime : null,
+    recordedGhosts,
+  ]);
+
+  // Show recorded ghosts at start position in lobby
+  useEffect(() => {
+    if (state.tag !== "Loading" || recordedGhosts.size === 0) return;
+    if (!sphereViewRef.current) return;
+
+    const ghostPositions = new Map<
+      number,
+      { name: string; lng: number; lat: number; heading: number }
+    >();
+
+    recordedGhosts.forEach((ghost) => {
+      if (ghost.path.length > 0) {
+        const start = ghost.path[0];
+        ghostPositions.set(ghost.id, {
+          name: ghost.name,
+          lng: start.lng,
+          lat: start.lat,
+          heading: start.heading,
+        });
+      }
+    });
+
+    sphereViewRef.current.updateRecordedGhosts(ghostPositions);
+  }, [state.tag, recordedGhosts]);
+
   // Sync position, heading, and courseTime to SphereView
   useEffect(() => {
     if (state.tag !== "Playing") return;
@@ -252,11 +360,14 @@ export default function App() {
                 }
                 courses={courses}
                 selectedCourseKey={selectedCourseKey}
+                recordedGhosts={recordedGhosts}
                 onCourseChange={handleCourseChange}
                 onCreateRace={multiplayerCallbacks.onCreateRace}
                 onJoinRace={multiplayerCallbacks.onJoinRace}
                 onStartRace={multiplayerCallbacks.onStartRace}
                 onLeaveRace={multiplayerCallbacks.onLeaveRace}
+                onAddGhost={handleAddGhost}
+                onRemoveGhost={handleRemoveGhost}
               />
             </div>
           )}
