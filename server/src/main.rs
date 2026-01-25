@@ -23,9 +23,6 @@ async fn main() {
     dotenvy::dotenv().ok();
     env_logger::init();
 
-    // Initialize database
-    db::init_db().expect("Failed to initialize database");
-
     let args = Cli::parse();
 
     match args.cmd {

@@ -34,14 +34,6 @@ static DB: Lazy<Mutex<Connection>> = Lazy::new(|| {
     Mutex::new(conn)
 });
 
-/// Initialize the database schema (called on startup, but schema is also auto-created)
-pub fn init_db() -> Result<()> {
-    // Just access DB to trigger lazy initialization
-    let _conn = DB.lock().unwrap();
-    log::info!("Database initialized");
-    Ok(())
-}
-
 /// Get a connection to the database
 pub fn with_connection<F, T>(f: F) -> Result<T>
 where
