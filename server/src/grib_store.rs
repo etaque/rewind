@@ -1,7 +1,7 @@
 use crate::grib_png::grib_to_uv_png;
 use crate::ncar_source::{NCAR_HOURS, NcarSource, ncar_grib_path, ncar_raster_path};
 use crate::s3;
-use crate::wind_reports::{self, SOURCE_NCAR, WindReport};
+use crate::wind_reports;
 use chrono::{Days, NaiveDate};
 use futures::stream::{self, StreamExt};
 use indicatif::{MultiProgress, ProgressBar, ProgressStyle};
@@ -18,15 +18,14 @@ pub async fn import_grib_range(
     let raster_s3 = Arc::new(s3::raster_client());
     let ncar = Arc::new(NcarSource::new());
 
-    let report_count = wind_reports::get_report_count()?;
-    println!("Database has {} reports", report_count);
     println!("Using NCAR THREDDS source (0.25° resolution)");
 
-    // Get existing report times to filter out already-imported files
-    let from_time = from.and_hms_opt(0, 0, 0).unwrap().and_utc();
+    // Get existing report times by listing S3 rasters bucket (stateless)
+    println!("Checking existing rasters in S3...");
+    let existing_times = wind_reports::get_existing_times_from_s3().await?;
+    println!("Found {} existing rasters in S3", existing_times.len());
+
     let end_day = to.checked_add_days(Days::new(1)).unwrap();
-    let to_time = end_day.and_hms_opt(0, 0, 0).unwrap().and_utc();
-    let existing_times = wind_reports::get_existing_times(from_time, to_time)?;
 
     // Collect (day, hour) pairs that need processing
     let mut tasks: Vec<(NaiveDate, u32)> = Vec::new();
@@ -100,9 +99,6 @@ pub async fn import_grib_range(
     }
 
     println!();
-    let report_count = wind_reports::get_report_count()?;
-    println!("Database now has {} reports", report_count);
-
     if error_count > 0 {
         println!("Finished with {} errors.", error_count);
     } else {
@@ -121,7 +117,6 @@ async fn handle_ncar_grib(
     multi_progress: &MultiProgress,
     global_pb: &ProgressBar,
 ) -> anyhow::Result<()> {
-    let target_time = day.and_hms_opt(hour, 0, 0).unwrap().and_utc();
     let label = format!("{} h{:02}", day, hour);
 
     // Insert after global progress bar to keep it at the top
@@ -169,15 +164,6 @@ async fn handle_ncar_grib(
     raster_s3
         .put(&png_path.as_str().into(), png_data.into())
         .await?;
-
-    let report = WindReport {
-        time: target_time,
-        grib_path,
-        png_path,
-        source: SOURCE_NCAR.to_string(),
-    };
-
-    wind_reports::upsert_wind_report(&report)?;
 
     pb.finish_and_clear();
 

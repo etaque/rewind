@@ -42,24 +42,23 @@ pub fn get_report_count() -> Result<i64> {
     })
 }
 
-/// Get all report times in a date range (for filtering import tasks)
-pub fn get_existing_times(
-    from: DateTime<Utc>,
-    to: DateTime<Utc>,
-) -> Result<std::collections::HashSet<i64>> {
-    with_connection(|conn| {
-        let from_ms = from.timestamp_millis();
-        let to_ms = to.timestamp_millis();
+/// Get existing report times by listing PNG files in S3 (stateless, no DB needed)
+pub async fn get_existing_times_from_s3() -> Result<std::collections::HashSet<i64>> {
+    let client = s3::raster_client();
+    let prefix = object_store::path::Path::from("ncar");
+    let objects: Vec<_> = client.list(Some(&prefix)).try_collect().await?;
 
-        let mut stmt =
-            conn.prepare("SELECT time FROM wind_reports WHERE time >= ? AND time <= ?")?;
-
-        let times: std::collections::HashSet<i64> = stmt
-            .query_map([from_ms, to_ms], |row| row.get(0))?
-            .collect::<Result<_, _>>()?;
-
-        Ok(times)
-    })
+    let mut times = std::collections::HashSet::new();
+    for meta in objects {
+        let path = meta.location.to_string();
+        if !path.ends_with("/uv.png") {
+            continue;
+        }
+        if let Some(report) = parse_ncar_png_path(&path) {
+            times.insert(report.time.timestamp_millis());
+        }
+    }
+    Ok(times)
 }
 
 /// Insert a wind report if it doesn't already exist (by time)
