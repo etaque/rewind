@@ -268,7 +268,7 @@ export function appReducer(state: AppState, action: AppAction): AppState {
       return createPlayingState(state, state.windRasterSources);
 
     case "LEAVE_RACE":
-      if (state.tag !== "Loading") return state;
+      if (state.tag === "Idle") return state;
       return { tag: "Idle" };
 
     case "SYNC_RACE_TIME": {

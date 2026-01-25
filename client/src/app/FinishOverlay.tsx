@@ -1,9 +1,14 @@
 type Props = {
   finishTime: number;
   courseStartTime: number;
+  onBack: () => void;
 };
 
-export default function FinishOverlay({ finishTime, courseStartTime }: Props) {
+export default function FinishOverlay({
+  finishTime,
+  courseStartTime,
+  onBack,
+}: Props) {
   const elapsedMs = finishTime - courseStartTime;
   const days = Math.floor(elapsedMs / (24 * 60 * 60 * 1000));
   const hours = Math.floor(
@@ -18,9 +23,12 @@ export default function FinishOverlay({ finishTime, courseStartTime }: Props) {
         Race Time: {days > 0 ? `${days}d ` : ""}
         {hours}h {minutes}m
       </p>
-      <p className="text-gray-400 mt-2 text-sm">
-        Race continues for other players...
-      </p>
+      <button
+        onClick={onBack}
+        className="mt-6 px-6 py-2 bg-slate-700 hover:bg-slate-600 text-white rounded-lg transition-all"
+      >
+        Back to Lobby
+      </button>
     </div>
   );
 }

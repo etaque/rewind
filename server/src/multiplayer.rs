@@ -396,7 +396,7 @@ impl RaceManager {
                             for finished in newly_finished {
                                 to_save.push((
                                     race.course.key.clone(),
-                                    race.race_start_time.unwrap_or(0),
+                                    race.course.start_time,
                                     finished,
                                 ));
                             }

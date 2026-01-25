@@ -94,7 +94,7 @@ pub fn get_leaderboard(
                 id,
                 rank: (i + 1) as u32,
                 player_name,
-                finish_time,
+                finish_time: finish_time - race_start_time, // Convert to elapsed duration
                 race_date: race_start_time,
             },
         )

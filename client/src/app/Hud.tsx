@@ -39,7 +39,7 @@ export default function Hud({ session }: Props) {
   const vmg = calculateVMG(session.boatSpeed, twa);
 
   return (
-    <div className="absolute top-4 right-4 bg-black/60 text-white px-4 py-3 rounded-lg font-mono text-sm">
+    <div className="absolute bottom-4 right-4 bg-black/60 text-white px-4 py-3 rounded-lg font-mono text-sm">
       <div className="flex flex-col gap-1">
         <div>
           <span className="text-gray-400">UTC </span>
