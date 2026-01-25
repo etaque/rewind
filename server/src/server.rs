@@ -1,6 +1,6 @@
 use axum::{
     Json, Router,
-    extract::{State, ws::WebSocketUpgrade},
+    extract::{Path, Query, State, ws::WebSocketUpgrade},
     http::{Method, StatusCode},
     response::{IntoResponse, Response},
     routing::{any, get},
@@ -8,12 +8,14 @@ use axum::{
 use bytes::Bytes;
 use object_store::ObjectStoreExt;
 use object_store::path::Path as S3Path;
+use serde::Deserialize;
 use tower_http::{compression::CompressionLayer, cors::CorsLayer};
 
 use crate::{
-    courses,
+    config::config,
+    courses, db,
     multiplayer::{RaceManager, handle_websocket},
-    wind_reports,
+    race_results, wind_reports,
 };
 
 use super::s3;
@@ -60,6 +62,8 @@ pub async fn run(address: std::net::SocketAddr) {
         .route("/courses", get(courses_handler))
         .route("/multiplayer/races", get(races_handler))
         .route("/multiplayer/race", any(websocket_handler))
+        .route("/leaderboard/{course_key}", get(leaderboard_handler))
+        .route("/replay/{result_id}", get(replay_handler))
         .layer(CompressionLayer::new())
         .layer(cors)
         .with_state(race_manager);
@@ -88,4 +92,41 @@ async fn courses_handler() -> impl IntoResponse {
 async fn races_handler(State(race_manager): State<RaceManager>) -> impl IntoResponse {
     let races = race_manager.list_races().await;
     Json(races)
+}
+
+#[derive(Deserialize)]
+struct LeaderboardQuery {
+    #[serde(default = "default_limit")]
+    limit: u32,
+}
+
+fn default_limit() -> u32 {
+    10
+}
+
+async fn leaderboard_handler(
+    Path(course_key): Path<String>,
+    Query(query): Query<LeaderboardQuery>,
+) -> Result<impl IntoResponse, AppError> {
+    let entries =
+        db::with_connection(|conn| race_results::get_leaderboard(conn, &course_key, query.limit))?;
+    Ok(Json(entries))
+}
+
+#[derive(serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+struct ReplayResponse {
+    path_url: String,
+}
+
+async fn replay_handler(Path(result_id): Path<i64>) -> Result<impl IntoResponse, AppError> {
+    let path_key = db::with_connection(|conn| race_results::get_path_key(conn, result_id))?;
+
+    match path_key {
+        Some(key) => {
+            let url = config().s3.paths_url(&key);
+            Ok(Json(ReplayResponse { path_url: url }))
+        }
+        None => Err(AppError(anyhow::anyhow!("Race result not found"))),
+    }
 }

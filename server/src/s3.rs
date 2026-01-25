@@ -24,3 +24,7 @@ pub fn grib_client() -> aws::AmazonS3 {
 pub fn raster_client() -> aws::AmazonS3 {
     client_for_bucket(&config().s3.raster_bucket)
 }
+
+pub fn paths_client() -> aws::AmazonS3 {
+    client_for_bucket(&config().s3.paths_bucket)
+}

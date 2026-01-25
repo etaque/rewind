@@ -1,15 +1,21 @@
 use anyhow::anyhow;
 use axum::extract::ws::{Message, WebSocket};
+use bytes::Bytes;
 use chrono::{DateTime, Utc};
 use futures::{SinkExt, StreamExt};
+use object_store::ObjectStoreExt;
 use rand::Rng;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::sync::Arc;
+use std::time::{Duration, Instant};
 use tokio::sync::{RwLock, mpsc};
 
 use crate::{
     courses::Course,
+    db,
+    race_results::{self, PathPoint},
+    s3,
     wind_reports::{self, WindReport},
 };
 
@@ -127,7 +133,10 @@ pub struct Player {
     pub name: String,
     pub tx: mpsc::UnboundedSender<ServerMessage>,
     pub position: Option<(f64, f64)>, // (lng, lat)
-    pub finish_time: Option<i64>,     // None = racing, Some(time) = finished
+    pub heading: f32,
+    pub finish_time: Option<i64>, // None = racing, Some(time) = finished
+    pub path_history: Vec<PathPoint>, // Accumulated path for replay
+    pub last_sample_instant: Option<Instant>, // For 100ms real-time sampling
 }
 
 impl Player {
@@ -213,8 +222,13 @@ impl Race {
         self.players.is_empty() && inactive_duration.num_minutes() >= 5
     }
 
-    fn compute_leaderboard(&mut self, race_time: i64) -> Vec<LeaderboardEntry> {
+    fn compute_leaderboard(
+        &mut self,
+        race_time: i64,
+    ) -> (Vec<LeaderboardEntry>, Vec<FinishedPlayer>) {
         const FINISH_THRESHOLD_NM: f64 = 10.0;
+
+        let mut newly_finished: Vec<FinishedPlayer> = Vec::new();
 
         let mut entries: Vec<LeaderboardEntry> = self
             .players
@@ -227,6 +241,14 @@ impl Race {
                 // Detect finish (if not already finished and within threshold)
                 if player.finish_time.is_none() && distance <= FINISH_THRESHOLD_NM {
                     player.finish_time = Some(race_time);
+
+                    // Collect data for saving (clone path_history before it's cleared)
+                    newly_finished.push(FinishedPlayer {
+                        player_id: player.id.clone(),
+                        player_name: player.name.clone(),
+                        finish_time: race_time,
+                        path_history: std::mem::take(&mut player.path_history),
+                    });
                 }
 
                 Some(LeaderboardEntry {
@@ -253,8 +275,17 @@ impl Race {
                 .unwrap_or(std::cmp::Ordering::Equal),
         });
 
-        entries
+        (entries, newly_finished)
     }
+}
+
+/// Data for a player who just finished, ready to be saved
+#[derive(Debug)]
+struct FinishedPlayer {
+    player_id: String,
+    player_name: String,
+    finish_time: i64,
+    path_history: Vec<PathPoint>,
 }
 
 /// Calculate distance between two points on Earth using Haversine formula
@@ -344,20 +375,44 @@ impl RaceManager {
         tokio::spawn(async move {
             loop {
                 tokio::time::sleep(tokio::time::Duration::from_secs(2)).await;
-                let mut races = races_clone.write().await;
-                for race in races.values_mut() {
-                    if race.race_started() && !race.race_ended {
-                        // Calculate current race time
-                        let now = Utc::now().timestamp_millis();
-                        let race_time = race
-                            .race_start_time
-                            .map(|start| race.course.race_time(now - start))
-                            .unwrap_or(0);
-                        let leaderboard = race.compute_leaderboard(race_time);
-                        race.broadcast_all(ServerMessage::Leaderboard {
-                            entries: leaderboard,
-                        });
+
+                // Collect finished players while holding write lock
+                let finished_to_save: Vec<(String, i64, FinishedPlayer)> = {
+                    let mut races = races_clone.write().await;
+                    let mut to_save = Vec::new();
+
+                    for race in races.values_mut() {
+                        if race.race_started() && !race.race_ended {
+                            // Calculate current race time
+                            let now = Utc::now().timestamp_millis();
+                            let race_time = race
+                                .race_start_time
+                                .map(|start| race.course.race_time(now - start))
+                                .unwrap_or(0);
+
+                            let (leaderboard, newly_finished) = race.compute_leaderboard(race_time);
+
+                            // Collect finished players for async save
+                            for finished in newly_finished {
+                                to_save.push((
+                                    race.course.key.clone(),
+                                    race.race_start_time.unwrap_or(0),
+                                    finished,
+                                ));
+                            }
+
+                            race.broadcast_all(ServerMessage::Leaderboard {
+                                entries: leaderboard,
+                            });
+                        }
                     }
+
+                    to_save
+                };
+
+                // Save finished players outside the lock
+                for (course_key, race_start_time, finished) in finished_to_save {
+                    tokio::spawn(save_race_result(course_key, race_start_time, finished));
                 }
             }
         });
@@ -388,7 +443,10 @@ impl RaceManager {
             name: player_name,
             tx,
             position: None,
+            heading: 0.0,
             finish_time: None,
+            path_history: Vec::new(),
+            last_sample_instant: None,
         };
         race.add_player(player)?;
 
@@ -416,7 +474,10 @@ impl RaceManager {
             name: player_name.clone(),
             tx,
             position: None,
+            heading: 0.0,
             finish_time: None,
+            path_history: Vec::new(),
+            last_sample_instant: None,
         };
 
         // Notify existing players before adding new one
@@ -466,7 +527,7 @@ impl RaceManager {
         drop(player_races);
 
         // First check with read lock if race has ended
-        {
+        let (race_started, race_start_time) = {
             let races = self.races.read().await;
             let Some(race) = races.get(&race_id) else {
                 return;
@@ -474,7 +535,8 @@ impl RaceManager {
             if race.race_ended {
                 return;
             }
-        }
+            (race.race_started(), race.race_start_time)
+        };
 
         // Now get write lock to update player position
         let mut races = self.races.write().await;
@@ -482,9 +544,33 @@ impl RaceManager {
             return;
         };
 
-        // Update player position
+        // Update player position and sample path
         if let Some(player) = race.players.get_mut(player_id) {
             player.position = Some((lng as f64, lat as f64));
+            player.heading = heading;
+
+            // Sample path if race has started (100ms real-time interval)
+            if race_started {
+                let now = Instant::now();
+                let should_sample = player
+                    .last_sample_instant
+                    .map(|last| now.duration_since(last) >= Duration::from_millis(100))
+                    .unwrap_or(true);
+
+                if should_sample {
+                    // Calculate race time
+                    let elapsed = Utc::now().timestamp_millis() - race_start_time.unwrap_or(0);
+                    let race_time = race.course.race_time(elapsed);
+
+                    player.path_history.push(PathPoint {
+                        race_time,
+                        lng,
+                        lat,
+                        heading,
+                    });
+                    player.last_sample_instant = Some(now);
+                }
+            }
         }
 
         // Broadcast to all players except sender
@@ -587,6 +673,53 @@ fn generate_race_id() -> String {
     generate_id()[..6].to_string()
 }
 
+/// Save a finished player's race result to database and S3
+async fn save_race_result(course_key: String, race_start_time: i64, finished: FinishedPlayer) {
+    let s3_key = format!(
+        "paths/{}/{}_{}.bin",
+        course_key, race_start_time, finished.player_id
+    );
+
+    // Encode path to binary
+    let path_data = race_results::encode_path(&finished.path_history);
+
+    // Upload to S3
+    let client = s3::paths_client();
+    if let Err(e) = client
+        .put(
+            &object_store::path::Path::from(s3_key.clone()),
+            Bytes::from(path_data).into(),
+        )
+        .await
+    {
+        log::error!("Failed to upload race path to S3: {}", e);
+        return;
+    }
+
+    // Save to database
+    if let Err(e) = db::with_connection(|conn| {
+        race_results::save_result(
+            conn,
+            &course_key,
+            &finished.player_name,
+            finished.finish_time,
+            race_start_time,
+            &s3_key,
+        )?;
+        Ok(())
+    }) {
+        log::error!("Failed to save race result to database: {}", e);
+        return;
+    }
+
+    log::info!(
+        "Saved race result: {} finished {} in {}ms",
+        finished.player_name,
+        course_key,
+        finished.finish_time
+    );
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -634,7 +767,10 @@ mod tests {
             name: name.to_string(),
             tx,
             position: None,
+            heading: 0.0,
             finish_time: None,
+            path_history: Vec::new(),
+            last_sample_instant: None,
         }
     }
 

@@ -11,6 +11,7 @@ mod grib_store;
 mod grib_stream;
 mod multiplayer;
 mod ncar_source;
+mod race_results;
 mod retry;
 mod s3;
 mod s3_multipart;

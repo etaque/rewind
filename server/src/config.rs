@@ -6,6 +6,7 @@ use std::env;
 pub struct S3Config {
     pub grib_bucket: String,
     pub raster_bucket: String,
+    pub paths_bucket: String,
     pub endpoint: String,
     pub region: String,
     pub access_key: String,
@@ -17,6 +18,11 @@ impl S3Config {
     pub fn raster_url(&self, path: &str) -> String {
         format!("{}/{}/{}", self.endpoint, self.raster_bucket, path)
     }
+
+    /// Get the public URL for a race path file
+    pub fn paths_url(&self, path: &str) -> String {
+        format!("{}/{}/{}", self.endpoint, self.paths_bucket, path)
+    }
 }
 
 impl Default for S3Config {
@@ -24,6 +30,7 @@ impl Default for S3Config {
         S3Config {
             grib_bucket: "grib-files".to_string(),
             raster_bucket: "wind-rasters".to_string(),
+            paths_bucket: "race-paths".to_string(),
             endpoint: "http://localhost:9000".to_string(),
             region: "us-east-1".to_string(),
             access_key: "test".to_string(),
