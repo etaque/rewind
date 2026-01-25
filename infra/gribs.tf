@@ -16,6 +16,22 @@ resource "aws_s3_bucket_public_access_block" "gribs" {
   restrict_public_buckets = true
 }
 
+resource "aws_s3_bucket_lifecycle_configuration" "gribs" {
+  bucket = aws_s3_bucket.gribs.id
+
+  rule {
+    id     = "move-to-glacier"
+    status = "Enabled"
+
+    filter {}
+
+    transition {
+      days          = 7
+      storage_class = "GLACIER"
+    }
+  }
+}
+
 # Wind rasters bucket (public read for client access)
 resource "aws_s3_bucket" "rasters" {
   bucket = "rewind-wind-rasters"
