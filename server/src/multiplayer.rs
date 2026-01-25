@@ -219,7 +219,7 @@ impl Race {
 
     fn is_expired(&self) -> bool {
         let inactive_duration = Utc::now() - self.last_activity;
-        self.players.is_empty() && inactive_duration.num_minutes() >= 5
+        self.players.is_empty() && inactive_duration.num_minutes() >= 1
     }
 
     fn compute_leaderboard(
@@ -329,7 +329,7 @@ impl RaceManager {
         let races_clone = manager.races.clone();
         tokio::spawn(async move {
             loop {
-                tokio::time::sleep(tokio::time::Duration::from_secs(60)).await;
+                tokio::time::sleep(tokio::time::Duration::from_secs(1)).await;
                 let mut races = races_clone.write().await;
                 races.retain(|_, race| !race.is_expired());
             }
