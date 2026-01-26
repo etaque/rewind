@@ -17,6 +17,7 @@ export default function RaceChoiceScreen() {
   const {
     raceId,
     isCreator,
+    canSelectCourse,
     players,
     windStatus,
     courses,
@@ -140,7 +141,7 @@ export default function RaceChoiceScreen() {
           />
 
           {/* Course */}
-          {isCreator && courses.length > 1 && (
+          {canSelectCourse && courses.length > 1 && (
             <div className="bg-slate-800 rounded-lg divide-y divide-slate-700 max-h-36 overflow-y-auto">
               {courses.map((course) => (
                 <button
@@ -230,6 +231,7 @@ export default function RaceChoiceScreen() {
             <button
               onClick={startRace}
               className="w-full bg-gradient-to-r from-green-500 to-blue-500 hover:from-green-400 hover:to-blue-400 text-white py-4 rounded-lg font-semibold transition-all text-lg"
+              disabled={windLoading}
             >
               {totalCompetitors === 1 ? "Start Solo" : "Start Race"}
             </button>

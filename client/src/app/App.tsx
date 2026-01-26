@@ -194,6 +194,8 @@ export default function App() {
       raceId: state.tag === "Lobby" ? state.race.id : null,
       myPlayerId: state.tag === "Lobby" ? state.race.myPlayerId : null,
       isCreator: state.tag === "Lobby" ? state.race.isCreator : false,
+      canSelectCourse:
+        state.tag === "Idle" || (state.tag === "Lobby" && state.race.isCreator),
       players: state.tag === "Lobby" ? state.race.players : new Map(),
       windStatus: state.tag === "Lobby" ? state.wind.status : "idle",
       courses,

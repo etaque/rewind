@@ -9,6 +9,7 @@ export type RaceContextValue = {
   raceId: string | null;
   myPlayerId: string | null;
   isCreator: boolean;
+  canSelectCourse: boolean;
   players: Map<string, PeerState>;
   windStatus: AsyncState<void>["status"];
 
