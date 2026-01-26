@@ -1,4 +1,11 @@
-import { useReducer, useEffect, useRef, useState, useCallback } from "react";
+import {
+  useReducer,
+  useEffect,
+  useRef,
+  useState,
+  useCallback,
+  useMemo,
+} from "react";
 import { appReducer, initialState } from "./state";
 import { SphereView } from "../sphere";
 import InterpolatedWind from "../interpolated-wind";
@@ -21,6 +28,7 @@ import {
   interpolatePosition,
   type PathPoint,
 } from "../replay-path";
+import { RaceContext, RaceContextValue } from "./race-context";
 
 export type RecordedGhost = {
   id: number;
@@ -223,6 +231,48 @@ export default function App() {
       interpolatedWind: interpolatedWindRef,
       multiplayer: multiplayerRef,
     },
+  );
+
+  // Build the race context value
+  const raceContextValue = useMemo<RaceContextValue>(
+    () => ({
+      // Race state
+      raceId: state.tag === "Lobby" ? state.race.id : null,
+      myPlayerId: state.tag === "Lobby" ? state.race.myPlayerId : null,
+      isCreator: state.tag === "Lobby" ? state.race.isCreator : false,
+      players: state.tag === "Lobby" ? state.race.players : new Map(),
+      windStatus: state.tag === "Lobby" ? state.wind.status : "idle",
+
+      // Course state
+      courses,
+      selectedCourseKey,
+
+      // Ghosts
+      recordedGhosts,
+
+      // Race actions
+      createRace: multiplayerCallbacks.onCreateRace,
+      joinRace: multiplayerCallbacks.onJoinRace,
+      startRace: multiplayerCallbacks.onStartRace,
+      leaveRace: multiplayerCallbacks.onLeaveRace,
+
+      // Course actions
+      changeCourse: handleCourseChange,
+
+      // Ghost actions
+      addGhost: handleAddGhost,
+      removeGhost: handleRemoveGhost,
+    }),
+    [
+      state,
+      courses,
+      selectedCourseKey,
+      recordedGhosts,
+      multiplayerCallbacks,
+      handleCourseChange,
+      handleAddGhost,
+      handleRemoveGhost,
+    ],
   );
 
   // Initialize SphereView and load wind when entering Lobby state
@@ -433,25 +483,9 @@ export default function App() {
         {(state.tag === "Idle" || state.tag === "Lobby") &&
           courses.length > 0 && (
             <div className="pointer-events-auto">
-              <RaceChoiceScreen
-                raceId={state.tag === "Lobby" ? state.race.id : null}
-                myPlayerId={
-                  state.tag === "Lobby" ? state.race.myPlayerId : null
-                }
-                isCreator={state.tag === "Lobby" ? state.race.isCreator : false}
-                players={state.tag === "Lobby" ? state.race.players : new Map()}
-                windStatus={state.tag === "Lobby" ? state.wind.status : "idle"}
-                courses={courses}
-                selectedCourseKey={selectedCourseKey}
-                recordedGhosts={recordedGhosts}
-                onCourseChange={handleCourseChange}
-                onCreateRace={multiplayerCallbacks.onCreateRace}
-                onJoinRace={multiplayerCallbacks.onJoinRace}
-                onStartRace={multiplayerCallbacks.onStartRace}
-                onLeaveRace={multiplayerCallbacks.onLeaveRace}
-                onAddGhost={handleAddGhost}
-                onRemoveGhost={handleRemoveGhost}
-              />
+              <RaceContext.Provider value={raceContextValue}>
+                <RaceChoiceScreen />
+              </RaceContext.Provider>
             </div>
           )}
         {state.tag === "Countdown" && (

@@ -1,9 +1,6 @@
 import { useState, useEffect } from "react";
-import { PeerState } from "../multiplayer/types";
-import { Course } from "../models";
-import { AsyncState } from "./state";
 import { RaceInfo } from "./race";
-import { RecordedGhost } from "./App";
+import { useRaceContext } from "./race-context";
 
 const PLAYER_NAME_KEY = "rewind:player_name";
 const serverUrl = import.meta.env.REWIND_SERVER_URL;
@@ -16,41 +13,23 @@ type HallOfFameEntry = {
   raceDate: number;
 };
 
-type Props = {
-  raceId: string | null;
-  myPlayerId: string | null;
-  isCreator: boolean;
-  players: Map<string, PeerState>;
-  windStatus: AsyncState<void>["status"];
-  courses: Course[];
-  selectedCourseKey: string | null;
-  recordedGhosts: Map<number, RecordedGhost>;
-  onCourseChange: (courseKey: string) => void;
-  onCreateRace: (playerName: string) => void;
-  onJoinRace: (raceId: string, playerName: string) => void;
-  onStartRace: () => void;
-  onLeaveRace: () => void;
-  onAddGhost: (entryId: number, playerName: string) => void;
-  onRemoveGhost: (ghostId: number) => void;
-};
-
-export default function RaceChoiceScreen({
-  raceId,
-  myPlayerId: _myPlayerId,
-  isCreator,
-  players,
-  windStatus,
-  courses,
-  selectedCourseKey,
-  recordedGhosts,
-  onCourseChange,
-  onCreateRace,
-  onJoinRace,
-  onStartRace,
-  onLeaveRace,
-  onAddGhost,
-  onRemoveGhost,
-}: Props) {
+export default function RaceChoiceScreen() {
+  const {
+    raceId,
+    isCreator,
+    players,
+    windStatus,
+    courses,
+    selectedCourseKey,
+    recordedGhosts,
+    createRace,
+    joinRace,
+    startRace,
+    leaveRace,
+    changeCourse,
+    addGhost,
+    removeGhost,
+  } = useRaceContext();
   const [playerName, setPlayerName] = useState("");
   const [availableRaces, setAvailableRaces] = useState<RaceInfo[]>([]);
   const [hallOfFame, setHallOfFame] = useState<HallOfFameEntry[]>([]);
@@ -68,7 +47,7 @@ export default function RaceChoiceScreen({
     }
     if (!inRace) {
       const name = savedName || "Skipper";
-      onCreateRace(name);
+      createRace(name);
     }
   }, []);
 
@@ -123,7 +102,7 @@ export default function RaceChoiceScreen({
   };
 
   const handleJoinRace = (targetRaceId: string) => {
-    onJoinRace(targetRaceId, getPlayerName());
+    joinRace(targetRaceId, getPlayerName());
   };
 
   const formatTime = (ms: number) => {
@@ -166,7 +145,7 @@ export default function RaceChoiceScreen({
               {courses.map((course) => (
                 <button
                   key={course.key}
-                  onClick={() => onCourseChange(course.key)}
+                  onClick={() => changeCourse(course.key)}
                   className={`w-full text-left px-4 py-2 transition-all text-sm flex items-center gap-2 ${
                     selectedCourseKey === course.key
                       ? "bg-blue-600 text-white"
@@ -224,7 +203,7 @@ export default function RaceChoiceScreen({
                   <span className="text-xs text-slate-500">ghost</span>
                 </div>
                 <button
-                  onClick={() => onRemoveGhost(ghost.id)}
+                  onClick={() => removeGhost(ghost.id)}
                   className="text-slate-500 hover:text-white text-sm"
                 >
                   ✕
@@ -249,7 +228,7 @@ export default function RaceChoiceScreen({
 
           {windReady && isCreator && (
             <button
-              onClick={onStartRace}
+              onClick={startRace}
               className="w-full bg-gradient-to-r from-green-500 to-blue-500 hover:from-green-400 hover:to-blue-400 text-white py-4 rounded-lg font-semibold transition-all text-lg"
             >
               {totalCompetitors === 1 ? "Start Solo" : "Start Race"}
@@ -289,7 +268,7 @@ export default function RaceChoiceScreen({
           )}
 
           <button
-            onClick={onLeaveRace}
+            onClick={leaveRace}
             className="w-full text-slate-500 hover:text-slate-300 py-2 text-sm transition-all"
           >
             Leave Race
@@ -343,7 +322,7 @@ export default function RaceChoiceScreen({
                         </span>
                       ) : (
                         <button
-                          onClick={() => onAddGhost(entry.id, entry.playerName)}
+                          onClick={() => addGhost(entry.id, entry.playerName)}
                           className="text-blue-400 hover:text-blue-300 text-xs w-10 text-right"
                         >
                           Race
