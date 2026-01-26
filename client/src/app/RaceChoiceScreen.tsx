@@ -2,12 +2,19 @@ import { useState, useEffect } from "react";
 import { PeerState } from "../multiplayer/types";
 import { Course } from "../models";
 import { AsyncState } from "./state";
-import { PlayerList, AvailableRaces, PlayerNameInput, RaceInfo } from "./race";
-import HallOfFameList from "./HallOfFameList";
+import { RaceInfo } from "./race";
 import { RecordedGhost } from "./App";
 
 const PLAYER_NAME_KEY = "rewind:player_name";
 const serverUrl = import.meta.env.REWIND_SERVER_URL;
+
+type HallOfFameEntry = {
+  id: number;
+  rank: number;
+  playerName: string;
+  finishTime: number;
+  raceDate: number;
+};
 
 type Props = {
   raceId: string | null;
@@ -29,7 +36,7 @@ type Props = {
 
 export default function RaceChoiceScreen({
   raceId,
-  myPlayerId,
+  myPlayerId: _myPlayerId,
   isCreator,
   players,
   windStatus,
@@ -46,9 +53,11 @@ export default function RaceChoiceScreen({
 }: Props) {
   const [playerName, setPlayerName] = useState("");
   const [availableRaces, setAvailableRaces] = useState<RaceInfo[]>([]);
+  const [hallOfFame, setHallOfFame] = useState<HallOfFameEntry[]>([]);
 
   const playerList = Array.from(players.values());
-  const totalPlayers = playerList.length + 1; // +1 for self
+  const ghostList = Array.from(recordedGhosts.values());
+  const totalCompetitors = 1 + playerList.length + ghostList.length;
   const inRace = raceId !== null;
 
   // Load player name from localStorage on mount and auto-create race
@@ -57,7 +66,6 @@ export default function RaceChoiceScreen({
     if (savedName) {
       setPlayerName(savedName);
     }
-    // Auto-create race when not in one
     if (!inRace) {
       const name = savedName || "Skipper";
       onCreateRace(name);
@@ -83,110 +91,269 @@ export default function RaceChoiceScreen({
     return () => clearInterval(interval);
   }, [raceId]);
 
-  const getPlayerName = () => {
-    const name = playerName.trim() || "Skipper";
-    localStorage.setItem(PLAYER_NAME_KEY, name);
-    return name;
-  };
+  // Fetch hall of fame when course changes
+  useEffect(() => {
+    if (!selectedCourseKey) return;
+
+    const fetchHallOfFame = async () => {
+      try {
+        const res = await fetch(
+          `${serverUrl}/leaderboard/${selectedCourseKey}?limit=10`,
+        );
+        if (res.ok) {
+          setHallOfFame(await res.json());
+        }
+      } catch (err) {
+        console.error("Failed to fetch leaderboard:", err);
+      }
+    };
+
+    fetchHallOfFame();
+  }, [selectedCourseKey]);
 
   const handlePlayerNameChange = (newName: string) => {
     setPlayerName(newName);
     localStorage.setItem(PLAYER_NAME_KEY, newName);
   };
 
+  const getPlayerName = () => {
+    const name = playerName.trim() || "Skipper";
+    localStorage.setItem(PLAYER_NAME_KEY, name);
+    return name;
+  };
+
   const handleJoinRace = (targetRaceId: string) => {
     onJoinRace(targetRaceId, getPlayerName());
   };
+
+  const formatTime = (ms: number) => {
+    const totalSeconds = Math.floor(ms / 1000);
+    const days = Math.floor(totalSeconds / 86400);
+    const hours = Math.floor((totalSeconds % 86400) / 3600);
+    const minutes = Math.floor((totalSeconds % 3600) / 60);
+    return days > 0
+      ? `${days}d ${hours}h ${minutes}m`
+      : `${hours}h ${minutes}m`;
+  };
+
+  const windReady = windStatus === "success";
+  const windLoading = windStatus === "loading" || windStatus === "idle";
 
   return (
     <div className="fixed inset-0 flex flex-col items-center justify-center bg-black bg-opacity-10">
       <h1 className="logo mb-6">Re:wind</h1>
 
-      <div className="bg-slate-900 bg-opacity-90 rounded-lg p-8 max-w-4xl w-full mx-4 flex gap-8">
-        {/* Left column - Race setup */}
-        <div className="flex-1 space-y-6">
-          <PlayerNameInput
+      <div className="bg-slate-900 bg-opacity-95 rounded-xl p-8 w-full max-w-3xl mx-4 flex gap-8">
+        {/* Left column - Your Race */}
+        <div className="flex-1 space-y-5">
+          <h2 className="text-slate-400 text-xs uppercase tracking-wide">
+            Your Race
+          </h2>
+
+          {/* Name */}
+          <input
+            type="text"
             value={playerName}
-            onChange={handlePlayerNameChange}
+            onChange={(e) => handlePlayerNameChange(e.target.value)}
+            placeholder="Skipper"
+            maxLength={20}
+            className="w-full bg-slate-800 text-white px-4 py-3 rounded-lg border border-slate-700 focus:border-blue-500 focus:outline-none"
           />
 
+          {/* Course */}
           {isCreator && courses.length > 1 && (
-            <div className="space-y-2">
-              <label className="text-slate-400 text-sm">Course</label>
-              <div className="flex flex-col gap-2">
-                {courses.map((course) => (
-                  <button
-                    key={course.key}
-                    onClick={() => onCourseChange(course.key)}
-                    className={`w-full text-left px-4 py-2 rounded-lg border transition-all ${
+            <div className="bg-slate-800 rounded-lg divide-y divide-slate-700 max-h-36 overflow-y-auto">
+              {courses.map((course) => (
+                <button
+                  key={course.key}
+                  onClick={() => onCourseChange(course.key)}
+                  className={`w-full text-left px-4 py-2 transition-all text-sm flex items-center gap-2 ${
+                    selectedCourseKey === course.key
+                      ? "bg-blue-600 text-white"
+                      : "text-slate-300 hover:bg-slate-700"
+                  }`}
+                >
+                  <span
+                    className={`w-2 h-2 rounded-full ${
                       selectedCourseKey === course.key
-                        ? "bg-blue-600 border-blue-500 text-white"
-                        : "bg-slate-800 border-slate-700 text-slate-300 hover:border-slate-600 hover:text-white"
+                        ? "bg-white"
+                        : "border border-slate-500"
                     }`}
-                  >
-                    {course.name}
-                  </button>
-                ))}
-              </div>
+                  />
+                  {course.name}
+                </button>
+              ))}
             </div>
           )}
 
-          <PlayerList
-            players={playerList}
-            myPlayerId={myPlayerId}
-            isCreator={isCreator}
-            totalPlayers={totalPlayers}
-            recordedGhosts={recordedGhosts}
-            onRemoveGhost={onRemoveGhost}
-          />
+          {/* Competitors */}
+          <div className="bg-slate-800 rounded-lg divide-y divide-slate-700">
+            {/* You */}
+            <div className="px-4 py-2 flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <span className="w-2 h-2 rounded-full bg-cyan-400" />
+                <span className="text-white">You</span>
+              </div>
+              {isCreator && (
+                <span className="text-xs bg-blue-500/20 text-blue-400 px-2 py-0.5 rounded">
+                  Host
+                </span>
+              )}
+            </div>
 
-          <div className="space-y-4">
-            {(windStatus === "loading" || windStatus === "idle") && (
-              <div className="text-center text-slate-400 py-3">
-                Loading wind data...
-              </div>
-            )}
-            {windStatus === "error" && (
-              <div className="text-center text-red-400 py-3">
-                Failed to load wind data. Try again.
-              </div>
-            )}
-            {windStatus === "success" && isCreator && (
-              <button
-                onClick={onStartRace}
-                className="w-full bg-gradient-to-r from-green-400 to-blue-500 hover:from-green-500 hover:to-blue-600 text-white py-3 px-6 rounded-lg font-semibold transition-all"
+            {/* Other players */}
+            {playerList.map((player) => (
+              <div
+                key={player.id}
+                className="px-4 py-2 flex items-center gap-2"
               >
-                {totalPlayers < 2 ? "Start Solo" : "Start Race"}
-              </button>
-            )}
-            {windStatus === "success" && !isCreator && (
-              <div className="text-center text-slate-400 py-3">
-                Waiting for host to start the race...
+                <span className="w-2 h-2 rounded-full bg-cyan-400" />
+                <span className="text-white">{player.name}</span>
               </div>
-            )}
+            ))}
 
-            <AvailableRaces
-              races={availableRaces}
-              onJoinRace={handleJoinRace}
-            />
-
-            <button
-              onClick={onLeaveRace}
-              className="w-full text-slate-400 hover:text-white py-2 transition-all"
-            >
-              Leave Race
-            </button>
+            {/* Ghosts */}
+            {ghostList.map((ghost) => (
+              <div
+                key={ghost.id}
+                className="px-4 py-2 flex items-center justify-between"
+              >
+                <div className="flex items-center gap-2">
+                  <span className="w-2 h-2 rounded-full bg-amber-400" />
+                  <span className="text-white">{ghost.name}</span>
+                  <span className="text-xs text-slate-500">ghost</span>
+                </div>
+                <button
+                  onClick={() => onRemoveGhost(ghost.id)}
+                  className="text-slate-500 hover:text-white text-sm"
+                >
+                  ✕
+                </button>
+              </div>
+            ))}
           </div>
+
+          {/* Start button */}
+          {windLoading && (
+            <div className="flex items-center justify-center gap-2 text-slate-400 py-3">
+              <span className="w-4 h-4 border-2 border-slate-500 border-t-blue-400 rounded-full animate-spin" />
+              <span>Loading wind data...</span>
+            </div>
+          )}
+
+          {windStatus === "error" && (
+            <div className="text-center text-red-400 py-3">
+              Failed to load wind data. Try again.
+            </div>
+          )}
+
+          {windReady && isCreator && (
+            <button
+              onClick={onStartRace}
+              className="w-full bg-gradient-to-r from-green-500 to-blue-500 hover:from-green-400 hover:to-blue-400 text-white py-4 rounded-lg font-semibold transition-all text-lg"
+            >
+              {totalCompetitors === 1 ? "Start Solo" : "Start Race"}
+            </button>
+          )}
+
+          {windReady && !isCreator && (
+            <div className="text-center text-slate-400 py-3">
+              Waiting for host to start...
+            </div>
+          )}
+
+          {/* Join other races */}
+          {availableRaces.length > 0 && (
+            <div className="space-y-2 pt-2 border-t border-slate-700">
+              <span className="text-slate-500 text-xs">Or join another</span>
+              {availableRaces.map((race) => {
+                const hostPlayer = race.players.find(
+                  (p) => p.id === race.creator_id,
+                );
+                return (
+                  <button
+                    key={race.id}
+                    onClick={() => handleJoinRace(race.id)}
+                    className="w-full px-4 py-2 bg-slate-800 hover:bg-slate-700 rounded-lg flex items-center justify-between transition-all text-sm"
+                  >
+                    <span className="text-white">
+                      {hostPlayer?.name || "Unknown"}'s race
+                    </span>
+                    <span className="text-slate-400">
+                      {race.players.length}/{race.max_players}
+                    </span>
+                  </button>
+                );
+              })}
+            </div>
+          )}
+
+          <button
+            onClick={onLeaveRace}
+            className="w-full text-slate-500 hover:text-slate-300 py-2 text-sm transition-all"
+          >
+            Leave Race
+          </button>
         </div>
 
-        {/* Right column - Hall of Fame */}
-        <div className="flex-1">
-          {selectedCourseKey && (
-            <HallOfFameList
-              courseKey={selectedCourseKey}
-              activeGhostIds={new Set(recordedGhosts.keys())}
-              onAddGhost={onAddGhost}
-            />
+        {/* Right column - Competitors / Hall of Fame */}
+        <div className="flex-1 space-y-4">
+          <h2 className="text-amber-400 text-xs uppercase tracking-wide">
+            Hall of Fame
+          </h2>
+
+          {hallOfFame.length === 0 ? (
+            <div className="text-slate-500 text-sm py-4">
+              No records yet. Be the first!
+            </div>
+          ) : (
+            <div className="space-y-1">
+              {hallOfFame.map((entry) => {
+                const isAdded = recordedGhosts.has(entry.id);
+                return (
+                  <div
+                    key={entry.id}
+                    className="flex items-center justify-between bg-slate-800 rounded-lg px-3 py-2"
+                  >
+                    <div className="flex items-center gap-3">
+                      <span
+                        className={`text-sm font-bold w-5 ${
+                          entry.rank === 1
+                            ? "text-yellow-400"
+                            : entry.rank === 2
+                              ? "text-slate-300"
+                              : entry.rank === 3
+                                ? "text-amber-600"
+                                : "text-slate-500"
+                        }`}
+                      >
+                        #{entry.rank}
+                      </span>
+                      <span className="text-white text-sm">
+                        {entry.playerName}
+                      </span>
+                    </div>
+                    <div className="flex items-center gap-3">
+                      <span className="text-green-400 font-mono text-xs">
+                        {formatTime(entry.finishTime)}
+                      </span>
+                      {isAdded ? (
+                        <span className="text-amber-400 text-xs w-10 text-right">
+                          Added
+                        </span>
+                      ) : (
+                        <button
+                          onClick={() => onAddGhost(entry.id, entry.playerName)}
+                          className="text-blue-400 hover:text-blue-300 text-xs w-10 text-right"
+                        >
+                          Race
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
           )}
         </div>
       </div>
