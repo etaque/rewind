@@ -19,6 +19,7 @@ export default class InterpolatedWind {
   async update(
     currentSource: WindRasterSource | null,
     nextSourcess: WindRasterSource[],
+    awaitAll = false,
   ): Promise<boolean> {
     const nextSource = nextSourcess[0] ?? null;
     let currentChanged = false;
@@ -51,13 +52,20 @@ export default class InterpolatedWind {
       this.loadingTime = nextSource.time;
       this.nextSource = nextSource;
 
-      WindRaster.load(nextSource.time, nextSource.pngUrl).then((raster) => {
-        // Only set if still relevant
-        if (this.nextSource?.time === raster.time) {
-          this.nextRaster = raster;
-        }
+      const loadPromise = WindRaster.load(nextSource.time, nextSource.pngUrl);
+
+      if (awaitAll) {
+        this.nextRaster = await loadPromise;
         this.loadingTime = null;
-      });
+      } else {
+        loadPromise.then((raster) => {
+          // Only set if still relevant
+          if (this.nextSource?.time === raster.time) {
+            this.nextRaster = raster;
+          }
+          this.loadingTime = null;
+        });
+      }
     }
 
     return currentChanged;

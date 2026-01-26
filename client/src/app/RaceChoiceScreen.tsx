@@ -1,6 +1,7 @@
 import { useState, useEffect } from "react";
 import { PeerState } from "../multiplayer/types";
 import { Course } from "../models";
+import { AsyncState } from "./state";
 import { PlayerList, AvailableRaces, PlayerNameInput, RaceInfo } from "./race";
 import HallOfFameList from "./HallOfFameList";
 import { RecordedGhost } from "./App";
@@ -13,6 +14,7 @@ type Props = {
   myPlayerId: string | null;
   isCreator: boolean;
   players: Map<string, PeerState>;
+  windStatus: AsyncState<void>["status"];
   courses: Course[];
   selectedCourseKey: string | null;
   recordedGhosts: Map<number, RecordedGhost>;
@@ -30,6 +32,7 @@ export default function RaceChoiceScreen({
   myPlayerId,
   isCreator,
   players,
+  windStatus,
   courses,
   selectedCourseKey,
   recordedGhosts,
@@ -138,7 +141,17 @@ export default function RaceChoiceScreen({
           />
 
           <div className="space-y-4">
-            {isCreator && (
+            {(windStatus === "loading" || windStatus === "idle") && (
+              <div className="text-center text-slate-400 py-3">
+                Loading wind data...
+              </div>
+            )}
+            {windStatus === "error" && (
+              <div className="text-center text-red-400 py-3">
+                Failed to load wind data. Try again.
+              </div>
+            )}
+            {windStatus === "success" && isCreator && (
               <button
                 onClick={onStartRace}
                 className="w-full bg-gradient-to-r from-green-400 to-blue-500 hover:from-green-500 hover:to-blue-600 text-white py-3 px-6 rounded-lg font-semibold transition-all"
@@ -146,7 +159,7 @@ export default function RaceChoiceScreen({
                 {totalPlayers < 2 ? "Start Solo" : "Start Race"}
               </button>
             )}
-            {!isCreator && (
+            {windStatus === "success" && !isCreator && (
               <div className="text-center text-slate-400 py-3">
                 Waiting for host to start the race...
               </div>

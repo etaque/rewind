@@ -6,13 +6,27 @@ import { toggleTWALock } from "./twa-lock";
 import { calculateVMGLockHeading } from "./vmg-lock";
 import { currentWindContext } from "./wind-context";
 
+export type AsyncState<T> =
+  | { status: "idle" }
+  | { status: "loading" }
+  | { status: "success"; data: T }
+  | { status: "error"; error: string };
+
+export const asyncState = {
+  idle: <T>(): AsyncState<T> => ({ status: "idle" }),
+  loading: <T>(): AsyncState<T> => ({ status: "loading" }),
+  success: <T>(data: T): AsyncState<T> => ({ status: "success", data }),
+  error: <T>(error: string): AsyncState<T> => ({ status: "error", error }),
+};
+
 export type AppState =
   | { tag: "Idle" }
   | {
-      tag: "Loading";
+      tag: "Lobby";
       course: Course;
       race: RaceState;
       windRasterSources: WindRasterSource[];
+      wind: AsyncState<void>;
     }
   | {
       tag: "Countdown";
@@ -82,6 +96,7 @@ export type AppAction =
   | { type: "PLAYER_LEFT"; playerId: string }
   | { type: "COUNTDOWN"; seconds: number }
   | { type: "START_PLAYING" }
+  | { type: "WIND_LOAD_RESULT"; result: AsyncState<void> }
   | { type: "LEAVE_RACE" }
   | { type: "SYNC_RACE_TIME"; raceTime: number }
   | { type: "RACE_ENDED"; reason: string }
@@ -198,9 +213,10 @@ export function appReducer(state: AppState, action: AppAction): AppState {
     case "RACE_CREATED": {
       if (state.tag !== "Idle") return state;
       return {
-        tag: "Loading",
+        tag: "Lobby",
         course: action.course,
         windRasterSources: action.windRasterSources,
+        wind: asyncState.loading(),
         race: {
           id: action.raceId,
           myPlayerId: action.playerId,
@@ -211,12 +227,13 @@ export function appReducer(state: AppState, action: AppAction): AppState {
     }
 
     case "RACE_JOINED": {
-      // Allow joining from Idle or Loading (switching races)
-      if (state.tag !== "Idle" && state.tag !== "Loading") return state;
+      // Allow joining from Idle or Lobby (switching races)
+      if (state.tag !== "Idle" && state.tag !== "Lobby") return state;
       return {
-        tag: "Loading",
+        tag: "Lobby",
         course: action.course,
         windRasterSources: action.windRasterSources,
+        wind: asyncState.loading(),
         race: {
           id: action.raceId,
           myPlayerId: action.playerId,
@@ -226,8 +243,16 @@ export function appReducer(state: AppState, action: AppAction): AppState {
       };
     }
 
+    case "WIND_LOAD_RESULT": {
+      if (state.tag !== "Lobby") return state;
+      return {
+        ...state,
+        wind: action.result,
+      };
+    }
+
     case "PLAYER_JOINED":
-      if (state.tag !== "Loading") return state;
+      if (state.tag !== "Lobby") return state;
       const newPlayers = new Map(state.race.players);
       newPlayers.set(action.playerId, {
         id: action.playerId,
@@ -242,7 +267,7 @@ export function appReducer(state: AppState, action: AppAction): AppState {
       };
 
     case "PLAYER_LEFT":
-      if (state.tag !== "Loading") return state;
+      if (state.tag !== "Lobby") return state;
       const remainingPlayers = new Map(state.race.players);
       remainingPlayers.delete(action.playerId);
       return {
@@ -251,8 +276,9 @@ export function appReducer(state: AppState, action: AppAction): AppState {
       };
 
     case "COUNTDOWN":
-      if (state.tag !== "Loading" && state.tag !== "Countdown") return state;
-      if (state.windRasterSources === null) return state;
+      if (state.tag !== "Lobby" && state.tag !== "Countdown") return state;
+      if (state.tag === "Lobby" && state.wind.status !== "success")
+        return state;
       if (state.tag === "Countdown" && action.seconds === 0) {
         return createPlayingState(state, state.windRasterSources);
       }

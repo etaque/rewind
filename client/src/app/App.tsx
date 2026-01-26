@@ -69,10 +69,10 @@ export default function App() {
 
   // Sync course to SphereView when joining a race (course may differ from selectedCourseKey)
   useEffect(() => {
-    if (state.tag === "Loading" && sphereViewRef.current) {
+    if (state.tag === "Lobby" && sphereViewRef.current) {
       sphereViewRef.current.setCourse(state.course);
     }
-  }, [state.tag === "Loading" ? state.course.key : null]);
+  }, [state.tag === "Lobby" ? state.course.key : null]);
 
   // Fetch courses on startup
   useEffect(() => {
@@ -223,9 +223,10 @@ export default function App() {
     },
   );
 
-  // Initialize SphereView
+  // Initialize SphereView and load wind when entering Lobby state
   useEffect(() => {
-    if (state.tag !== "Loading") return;
+    if (state.tag !== "Lobby") return;
+    if (state.wind.status !== "loading") return;
 
     const course = state.course;
 
@@ -238,21 +239,48 @@ export default function App() {
     // Initialize land collision data
     initLandData();
 
-    const [currentWindSource, nextWindSources] = currentWindContext(
-      course.startTime,
-      null,
-      state.windRasterSources,
-    );
+    // Load wind rasters
+    const loadWind = async () => {
+      try {
+        const [currentWindSource, nextWindSources] = currentWindContext(
+          course.startTime,
+          null,
+          state.windRasterSources,
+        );
 
-    interpolatedWindRef.current
-      .update(currentWindSource, nextWindSources)
-      .then(() => {
+        // Load wind rasters (await all for initial load)
+        await interpolatedWindRef.current.update(
+          currentWindSource,
+          nextWindSources,
+          true, // awaitAll
+        );
+
+        // Update visualization
         const factor = interpolatedWindRef.current.getInterpolationFactor(
           course.startTime,
         );
         sphereViewRef.current?.updateWind(interpolatedWindRef.current, factor);
-      });
-  }, [state.tag === "Loading" ? state.course.key : null]);
+
+        dispatch({
+          type: "WIND_LOAD_RESULT",
+          result: { status: "success", data: undefined },
+        });
+      } catch (e) {
+        dispatch({
+          type: "WIND_LOAD_RESULT",
+          result: {
+            status: "error",
+            error: e instanceof Error ? e.message : "Failed to load wind data",
+          },
+        });
+      }
+    };
+
+    loadWind();
+  }, [
+    state.tag === "Lobby" ? state.course.key : null,
+    state.tag === "Lobby" ? state.wind.status : null,
+  ]);
 
   // Transition to Playing when countdown is over
   useEffect(() => {
@@ -321,8 +349,8 @@ export default function App() {
 
   // Show recorded ghosts at start position in lobby
   useEffect(() => {
-    if (state.tag !== "Loading" || recordedGhosts.size === 0) return;
-    if (!sphereViewRef.current) return;
+    if (state.tag !== "Lobby" || state.wind.status !== "success") return;
+    if (recordedGhosts.size === 0 || !sphereViewRef.current) return;
 
     const ghostPositions = new Map<
       number,
@@ -342,7 +370,11 @@ export default function App() {
     });
 
     sphereViewRef.current.updateRecordedGhosts(ghostPositions);
-  }, [state.tag, recordedGhosts]);
+  }, [
+    state.tag,
+    state.tag === "Lobby" ? state.wind.status : null,
+    recordedGhosts,
+  ]);
 
   // Sync position, heading, and courseTime to SphereView
   useEffect(() => {
@@ -387,20 +419,17 @@ export default function App() {
     <>
       <div ref={sphereNodeRef} id="sphere" className="fixed inset-0" />
       <div id="app" className="fixed inset-0 z-10 pointer-events-none">
-        {(state.tag === "Idle" || state.tag === "Loading") &&
+        {(state.tag === "Idle" || state.tag === "Lobby") &&
           courses.length > 0 && (
             <div className="pointer-events-auto">
               <RaceChoiceScreen
-                raceId={state.tag === "Loading" ? state.race.id : null}
+                raceId={state.tag === "Lobby" ? state.race.id : null}
                 myPlayerId={
-                  state.tag === "Loading" ? state.race.myPlayerId : null
+                  state.tag === "Lobby" ? state.race.myPlayerId : null
                 }
-                isCreator={
-                  state.tag === "Loading" ? state.race.isCreator : false
-                }
-                players={
-                  state.tag === "Loading" ? state.race.players : new Map()
-                }
+                isCreator={state.tag === "Lobby" ? state.race.isCreator : false}
+                players={state.tag === "Lobby" ? state.race.players : new Map()}
+                windStatus={state.tag === "Lobby" ? state.wind.status : "idle"}
                 courses={courses}
                 selectedCourseKey={selectedCourseKey}
                 recordedGhosts={recordedGhosts}
