@@ -35,6 +35,7 @@ export function useGameLoop(
     let animationId: number;
     let lastTime: number | null = null;
     let accumulatedClock = session.clock;
+    lastWindRefreshRef.current = 0;
 
     const tick = (time: number) => {
       if (lastTime !== null) {

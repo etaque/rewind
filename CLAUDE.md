@@ -76,14 +76,17 @@ Uses `useReducer` with a four-state machine (`src/app/state.ts`):
 | State | Description |
 |-------|-------------|
 | **Idle** | Initial state, no active race |
-| **Loading** | In race lobby, wind raster sources loaded, waiting for race start |
+| **Lobby** | In race lobby. Wind rasters load asynchronously (tracked via `wind: AsyncState<void>`). Start button appears only after wind loads successfully. |
 | **Countdown** | Race countdown in progress (3-2-1), zoom to max triggered |
 | **Playing** | Active race session with animation loop |
 
+`AsyncState<T>` is a generic type (`idle | loading | success | error`) used to track async operations within state.
+
 Key Actions:
-- `RACE_CREATED`, `RACE_JOINED` - Multiplayer race management
+- `RACE_CREATED`, `RACE_JOINED` - Multiplayer race management (transition to Lobby with `wind: loading`)
+- `WIND_LOAD_RESULT` - Wind raster loading completed (success or error)
 - `PLAYER_JOINED`, `PLAYER_LEFT` - Player roster updates
-- `COUNTDOWN` - Race countdown sequence (transitions Loading → Countdown → Playing)
+- `COUNTDOWN` - Race countdown sequence (transitions Lobby → Countdown → Playing, requires `wind: success`)
 - `START_PLAYING` - Transition to playing state
 - `TICK` - Game physics update
 - `TURN`, `TACK`, `TOGGLE_TWA_LOCK`, `VMG_LOCK` - Boat controls
@@ -104,9 +107,11 @@ The `SphereView` class orchestrates all layers, handles D3 zoom/pan with quatern
 ```
 Race created/joined → Server queries SQLite for course wind reports
     → Server sends wind raster sources via WebSocket
+    → State transitions to Lobby (wind: loading)
     → Client loads WindRaster.load(pngUrl) → fetch directly from S3
     → Decode RGB to u,v components → SphereView.updateWind()
-    → Animation loop: query interpolatedWind.speedAt(position, time) every 100ms
+    → Wind loaded → State transitions to Lobby (wind: success)
+    → Race starts → Animation loop: query interpolatedWind.speedAt(position, time) every 100ms
 ```
 
 Wind PNG format: 720×360 pixels (0.5° resolution), RGB encodes u/v as `(n/255 * 60) - 30` m/s
@@ -299,13 +304,14 @@ cd server && cargo run -- rebuild-manifest    # Rebuild database from S3 PNG fil
 ## Key Data Flow
 
 1. Client loads → creates/joins multiplayer race via WebSocket
-2. Server sends wind raster sources on race create/join, wind texture displayed during lobby
-3. Host starts race → countdown (zoom to max) → all players begin simultaneously
-4. Game loop ticks via `requestAnimationFrame`:
+2. Server sends wind raster sources on race create/join → client enters Lobby state, loads wind rasters
+3. Wind loads complete → lobby shows Start button, wind texture displayed
+4. Host starts race → countdown (zoom to max) → all players begin simultaneously
+5. Game loop ticks via `requestAnimationFrame`:
    - Query wind at boat position using interpolated wind data
    - Calculate boat speed from polar diagram (TWS + TWA → BSP)
    - Update boat position, broadcast to server via WebSocket
-5. Server broadcasts position updates to other players, ghost boats rendered
+6. Server broadcasts position updates to other players, ghost boats rendered
 
 ## Speed Polars
 

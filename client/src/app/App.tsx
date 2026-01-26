@@ -148,6 +148,7 @@ export default function App() {
       multiplayerRef.current.leaveRace();
       multiplayerRef.current.disconnect();
     }
+    interpolatedWindRef.current = new InterpolatedWind();
     dispatch({ type: "LEAVE_RACE" });
     setShowQuitConfirm(false);
   }, []);
@@ -178,6 +179,7 @@ export default function App() {
         multiplayerRef.current.leaveRace();
         multiplayerRef.current.disconnect();
       }
+      interpolatedWindRef.current = new InterpolatedWind();
       dispatch({ type: "LEAVE_RACE" });
 
       // Small delay to ensure state is updated before creating new race
@@ -288,6 +290,15 @@ export default function App() {
     if (state.countdown > 0) return;
 
     dispatch({ type: "START_PLAYING" });
+
+    // Query wind immediately at start position so first frame has correct speed
+    const wind = interpolatedWindRef.current.speedAt(
+      state.course.start,
+      state.course.startTime,
+    );
+    if (wind) {
+      dispatch({ type: "LOCAL_WIND_UPDATED", windSpeed: wind });
+    }
   }, [state.tag === "Countdown" ? state.countdown : false]);
 
   // Handle window resize
