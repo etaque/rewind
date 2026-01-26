@@ -1,11 +1,4 @@
-import {
-  useReducer,
-  useEffect,
-  useRef,
-  useState,
-  useCallback,
-  useMemo,
-} from "react";
+import { useReducer, useEffect, useState, useCallback, useMemo } from "react";
 import { appReducer, initialState } from "./state";
 import Hud from "./Hud";
 import CursorWind from "./CursorWind";
@@ -21,6 +14,7 @@ import {
   useSphereView,
   useWindLoader,
   useWindSourceUpdater,
+  useSessionRefs,
 } from "./hooks";
 import { CountdownDisplay } from "./race";
 import { calculateTWA } from "./polar";
@@ -100,19 +94,8 @@ export default function App() {
     interpolatedWindRef,
   );
 
-  // Refs for game loop (avoid re-renders)
-  const positionRef = useRef(session?.position ?? null);
-  const courseTimeRef = useRef(session?.courseTime ?? 0);
-  const headingRef = useRef(session?.heading ?? 0);
-
-  // Keep refs in sync with session
-  useEffect(() => {
-    if (session) {
-      positionRef.current = session.position;
-      courseTimeRef.current = session.courseTime;
-      headingRef.current = session.heading;
-    }
-  }, [session?.position, session?.courseTime, session?.heading]);
+  // Session refs for game loop (avoids re-renders)
+  const sessionRefs = useSessionRefs(session);
 
   // Handle quitting the race
   const handleQuitRace = useCallback(() => {
@@ -182,9 +165,7 @@ export default function App() {
 
   // Game loop
   useGameLoop(state.tag === "Playing", session, dispatch, {
-    position: positionRef,
-    courseTime: courseTimeRef,
-    heading: headingRef,
+    ...sessionRefs,
     interpolatedWind: interpolatedWindRef,
     multiplayer: multiplayerRef,
   });

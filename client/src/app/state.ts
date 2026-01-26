@@ -1,3 +1,4 @@
+import { produce, enableMapSet } from "immer";
 import { Course, LngLat, WindSpeed, WindRasterSource } from "../models";
 import { LeaderboardEntry, PeerState } from "../multiplayer/types";
 import { tick } from "./tick";
@@ -5,6 +6,9 @@ import { calculateTackTarget } from "./tack";
 import { toggleTWALock } from "./twa-lock";
 import { calculateVMGLockHeading } from "./vmg-lock";
 import { currentWindContext } from "./wind-context";
+
+// Enable Map support in Immer
+enableMapSet();
 
 export type AsyncState<T> =
   | { status: "idle" }
@@ -106,11 +110,11 @@ export type Turn = "left" | "right" | null;
 
 export const initialState: AppState = { tag: "Idle" };
 
-// Helper to create a Playing state from Loading state with raster sources
+// Helper to create a Playing state from Countdown state
 function createPlayingState(
   state: Extract<AppState, { tag: "Countdown" }>,
   windRasterSources: WindRasterSource[],
-): AppState {
+): Extract<AppState, { tag: "Playing" }> {
   const [currentSource, nextSources] = currentWindContext(
     state.course.startTime,
     null,
@@ -133,8 +137,8 @@ function createPlayingState(
       lockedTWA: null,
       boatSpeed: 0,
       course: state.course,
-      currentSource: currentSource,
-      nextSources: nextSources,
+      currentSource,
+      nextSources,
       windSpeed: { u: 0, v: 0 },
       finishTime: null,
     },
@@ -145,72 +149,51 @@ export function appReducer(state: AppState, action: AppAction): AppState {
   switch (action.type) {
     case "LOCAL_WIND_UPDATED":
       if (state.tag !== "Playing") return state;
-      return {
-        ...state,
-        session: { ...state.session, windSpeed: action.windSpeed },
-      };
+      return produce(state, (draft) => {
+        draft.session.windSpeed = action.windSpeed;
+      });
 
     case "TICK":
       if (state.tag !== "Playing") return state;
-      const tickResult = tick(state.session, action.delta);
-      return {
-        ...state,
-        session: {
-          ...state.session,
-          ...tickResult,
-        },
-      };
+      return produce(state, (draft) => {
+        const tickResult = tick(state.session, action.delta);
+        Object.assign(draft.session, tickResult);
+      });
 
     case "TURN":
       if (state.tag !== "Playing") return state;
-      return {
-        ...state,
-        session: {
-          ...state.session,
-          turning: action.direction,
-          targetHeading: null, // cancel any ongoing tack
-          lockedTWA: null, // cancel TWA lock
-        },
-      };
+      return produce(state, (draft) => {
+        draft.session.turning = action.direction;
+        draft.session.targetHeading = null;
+        draft.session.lockedTWA = null;
+      });
 
-    case "TACK":
+    case "TACK": {
       if (state.tag !== "Playing") return state;
       const targetHeading = calculateTackTarget(state.session);
       if (targetHeading === null) return state;
-      return {
-        ...state,
-        session: {
-          ...state.session,
-          targetHeading,
-        },
-      };
+      return produce(state, (draft) => {
+        draft.session.targetHeading = targetHeading;
+      });
+    }
 
     case "TOGGLE_TWA_LOCK":
       if (state.tag !== "Playing") return state;
-      return {
-        ...state,
-        session: {
-          ...state.session,
-          lockedTWA: toggleTWALock(state.session),
-        },
-      };
+      return produce(state, (draft) => {
+        draft.session.lockedTWA = toggleTWALock(state.session);
+      });
 
     case "VMG_LOCK": {
       if (state.tag !== "Playing") return state;
       const vmgHeading = calculateVMGLockHeading(state.session);
       if (vmgHeading === null) return state;
-      return {
-        ...state,
-        session: {
-          ...state.session,
-          targetHeading: vmgHeading,
-          lockedTWA: null, // Cancel any TWA lock
-        },
-      };
+      return produce(state, (draft) => {
+        draft.session.targetHeading = vmgHeading;
+        draft.session.lockedTWA = null;
+      });
     }
 
-    // Multiplayer actions
-    case "RACE_CREATED": {
+    case "RACE_CREATED":
       if (state.tag !== "Idle") return state;
       return {
         tag: "Lobby",
@@ -224,10 +207,8 @@ export function appReducer(state: AppState, action: AppAction): AppState {
           players: new Map(),
         },
       };
-    }
 
-    case "RACE_JOINED": {
-      // Allow joining from Idle or Lobby (switching races)
+    case "RACE_JOINED":
       if (state.tag !== "Idle" && state.tag !== "Lobby") return state;
       return {
         tag: "Lobby",
@@ -241,39 +222,30 @@ export function appReducer(state: AppState, action: AppAction): AppState {
           players: action.players,
         },
       };
-    }
 
-    case "WIND_LOAD_RESULT": {
+    case "WIND_LOAD_RESULT":
       if (state.tag !== "Lobby") return state;
-      return {
-        ...state,
-        wind: action.result,
-      };
-    }
+      return produce(state, (draft) => {
+        draft.wind = action.result;
+      });
 
     case "PLAYER_JOINED":
       if (state.tag !== "Lobby") return state;
-      const newPlayers = new Map(state.race.players);
-      newPlayers.set(action.playerId, {
-        id: action.playerId,
-        name: action.playerName,
-        position: null,
-        heading: null,
-        lastUpdate: 0,
+      return produce(state, (draft) => {
+        draft.race.players.set(action.playerId, {
+          id: action.playerId,
+          name: action.playerName,
+          position: null,
+          heading: null,
+          lastUpdate: 0,
+        });
       });
-      return {
-        ...state,
-        race: { ...state.race, players: newPlayers },
-      };
 
     case "PLAYER_LEFT":
       if (state.tag !== "Lobby") return state;
-      const remainingPlayers = new Map(state.race.players);
-      remainingPlayers.delete(action.playerId);
-      return {
-        ...state,
-        race: { ...state.race, players: remainingPlayers },
-      };
+      return produce(state, (draft) => {
+        draft.race.players.delete(action.playerId);
+      });
 
     case "COUNTDOWN":
       if (state.tag !== "Lobby" && state.tag !== "Countdown") return state;
@@ -282,12 +254,11 @@ export function appReducer(state: AppState, action: AppAction): AppState {
       if (state.tag === "Countdown" && action.seconds === 0) {
         return createPlayingState(state, state.windRasterSources);
       }
-      return {
-        ...state,
-        tag: "Countdown",
-        countdown: action.seconds,
-        windRasterSources: state.windRasterSources,
-      };
+      return produce(state, (draft) => {
+        (draft as Extract<AppState, { tag: "Countdown" }>).tag = "Countdown";
+        (draft as Extract<AppState, { tag: "Countdown" }>).countdown =
+          action.seconds;
+      });
 
     case "START_PLAYING":
       if (state.tag !== "Countdown") return state;
@@ -297,37 +268,29 @@ export function appReducer(state: AppState, action: AppAction): AppState {
       if (state.tag === "Idle") return state;
       return { tag: "Idle" };
 
-    case "SYNC_RACE_TIME": {
+    case "SYNC_RACE_TIME":
       if (state.tag !== "Playing") return state;
-      return {
-        ...state,
-        session: {
-          ...state.session,
-          serverRaceTime: action.raceTime,
-        },
-      };
-    }
+      return produce(state, (draft) => {
+        draft.session.serverRaceTime = action.raceTime;
+      });
 
     case "RACE_ENDED":
       if (state.tag !== "Playing") return state;
-      return {
-        ...state,
-        raceEndedReason: action.reason,
-      };
+      return produce(state, (draft) => {
+        draft.raceEndedReason = action.reason;
+      });
 
     case "LEADERBOARD_UPDATE": {
       if (state.tag !== "Playing") return state;
       const myEntry = action.entries.find(
         (e) => e.playerId === state.race.myPlayerId,
       );
-      return {
-        ...state,
-        leaderboard: action.entries,
-        session: {
-          ...state.session,
-          finishTime: myEntry?.finishTime ?? state.session.finishTime,
-        },
-      };
+      return produce(state, (draft) => {
+        draft.leaderboard = action.entries;
+        if (myEntry?.finishTime !== undefined) {
+          draft.session.finishTime = myEntry.finishTime;
+        }
+      });
     }
 
     default:
