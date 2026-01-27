@@ -17,6 +17,7 @@ import CourseLine from "./course-line";
 import ProjectedPath from "./projected-path";
 import ExclusionZoneRenderer from "./exclusion-zone";
 import { ProjectedPoint } from "../app/projected-path";
+import Stars from "./stars";
 
 const MAX_SCALE = 12;
 
@@ -39,6 +40,7 @@ export class SphereView {
 
   projection: d3.GeoProjection;
 
+  stars: Stars;
   land: Land;
   boat: Boat;
   wake: Wake;
@@ -81,6 +83,18 @@ export class SphereView {
       .scale(course ? 500 : 500); // Same scale, bigger globe when no course
 
     const dpr = getDPR();
+
+    const starsCanvas = d3
+      .select(this.node)
+      .append("canvas")
+      .attr("class", "stars fixed")
+      .style("width", `${this.width}px`)
+      .style("height", `${this.height}px`)
+      .attr("width", this.width * dpr)
+      .attr("height", this.height * dpr)
+      .node()!;
+
+    this.stars = new Stars(starsCanvas);
 
     const textureCanvas = d3
       .select(this.node)
@@ -431,6 +445,8 @@ export class SphereView {
       sphereCenter: sphereCenter(this.projection),
       dpr,
     };
+
+    this.stars.render(scene);
 
     const currentGeneration = ++this.renderGeneration;
     this.land.render(scene, this.moving).then(() => {
