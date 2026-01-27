@@ -134,7 +134,7 @@ resource "aws_cloudfront_distribution" "frontend_cdn" {
 
 # Output CloudFront domain for Gandi CNAME configuration
 output "cloudfront_domain" {
-  description = "CloudFront domain to use as CNAME target in Gandi for rewind.tacoz.fr"
+  description = "CloudFront domain to use as CNAME target for rewind.milox.dev"
   value       = aws_cloudfront_distribution.frontend_cdn.domain_name
 }
 

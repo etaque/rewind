@@ -94,7 +94,7 @@ terraform apply
 ```
 
 This creates:
-- ACM certificate for `rewind.tacoz.fr`
+- ACM certificate for `rewind.milox.dev`
 - S3 buckets for GRIB files and wind rasters
 - CloudFront distribution for the client
 
