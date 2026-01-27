@@ -206,6 +206,13 @@ export class SphereView {
   getWindAtScreen(x: number, y: number, courseTime: number): WindSpeed | null {
     if (!this.interpolatedWind || !this.projection.invert) return null;
 
+    // Check if cursor is within the visible sphere
+    const center = sphereCenter(this.projection);
+    const radius = sphereRadius(this.projection);
+    const dx = x - center.x;
+    const dy = y - center.y;
+    if (dx * dx + dy * dy > radius * radius) return null;
+
     const coords = this.projection.invert([x, y]);
     if (!coords) return null;
 
