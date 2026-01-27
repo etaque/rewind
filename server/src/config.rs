@@ -69,3 +69,21 @@ pub static CONFIG: Lazy<Config> = Lazy::new(|| {
 pub fn config() -> &'static Config {
     &CONFIG
 }
+
+/// Validate configuration at startup with clear error messages.
+/// Call this early in main() to fail fast with helpful errors instead of
+/// getting a cryptic "Lazy instance has previously been poisoned" later.
+pub fn validate() {
+    if cfg!(test) {
+        return;
+    }
+
+    if let Err(e) = envy::prefixed("REWIND_S3_").from_env::<S3Config>() {
+        eprintln!("ERROR: Invalid S3 configuration: {}", e);
+        std::process::exit(1);
+    }
+
+    // Trigger full config initialization to catch any other errors early
+    let _ = config();
+    log::info!("Configuration validated successfully");
+}

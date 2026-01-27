@@ -23,6 +23,9 @@ async fn main() {
     dotenvy::dotenv().ok();
     env_logger::init();
 
+    // Validate config early to get clear error messages on missing env vars
+    config::validate();
+
     let args = Cli::parse();
 
     match args.cmd {

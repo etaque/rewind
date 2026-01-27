@@ -23,6 +23,7 @@
         overlays = [ (import rust-overlay) ];
         pkgs = import nixpkgs {
           inherit system overlays;
+          config.allowUnfree = true;
         };
         rustToolchain = pkgs.rust-bin.stable.latest.default.override {
           extensions = [
@@ -35,6 +36,7 @@
       {
         devShells.default = pkgs.mkShell {
           buildInputs = with pkgs; [
+            terraform
             flyctl
 
             litecli
