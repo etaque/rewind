@@ -15,6 +15,7 @@ import WindParticles from "./wind-particles";
 import GhostBoats from "./ghost-boats";
 import CourseLine from "./course-line";
 import ProjectedPath from "./projected-path";
+import ExclusionZoneRenderer from "./exclusion-zone";
 import { ProjectedPoint } from "../app/projected-path";
 
 const MAX_SCALE = 12;
@@ -46,12 +47,14 @@ export class SphereView {
   ghostBoats: GhostBoats;
   courseLine: CourseLine;
   projectedPath: ProjectedPath;
+  exclusionZones: ExclusionZoneRenderer;
 
   v0?: versor.Cartesian;
   q0?: versor.Versor;
   r0?: versor.Euler;
 
   moving = false;
+  private renderGeneration = 0;
 
   private zoom: d3.ZoomBehavior<HTMLElement, unknown>;
 
@@ -113,6 +116,10 @@ export class SphereView {
     this.ghostBoats = new GhostBoats(landCanvas);
     this.courseLine = new CourseLine(landCanvas, course);
     this.projectedPath = new ProjectedPath(landCanvas);
+    this.exclusionZones = new ExclusionZoneRenderer(
+      landCanvas,
+      course.exclusionZones,
+    );
 
     const initialScale = this.projection.scale();
 
@@ -299,8 +306,12 @@ export class SphereView {
       dpr,
     };
 
+    const currentGeneration = ++this.renderGeneration;
     this.land.render(scene, this.moving).then(() => {
-      // Draw course line, projected path, wake and boats on top of land
+      // Skip if a newer render has started
+      if (currentGeneration !== this.renderGeneration) return;
+      // Draw exclusion zones, course line, projected path, wake and boats on top of land
+      this.exclusionZones.render(scene);
       this.courseLine.render(scene);
       this.projectedPath.render(scene);
       this.wake.render(scene);

@@ -15,6 +15,7 @@ function makeSession(overrides: Partial<Session> = {}): Session {
         point2: { lng: 0.1, lat: 0 },
       },
       gates: [],
+      exclusionZones: [],
       startHeading: 0,
       timeFactor: 1,
       maxDays: 90,

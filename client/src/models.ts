@@ -18,6 +18,11 @@ export type Gate = {
   point2: LngLat;
 };
 
+export type ExclusionZone = {
+  name: string;
+  polygon: LngLat[];
+};
+
 export type Course = {
   key: string;
   name: string;
@@ -26,6 +31,7 @@ export type Course = {
   startHeading: number;
   finishLine: Gate;
   gates: Gate[];
+  exclusionZones: ExclusionZone[];
   timeFactor: number;
   maxDays: number;
 };

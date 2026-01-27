@@ -843,6 +843,7 @@ mod tests {
                 },
             },
             gates: vec![],
+            exclusion_zones: vec![],
             time_factor: 2000,
             max_days: 90,
         }

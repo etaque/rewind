@@ -1,6 +1,7 @@
 import { LngLat, WindRasterSource } from "../models";
 import { getBoatSpeed, calculateTWA } from "./polar";
 import { isPointOnLand } from "./land";
+import { isPointInExclusionZone } from "./exclusion-zone";
 import { Session } from "./state";
 import { currentWindContext } from "./wind-context";
 import { getWindDirection, getWindSpeed, msToKnots } from "../utils";
@@ -113,6 +114,12 @@ export function tick(session: Session, delta: number): TickResult {
 
   // Check land collision - don't move if new position is on land
   if (isPointOnLand(newPosition.lng, newPosition.lat)) {
+    boatSpeed = 0;
+    newPosition = session.position;
+  }
+
+  // Check exclusion zone collision
+  if (isPointInExclusionZone(newPosition.lng, newPosition.lat)) {
     boatSpeed = 0;
     newPosition = session.position;
   }

@@ -21,6 +21,7 @@ const testCourse: Course = {
     point2: { lng: 10.1, lat: 45 },
   },
   gates: [],
+  exclusionZones: [],
   startHeading: 90,
   timeFactor: 60,
   maxDays: 90,
