@@ -1,6 +1,7 @@
 import { useState, useEffect } from "react";
 import { RaceInfo } from "./race";
 import { useRaceContext } from "./race-context";
+import { generateNickname } from "./nickname";
 
 const PLAYER_NAME_KEY = "rewind:player_name";
 const serverUrl = import.meta.env.REWIND_SERVER_URL;
@@ -41,11 +42,15 @@ export default function RaceChoiceScreen() {
 
   const selectedCourse = courses.find((c) => c.key === selectedCourseKey);
 
-  // Load player name from localStorage on mount
+  // Load player name from localStorage on mount, or generate a random nickname
   useEffect(() => {
     const savedName = localStorage.getItem(PLAYER_NAME_KEY);
     if (savedName) {
       setPlayerName(savedName);
+    } else {
+      const nickname = generateNickname();
+      setPlayerName(nickname);
+      localStorage.setItem(PLAYER_NAME_KEY, nickname);
     }
   }, []);
 
@@ -96,8 +101,20 @@ export default function RaceChoiceScreen() {
     localStorage.setItem(PLAYER_NAME_KEY, newName);
   };
 
+  const handlePlayerNameBlur = () => {
+    if (!playerName.trim()) {
+      const name = generateNickname();
+      setPlayerName(name);
+      localStorage.setItem(PLAYER_NAME_KEY, name);
+    }
+  };
+
   const getPlayerName = () => {
-    const name = playerName.trim() || "Skipper";
+    let name = playerName.trim();
+    if (!name) {
+      name = generateNickname();
+      setPlayerName(name);
+    }
     localStorage.setItem(PLAYER_NAME_KEY, name);
     return name;
   };
@@ -131,14 +148,20 @@ export default function RaceChoiceScreen() {
         {/* Left column - Player name, Courses, Open Races */}
         <div className="flex-1 space-y-5">
           {/* Player name */}
-          <input
-            type="text"
-            value={playerName}
-            onChange={(e) => handlePlayerNameChange(e.target.value)}
-            placeholder="Your name"
-            maxLength={20}
-            className="w-full bg-slate-800 text-white px-4 py-3 rounded-lg border border-slate-700 focus:border-blue-500 focus:outline-none"
-          />
+          <div>
+            <h2 className="text-slate-400 text-xs uppercase tracking-wide mb-2">
+              Player Name
+            </h2>
+            <input
+              type="text"
+              value={playerName}
+              onChange={(e) => handlePlayerNameChange(e.target.value)}
+              onBlur={handlePlayerNameBlur}
+              placeholder="Your name"
+              maxLength={20}
+              className="w-full bg-slate-800 text-white px-3 py-2 rounded-lg border border-slate-700 focus:border-blue-500 focus:outline-none"
+            />
+          </div>
 
           {/* Courses */}
           <div>

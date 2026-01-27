@@ -11,7 +11,7 @@ export default function PlayerNameInput({ value, onChange }: Props) {
         type="text"
         value={value}
         onChange={(e) => onChange(e.target.value)}
-        placeholder="Skipper"
+        placeholder="Your name"
         maxLength={20}
         className="w-full bg-slate-800 text-white px-4 py-3 rounded-lg border border-slate-700 focus:border-blue-500 focus:outline-none"
       />
