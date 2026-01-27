@@ -825,6 +825,7 @@ mod tests {
         Course {
             key: "vg20".to_string(),
             name: "Vendee Globe 2020".to_string(),
+            description: "Test course".to_string(),
             start_time: 1604833200000,
             start: crate::courses::LngLat {
                 lng: -1.788,

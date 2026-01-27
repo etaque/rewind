@@ -14,6 +14,7 @@ import { Course, WindRasterSource } from "../models";
 const testCourse: Course = {
   key: "test-course",
   name: "Test Course",
+  description: "Test course description",
   startTime: 1000,
   start: { lng: -10, lat: 45 },
   finishLine: {

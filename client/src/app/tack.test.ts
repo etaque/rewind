@@ -8,6 +8,7 @@ function makeSession(overrides: Partial<Session> = {}): Session {
     course: {
       key: "test",
       name: "Test Course",
+      description: "Test course",
       startTime: 0,
       start: { lng: 0, lat: 0 },
       finishLine: {

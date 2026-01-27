@@ -254,6 +254,9 @@ export default function RaceChoiceScreen() {
                   {selectedCourse.name}
                 </h2>
                 <p className="text-slate-400 text-sm mt-1">
+                  {selectedCourse.description}
+                </p>
+                <p className="text-slate-500 text-xs mt-1">
                   {selectedCourse.timeFactor}x time acceleration
                 </p>
               </div>
