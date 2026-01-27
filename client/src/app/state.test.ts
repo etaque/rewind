@@ -23,6 +23,7 @@ const testCourse: Course = {
   },
   gates: [],
   exclusionZones: [],
+  routeWaypoints: [[]],
   startHeading: 90,
   timeFactor: 60,
   maxDays: 90,

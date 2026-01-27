@@ -241,12 +241,11 @@ impl Race {
                 let distance = if player.next_gate_index < num_gates {
                     // Distance to next intermediate gate
                     let gate = &self.course.gates[player.next_gate_index];
-                    let midpoint = gate.midpoint();
-                    haversine_distance(lat, lng, midpoint.lat, midpoint.lng)
+                    haversine_distance(lat, lng, gate.center.lat, gate.center.lng)
                 } else {
                     // Distance to finish line
-                    let midpoint = self.course.finish_line.midpoint();
-                    haversine_distance(lat, lng, midpoint.lat, midpoint.lng)
+                    let center = &self.course.finish_line.center;
+                    haversine_distance(lat, lng, center.lat, center.lng)
                 };
 
                 Some(LeaderboardEntry {

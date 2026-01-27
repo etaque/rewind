@@ -17,6 +17,7 @@ function makeSession(overrides: Partial<Session> = {}): Session {
       },
       gates: [],
       exclusionZones: [],
+      routeWaypoints: [[]],
       startHeading: 0,
       timeFactor: 1,
       maxDays: 90,

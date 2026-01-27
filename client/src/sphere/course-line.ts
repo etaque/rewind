@@ -13,6 +13,13 @@ const GATE_COLOR_NEXT = "rgba(250, 204, 21, 0.9)"; // yellow
 const GATE_COLOR_FUTURE = "rgba(156, 163, 175, 0.5)"; // gray
 const FINISH_LINE_COLOR = "rgba(34, 197, 94, 0.9)"; // green
 
+// Colors for leg states
+const LEG_COLOR_PASSED = "rgba(100, 100, 100, 0.3)";
+const LEG_COLOR_CURRENT = "rgba(250, 204, 21, 0.6)";
+const LEG_COLOR_FUTURE = "rgba(255, 255, 255, 0.2)";
+
+type LegState = "passed" | "current" | "future";
+
 export default class CourseLine {
   canvas: HTMLCanvasElement;
   private course: Course;
@@ -32,28 +39,34 @@ export default class CourseLine {
   }
 
   render(scene: Scene) {
-    const { start, finishLine, gates } = this.course;
+    const { start, finishLine, gates, routeWaypoints } = this.course;
     const context = this.canvas.getContext("2d")!;
     const numGates = gates.length;
     const finishMidpoint = gateMidpoint(finishLine);
 
-    // Draw line from start to first gate (or finish if no gates)
-    const firstTarget = numGates > 0 ? gateMidpoint(gates[0]) : finishMidpoint;
-    if (start.lng !== firstTarget.lng || start.lat !== firstTarget.lat) {
-      this.drawCourseLine(scene, context, start, firstTarget);
-    }
+    // Build list of leg endpoints: [start, gate0, gate1, ..., gateN, finish]
+    const legPoints: LngLat[] = [
+      start,
+      ...gates.map(gateMidpoint),
+      finishMidpoint,
+    ];
 
-    // Draw lines between gates
-    for (let i = 0; i < numGates - 1; i++) {
-      const from = gateMidpoint(gates[i]);
-      const to = gateMidpoint(gates[i + 1]);
-      this.drawCourseLine(scene, context, from, to);
-    }
+    // Draw all legs
+    for (let legIndex = 0; legIndex < legPoints.length - 1; legIndex++) {
+      const from = legPoints[legIndex];
+      const to = legPoints[legIndex + 1];
+      const waypoints = routeWaypoints[legIndex] ?? [];
 
-    // Draw line from last gate to finish
-    if (numGates > 0) {
-      const lastGate = gateMidpoint(gates[numGates - 1]);
-      this.drawCourseLine(scene, context, lastGate, finishMidpoint);
+      let legState: LegState;
+      if (legIndex < this.nextGateIndex) {
+        legState = "passed";
+      } else if (legIndex === this.nextGateIndex) {
+        legState = "current";
+      } else {
+        legState = "future";
+      }
+
+      this.drawCourseLine(scene, context, from, to, waypoints, legState);
     }
 
     // Draw intermediate gates
@@ -84,24 +97,46 @@ export default class CourseLine {
     context: CanvasRenderingContext2D,
     from: LngLat,
     to: LngLat,
+    waypoints: LngLat[],
+    legState: LegState,
   ) {
     const path = geoPath(scene.projection, context);
+
+    // Build coordinates array: from -> waypoints -> to
+    const coordinates: [number, number][] = [
+      [from.lng, from.lat],
+      ...waypoints.map((wp): [number, number] => [wp.lng, wp.lat]),
+      [to.lng, to.lat],
+    ];
 
     const line: GeoJSON.Feature<GeoJSON.LineString> = {
       type: "Feature",
       properties: {},
       geometry: {
         type: "LineString",
-        coordinates: [
-          [from.lng, from.lat],
-          [to.lng, to.lat],
-        ],
+        coordinates,
       },
     };
 
-    context.strokeStyle = "rgba(255, 255, 255, 0.2)";
-    context.lineWidth = 1;
-    context.setLineDash([6, 8]);
+    // Apply styling based on leg state
+    switch (legState) {
+      case "passed":
+        context.strokeStyle = LEG_COLOR_PASSED;
+        context.lineWidth = 1;
+        context.setLineDash([]);
+        break;
+      case "current":
+        context.strokeStyle = LEG_COLOR_CURRENT;
+        context.lineWidth = 2;
+        context.setLineDash([8, 6]);
+        break;
+      case "future":
+        context.strokeStyle = LEG_COLOR_FUTURE;
+        context.lineWidth = 1;
+        context.setLineDash([6, 8]);
+        break;
+    }
+
     context.beginPath();
     path(line);
     context.stroke();

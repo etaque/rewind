@@ -32,34 +32,6 @@ impl Gate {
             length_nm,
         }
     }
-
-    /// Compute the two endpoints of the gate
-    pub fn endpoints(&self) -> (LngLat, LngLat) {
-        // 1 nautical mile = 1/60 degree of latitude
-        let half_length_deg = (self.length_nm / 2.0) / 60.0;
-        let orientation_rad = self.orientation.to_radians();
-
-        // For orientation 0 (vertical): points are north/south of center
-        // For orientation 90 (horizontal): points are east/west of center
-        let lat_offset = half_length_deg * orientation_rad.cos();
-        let lng_offset =
-            half_length_deg * orientation_rad.sin() / self.center.lat.to_radians().cos();
-
-        (
-            LngLat {
-                lng: self.center.lng - lng_offset,
-                lat: self.center.lat - lat_offset,
-            },
-            LngLat {
-                lng: self.center.lng + lng_offset,
-                lat: self.center.lat + lat_offset,
-            },
-        )
-    }
-
-    pub fn midpoint(&self) -> LngLat {
-        self.center.clone()
-    }
 }
 
 #[derive(Clone, Debug, Serialize)]
@@ -79,6 +51,7 @@ pub struct Course {
     pub finish_line: Gate,
     pub gates: Vec<Gate>,
     pub exclusion_zones: Vec<ExclusionZone>,
+    pub route_waypoints: Vec<Vec<LngLat>>, // waypoints for each leg (start→gate0, gate0→gate1, ..., gateN→finish)
     pub time_factor: u16,
     pub max_days: u8,
 }
@@ -108,6 +81,7 @@ pub fn all() -> Vec<Course> {
             finish_line: Gate::vertical(-61.53, 16.23, 24.0), // ~24 NM vertical gate
             gates: vec![],
             exclusion_zones: vec![],
+            route_waypoints: vec![vec![]], // Single leg with no intermediate waypoints
             time_factor: 5000,
             max_days: 21,
         },
@@ -128,6 +102,37 @@ pub fn all() -> Vec<Course> {
                 Gate::vertical(-67.0, -57.2, 150.0),  // Cape Horn (land to AEZ)
             ],
             exclusion_zones: vec![vendee_globe_aez()],
+            route_waypoints: vec![
+                // Leg 0: Start → Cape of Good Hope (down Atlantic, west of Africa)
+                vec![
+                    LngLat { lng: -12.0, lat: 35.0 },
+                    LngLat { lng: -18.0, lat: 15.0 },
+                    LngLat { lng: -10.0, lat: -5.0 },
+                    LngLat { lng: 0.0, lat: -25.0 },
+                ],
+                // Leg 1: Cape of Good Hope → Cape Leeuwin (Indian Ocean, north of AEZ)
+                vec![
+                    LngLat { lng: 45.0, lat: -43.0 },
+                    LngLat { lng: 75.0, lat: -45.0 },
+                    LngLat { lng: 95.0, lat: -48.0 },
+                ],
+                // Leg 2: Cape Leeuwin → Cape Horn (Southern Ocean, north of AEZ)
+                vec![
+                    LngLat { lng: 145.0, lat: -54.0 },
+                    LngLat { lng: 175.0, lat: -58.0 },
+                    LngLat { lng: -155.0, lat: -57.0 },
+                    LngLat { lng: -115.0, lat: -53.0 },
+                    LngLat { lng: -85.0, lat: -53.0 },
+                ],
+                // Leg 3: Cape Horn → Finish (up Atlantic, west of South America/Africa)
+                vec![
+                    LngLat { lng: -55.0, lat: -42.0 },
+                    LngLat { lng: -40.0, lat: -25.0 },
+                    LngLat { lng: -32.0, lat: -5.0 },
+                    LngLat { lng: -22.0, lat: 15.0 },
+                    LngLat { lng: -15.0, lat: 35.0 },
+                ],
+            ],
             time_factor: 8000,
             max_days: 90,
         },
@@ -144,6 +149,7 @@ pub fn all() -> Vec<Course> {
             finish_line: Gate::horizontal(147.50, -43.10, 24.0), // ~24 NM horizontal gate
             gates: vec![],
             exclusion_zones: vec![],
+            route_waypoints: vec![vec![]], // Single leg with no intermediate waypoints
             time_factor: 2000,
             max_days: 5,
         },

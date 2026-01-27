@@ -33,6 +33,7 @@ export type Course = {
   finishLine: Gate;
   gates: Gate[];
   exclusionZones: ExclusionZone[];
+  routeWaypoints: LngLat[][]; // waypoints for each leg
   timeFactor: number;
   maxDays: number;
 };
