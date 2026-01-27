@@ -287,6 +287,7 @@ Two buckets are auto-created on startup:
 cd client && npm install
 cd client && npm run dev        # Vite dev server (port 3000)
 cd client && npm run build      # Production build
+cd client && npm test           # Run client tests
 ```
 
 ### Server (manual)
@@ -298,6 +299,18 @@ nix develop --command cargo check           # Type check Rust code
 nix develop --command cargo run -- http     # Start server
 nix develop --command cargo test            # Run tests
 cd server && ./bin/dev-server               # With cargo-watch auto-reload (uses nix internally)
+```
+
+### After Modifying Code
+
+Always run tests in both server and client after making code changes:
+
+```bash
+# Server tests
+nix develop --command cargo test
+
+# Client tests
+cd client && npm test
 ```
 
 ### Data Import
