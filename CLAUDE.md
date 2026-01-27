@@ -290,14 +290,19 @@ cd client && npm run build      # Production build
 ```
 
 ### Server (manual)
+
+The project uses Nix flakes for Rust toolchain management. Run cargo commands via `nix develop`:
+
 ```bash
-cd server && cargo run -- http              # Start server
-cd server && ./bin/dev-server               # With cargo-watch auto-reload
+nix develop --command cargo check           # Type check Rust code
+nix develop --command cargo run -- http     # Start server
+nix develop --command cargo test            # Run tests
+cd server && ./bin/dev-server               # With cargo-watch auto-reload (uses nix internally)
 ```
 
 ### Data Import
 ```bash
-cd server && cargo run -- import-grib-range --from 2020-11-01 --to 2021-01-27
+nix develop --command cargo run -- import-grib-range --from 2020-11-01 --to 2021-01-27
 cd server && cargo run -- rebuild-manifest    # Rebuild database from S3 PNG files
 ```
 
