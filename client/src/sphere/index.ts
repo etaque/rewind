@@ -57,6 +57,7 @@ export class SphereView {
   private renderGeneration = 0;
 
   private zoom: d3.ZoomBehavior<HTMLElement, unknown>;
+  private initialScale: number = 500;
 
   constructor(node: HTMLElement, course: Course | null = null) {
     this.course = course;
@@ -131,12 +132,15 @@ export class SphereView {
       );
     }
 
-    const initialScale = this.projection.scale();
+    this.initialScale = this.projection.scale();
 
     this.zoom = d3
       .zoom<HTMLElement, unknown>()
       .scaleExtent([0.8, MAX_SCALE])
       .on("start", (e: d3.D3ZoomEvent<HTMLElement, unknown>) => {
+        // Cancel any running view animation when user starts interacting
+        d3.select(this.node).interrupt("view-animation");
+
         this.moving = true;
         this.particles.hide();
 
@@ -155,7 +159,7 @@ export class SphereView {
         this.moving = true;
         this.particles.hide();
 
-        this.projection.scale(initialScale * e.transform.k);
+        this.projection.scale(this.initialScale * e.transform.k);
 
         const rotated = this.projection.rotate(this.r0!);
         const coords = rotated.invert ? rotated.invert(d3.pointer(e)) : null;
@@ -277,11 +281,9 @@ export class SphereView {
   }
 
   zoomToMax() {
-    const selection = d3.select<HTMLElement, unknown>(this.node);
-    // Rotate to course start position
-    this.projection.rotate([-this.position.lng, -this.position.lat]);
-    this.zoom.scaleTo(selection, MAX_SCALE);
-    this.render();
+    const baseScale = 500;
+    const targetScale = baseScale * MAX_SCALE;
+    this.animateToView(this.position.lng, this.position.lat, targetScale, 1000);
   }
 
   /**
@@ -310,17 +312,68 @@ export class SphereView {
     // Determine zoom level based on distance
     // Larger distance = smaller scale (zoomed out)
     // We need both points to fit in the viewport
-    // Scale inversely with distance - use lower values for large distances
     const minScale = 1.0;
     const maxScale = 6;
-    // For VG20: distance ~90°, we want scale ~1.2
-    // For short courses: distance ~10°, we want scale ~5
     const scale = Math.max(minScale, Math.min(maxScale, 120 / (distance + 20)));
 
-    const selection = d3.select<HTMLElement, unknown>(this.node);
-    this.projection.rotate([-centerLng, -centerLat]);
-    this.zoom.scaleTo(selection, scale);
-    this.render();
+    // Convert scale factor to actual projection scale
+    const baseScale = 500;
+    const targetScale = baseScale * scale;
+
+    this.animateToView(centerLng, centerLat, targetScale, 1500);
+  }
+
+  /**
+   * Animate the view to a target rotation and scale.
+   * @param targetLng Target longitude to center on
+   * @param targetLat Target latitude to center on
+   * @param targetScale Target projection scale
+   * @param duration Animation duration in ms
+   */
+  private animateToView(
+    targetLng: number,
+    targetLat: number,
+    targetScale: number,
+    duration: number,
+  ) {
+    const startRotation = this.projection.rotate() as [number, number, number];
+    const startScale = this.projection.scale();
+
+    // Cancel any existing animation
+    d3.select(this.node).interrupt("view-animation");
+
+    // Hide particles during animation (same as user drag behavior)
+    this.moving = true;
+    this.particles.hide();
+
+    d3.select(this.node)
+      .transition("view-animation")
+      .duration(duration)
+      .ease(d3.easeCubicInOut)
+      .tween("view", () => {
+        const rotateInterp = d3.interpolate(startRotation, [
+          -targetLng,
+          -targetLat,
+          0,
+        ]);
+        const scaleInterp = d3.interpolate(startScale, targetScale);
+        return (t: number) => {
+          this.projection.rotate(rotateInterp(t) as [number, number, number]);
+          this.projection.scale(scaleInterp(t));
+          this.render();
+        };
+      })
+      .on("end", () => {
+        // Sync D3 zoom transform with the new scale
+        // This prevents jump when user starts scrolling after animation
+        const newK = this.projection.scale() / this.initialScale;
+        const selection = d3.select<HTMLElement, unknown>(this.node);
+        this.zoom.transform(selection, d3.zoomIdentity.scale(newK));
+
+        // Re-enable particles after animation completes
+        this.moving = false;
+        this.render();
+      });
   }
 
   resize() {
