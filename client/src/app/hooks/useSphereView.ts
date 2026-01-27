@@ -24,6 +24,14 @@ export function useSphereView(
   const sphereNodeRef = useRef<HTMLDivElement>(null!);
   const interpolatedWindRef = useRef<InterpolatedWind>(new InterpolatedWind());
 
+  // Initialize SphereView immediately (without a course for idle view)
+  useEffect(() => {
+    if (sphereNodeRef.current && !sphereViewRef.current) {
+      sphereViewRef.current = new SphereView(sphereNodeRef.current);
+      sphereViewRef.current.render();
+    }
+  }, []);
+
   // Handle window resize
   useEffect(() => {
     const handleResize = () => {

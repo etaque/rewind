@@ -32,11 +32,6 @@ export function useCourses(): CoursesState {
         fetchedCourses.forEach((c) => courseMap.set(c.key, c));
         coursesRef.current = courseMap;
         setCourses(fetchedCourses);
-        // Select first course by default
-        if (fetchedCourses.length > 0) {
-          selectedCourseRef.current = fetchedCourses[0];
-          setSelectedCourseKey(fetchedCourses[0].key);
-        }
       })
       .catch((err) => {
         console.error("Failed to fetch courses:", err);

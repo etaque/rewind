@@ -15,6 +15,7 @@ import {
   useWindLoader,
   useWindSourceUpdater,
   useSessionRefs,
+  useIdleWind,
 } from "./hooks";
 import { CountdownDisplay } from "./race";
 import { calculateTWA } from "./polar";
@@ -46,15 +47,23 @@ export default function App() {
   const { sphereViewRef, sphereNodeRef, interpolatedWindRef, resetWind } =
     useSphereView(session, lobbyCourse);
 
-  // Sync selected course to SphereView
+  // Load random wind for idle globe view (before any race is created)
+  const isIdleWithoutRace = state.tag === "Idle";
+  useIdleWind(isIdleWithoutRace, sphereViewRef, interpolatedWindRef);
+
+  // Sync selected course to SphereView and focus viewport
   useEffect(() => {
     if (selectedCourseKey && sphereViewRef.current && coursesRef.current) {
       const course = coursesRef.current.get(selectedCourseKey);
       if (course) {
         sphereViewRef.current.setCourse(course);
+        // Focus on start + first gate when selecting a course in idle state
+        if (state.tag === "Idle") {
+          sphereViewRef.current.focusOnCourseStart();
+        }
       }
     }
-  }, [selectedCourseKey, coursesRef, sphereViewRef]);
+  }, [selectedCourseKey, coursesRef, sphereViewRef, state.tag]);
 
   // Ghost replays
   const courseTime = session?.courseTime ?? null;

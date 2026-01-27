@@ -22,12 +22,6 @@ export function useWindLoader(
   useEffect(() => {
     if (!isLoadingWind || !course || !windRasterSources) return;
 
-    // Initialize SphereView
-    if (sphereNodeRef.current && !sphereViewRef.current) {
-      sphereViewRef.current = new SphereView(sphereNodeRef.current, course);
-      sphereViewRef.current.render();
-    }
-
     // Initialize land collision data
     initLandData();
 

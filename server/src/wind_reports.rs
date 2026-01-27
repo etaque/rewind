@@ -75,6 +75,31 @@ pub fn upsert_wind_report(report: &WindReport) -> Result<bool> {
     })
 }
 
+/// Get a random wind report from the database
+pub fn get_random_report() -> Result<Option<WindReport>> {
+    with_connection(|conn| {
+        let mut stmt = conn.prepare(
+            "SELECT time, grib_path, png_path, source FROM wind_reports ORDER BY RANDOM() LIMIT 1",
+        )?;
+
+        let report = stmt
+            .query_row([], |row| {
+                let time_ms: i64 = row.get(0)?;
+                let time =
+                    DateTime::from_timestamp_millis(time_ms).unwrap_or_else(|| DateTime::UNIX_EPOCH);
+                Ok(WindReport {
+                    time,
+                    grib_path: row.get(1)?,
+                    png_path: row.get(2)?,
+                    source: row.get(3)?,
+                })
+            })
+            .ok();
+
+        Ok(report)
+    })
+}
+
 /// Get reports for a given course (within time range)
 pub fn get_reports_for_course(course: &Course) -> Result<Vec<WindReport>> {
     with_connection(|conn| {

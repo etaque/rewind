@@ -60,6 +60,7 @@ pub async fn run(address: std::net::SocketAddr) {
     let app = Router::new()
         .route("/health", get(health_handler))
         .route("/courses", get(courses_handler))
+        .route("/wind/random", get(random_wind_handler))
         .route("/multiplayer/races", get(races_handler))
         .route("/multiplayer/race", any(websocket_handler))
         .route("/leaderboard/{course_key}", get(leaderboard_handler))
@@ -128,5 +129,20 @@ async fn replay_handler(Path(result_id): Path<i64>) -> Result<impl IntoResponse,
             Ok(Json(ReplayResponse { path_url: url }))
         }
         None => Err(AppError(anyhow::anyhow!("Race result not found"))),
+    }
+}
+
+#[derive(serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+struct RandomWindResponse {
+    png_url: String,
+}
+
+async fn random_wind_handler() -> Result<impl IntoResponse, AppError> {
+    let report = wind_reports::get_random_report()?;
+
+    match report {
+        Some(r) => Ok(Json(RandomWindResponse { png_url: r.png_url() })),
+        None => Err(AppError(anyhow::anyhow!("No wind reports available"))),
     }
 }

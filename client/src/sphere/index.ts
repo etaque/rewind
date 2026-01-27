@@ -26,7 +26,7 @@ function getDPR(): number {
 }
 
 export class SphereView {
-  readonly course: Course;
+  private course: Course | null;
   readonly node: HTMLElement;
 
   width: number;
@@ -45,9 +45,9 @@ export class SphereView {
   particles: WindParticles;
   windTexture: WindTexture;
   ghostBoats: GhostBoats;
-  courseLine: CourseLine;
+  courseLine: CourseLine | null = null;
   projectedPath: ProjectedPath;
-  exclusionZones: ExclusionZoneRenderer;
+  exclusionZones: ExclusionZoneRenderer | null = null;
 
   v0?: versor.Cartesian;
   q0?: versor.Versor;
@@ -58,20 +58,26 @@ export class SphereView {
 
   private zoom: d3.ZoomBehavior<HTMLElement, unknown>;
 
-  constructor(node: HTMLElement, course: Course) {
+  constructor(node: HTMLElement, course: Course | null = null) {
     this.course = course;
     this.node = node;
-    this.position = course.start;
-    this.heading = course.startHeading;
+    // Default to Atlantic view if no course
+    this.position = course?.start ?? { lng: -30, lat: 20 };
+    this.heading = course?.startHeading ?? 0;
     this.width = document.body.clientWidth;
     this.height = document.body.clientHeight;
+
+    // Default scale for full globe view
+    const initialRotation: [number, number] = course
+      ? [-course.start.lng, -course.start.lat]
+      : [-30, -20]; // Atlantic-centered view
 
     this.projection = d3
       .geoOrthographic()
       .precision(0.1)
-      .rotate([-course.start.lng, -course.start.lat])
+      .rotate(initialRotation)
       .fitSize([this.width, this.height], sphere)
-      .scale(500);
+      .scale(course ? 500 : 500); // Same scale, bigger globe when no course
 
     const dpr = getDPR();
 
@@ -114,12 +120,16 @@ export class SphereView {
     this.wake = new Wake(landCanvas);
     this.boat = new Boat(landCanvas);
     this.ghostBoats = new GhostBoats(landCanvas);
-    this.courseLine = new CourseLine(landCanvas, course);
     this.projectedPath = new ProjectedPath(landCanvas);
-    this.exclusionZones = new ExclusionZoneRenderer(
-      landCanvas,
-      course.exclusionZones,
-    );
+
+    // Only create course-related renderers if we have a course
+    if (course) {
+      this.courseLine = new CourseLine(landCanvas, course);
+      this.exclusionZones = new ExclusionZoneRenderer(
+        landCanvas,
+        course.exclusionZones,
+      );
+    }
 
     const initialScale = this.projection.scale();
 
@@ -207,15 +217,32 @@ export class SphereView {
   }
 
   setCourse(course: Course) {
-    this.courseLine.setCourse(course);
+    this.course = course;
     this.position = course.start;
     this.heading = course.startHeading;
     this.wake.clear();
+
+    // Create course renderers if they don't exist yet
+    if (!this.courseLine) {
+      this.courseLine = new CourseLine(this.land.canvas, course);
+    } else {
+      this.courseLine.setCourse(course);
+    }
+
+    if (!this.exclusionZones) {
+      this.exclusionZones = new ExclusionZoneRenderer(
+        this.land.canvas,
+        course.exclusionZones,
+      );
+    } else {
+      this.exclusionZones.setZones(course.exclusionZones);
+    }
+
     this.render();
   }
 
   setNextGateIndex(index: number) {
-    this.courseLine.setNextGateIndex(index);
+    this.courseLine?.setNextGateIndex(index);
     this.render();
   }
 
@@ -254,6 +281,45 @@ export class SphereView {
     // Rotate to course start position
     this.projection.rotate([-this.position.lng, -this.position.lat]);
     this.zoom.scaleTo(selection, MAX_SCALE);
+    this.render();
+  }
+
+  /**
+   * Focus the viewport on the course start and first gate (or finish if no gates).
+   * Adjusts rotation and zoom to show both points comfortably.
+   */
+  focusOnCourseStart() {
+    if (!this.course) return;
+
+    const start = this.course.start;
+    // Get target point: first gate center, or finish line center if no gates
+    const target =
+      this.course.gates.length > 0
+        ? this.course.gates[0].center
+        : this.course.finishLine.center;
+
+    // Calculate center point between start and target
+    const centerLng = (start.lng + target.lng) / 2;
+    const centerLat = (start.lat + target.lat) / 2;
+
+    // Calculate distance in degrees (rough approximation)
+    const dLng = Math.abs(start.lng - target.lng);
+    const dLat = Math.abs(start.lat - target.lat);
+    const distance = Math.sqrt(dLng * dLng + dLat * dLat);
+
+    // Determine zoom level based on distance
+    // Larger distance = smaller scale (zoomed out)
+    // We need both points to fit in the viewport
+    // Scale inversely with distance - use lower values for large distances
+    const minScale = 1.0;
+    const maxScale = 6;
+    // For VG20: distance ~90°, we want scale ~1.2
+    // For short courses: distance ~10°, we want scale ~5
+    const scale = Math.max(minScale, Math.min(maxScale, 120 / (distance + 20)));
+
+    const selection = d3.select<HTMLElement, unknown>(this.node);
+    this.projection.rotate([-centerLng, -centerLat]);
+    this.zoom.scaleTo(selection, scale);
     this.render();
   }
 
@@ -311,12 +377,15 @@ export class SphereView {
       // Skip if a newer render has started
       if (currentGeneration !== this.renderGeneration) return;
       // Draw exclusion zones, course line, projected path, wake and boats on top of land
-      this.exclusionZones.render(scene);
-      this.courseLine.render(scene);
+      this.exclusionZones?.render(scene);
+      this.courseLine?.render(scene);
       this.projectedPath.render(scene);
       this.wake.render(scene);
       this.ghostBoats.render(scene);
-      this.boat.render(scene, this.position, this.heading);
+      // Only render boat if we have a course (i.e., we're in a race context)
+      if (this.course) {
+        this.boat.render(scene, this.position, this.heading);
+      }
     });
 
     const currentRaster = this.interpolatedWind?.getCurrentRaster();

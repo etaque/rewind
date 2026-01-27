@@ -144,7 +144,7 @@ export default function RaceChoiceScreen() {
     <div className="fixed inset-0 flex flex-col items-center justify-center bg-black bg-opacity-10">
       <h1 className="logo mb-6">Re:wind</h1>
 
-      <div className="bg-slate-900 bg-opacity-95 rounded-xl p-8 w-full max-w-3xl mx-4 flex gap-8">
+      <div className="bg-slate-900 bg-opacity-80 rounded-xl p-8 w-full max-w-3xl mx-4 flex gap-8">
         {/* Left column - Player name, Courses, Open Races */}
         <div className="flex-1 space-y-5">
           {/* Player name */}

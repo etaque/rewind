@@ -6,3 +6,4 @@ export { useGhosts } from "./useGhosts";
 export { useSphereView } from "./useSphereView";
 export { useWindLoader, useWindSourceUpdater } from "./useWindLoader";
 export { useSessionRefs } from "./useSessionRefs";
+export { useIdleWind } from "./useIdleWind";
