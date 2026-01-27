@@ -27,7 +27,7 @@ export type RaceContextValue = {
   leaveRace: () => void;
 
   // Course actions
-  changeCourse: (courseKey: string) => void;
+  selectCourse: (courseKey: string) => void;
 
   // Ghost actions
   addGhost: (entryId: number, playerName: string) => void;

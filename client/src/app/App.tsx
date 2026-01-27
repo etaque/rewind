@@ -121,9 +121,14 @@ export default function App() {
     }
   }, [state, handleQuitRace]);
 
-  // Handle course change - leave current race and create new one
-  const handleCourseChange = useCallback(
-    async (courseKey: string) => {
+  // Handle course selection - leave current race if any, just select the course
+  const handleSelectCourse = useCallback(
+    (courseKey: string) => {
+      if (selectedCourseKey === courseKey && state.tag === "Idle") {
+        // Already selected and not in race, no-op
+        return;
+      }
+
       setSelectedCourseKey(courseKey);
 
       if (multiplayerRef.current) {
@@ -132,14 +137,14 @@ export default function App() {
       }
       resetWind();
       dispatch({ type: "LEAVE_RACE" });
-
-      setTimeout(() => {
-        const savedName =
-          localStorage.getItem("rewind:player_name") || "Skipper";
-        multiplayerCallbacks.onCreateRace(savedName);
-      }, 100);
     },
-    [setSelectedCourseKey, multiplayerRef, resetWind, multiplayerCallbacks],
+    [
+      selectedCourseKey,
+      state.tag,
+      setSelectedCourseKey,
+      multiplayerRef,
+      resetWind,
+    ],
   );
 
   // Keyboard controls
@@ -205,7 +210,7 @@ export default function App() {
       joinRace: multiplayerCallbacks.onJoinRace,
       startRace: multiplayerCallbacks.onStartRace,
       leaveRace: multiplayerCallbacks.onLeaveRace,
-      changeCourse: handleCourseChange,
+      selectCourse: handleSelectCourse,
       addGhost,
       removeGhost,
     }),
@@ -215,7 +220,7 @@ export default function App() {
       selectedCourseKey,
       recordedGhosts,
       multiplayerCallbacks,
-      handleCourseChange,
+      handleSelectCourse,
       addGhost,
       removeGhost,
     ],
