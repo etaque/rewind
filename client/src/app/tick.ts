@@ -4,6 +4,7 @@ import { isPointOnLand } from "./land";
 import { Session } from "./state";
 import { currentWindContext } from "./wind-context";
 import { getWindDirection, getWindSpeed, msToKnots } from "../utils";
+import { checkGateCrossing } from "./gate-crossing";
 
 export type TickResult = {
   clock: number;
@@ -15,6 +16,7 @@ export type TickResult = {
   lockedTWA: number | null;
   currentSource: WindRasterSource | null;
   nextSources: WindRasterSource[];
+  gateCrossed: number | null; // gate index if crossed this tick, null otherwise
 };
 
 // Turn rate in degrees per second during a tack
@@ -115,6 +117,21 @@ export function tick(session: Session, delta: number): TickResult {
     newPosition = session.position;
   }
 
+  // Check for gate crossing (only if position changed and not finished)
+  let gateCrossed: number | null = null;
+  if (
+    session.finishTime === null &&
+    (newPosition.lat !== session.position.lat ||
+      newPosition.lng !== session.position.lng)
+  ) {
+    gateCrossed = checkGateCrossing(
+      session.position,
+      newPosition,
+      session.course,
+      session.nextGateIndex,
+    );
+  }
+
   return {
     clock: newClock,
     courseTime: newCourseTime,
@@ -125,5 +142,6 @@ export function tick(session: Session, delta: number): TickResult {
     lockedTWA,
     currentSource: currentSource,
     nextSources: nextSources,
+    gateCrossed,
   };
 }

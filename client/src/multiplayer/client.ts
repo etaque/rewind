@@ -112,4 +112,11 @@ export class MultiplayerClient {
   broadcastPosition(position: LngLat, heading: number) {
     this.signaling.sendPositionUpdate(position.lng, position.lat, heading);
   }
+
+  /**
+   * Notify server that a gate was crossed.
+   */
+  sendGateCrossed(gateIndex: number, courseTime: number) {
+    this.signaling.sendGateCrossed(gateIndex, courseTime);
+  }
 }

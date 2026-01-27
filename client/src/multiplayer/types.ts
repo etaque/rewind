@@ -9,12 +9,14 @@ export type ClientMessage =
   | { type: "JoinRace"; raceId: string; playerName: string }
   | { type: "LeaveRace" }
   | { type: "StartRace" }
-  | { type: "PositionUpdate"; lng: number; lat: number; heading: number };
+  | { type: "PositionUpdate"; lng: number; lat: number; heading: number }
+  | { type: "GateCrossed"; gateIndex: number; courseTime: number };
 
 export type LeaderboardEntry = {
   playerId: string;
   playerName: string;
-  distanceToFinish: number;
+  nextGateIndex: number;
+  distanceToNextGate: number;
   finishTime: number | null;
 };
 

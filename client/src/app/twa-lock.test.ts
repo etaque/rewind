@@ -10,7 +10,11 @@ function makeSession(overrides: Partial<Session> = {}): Session {
       name: "Test Course",
       startTime: 0,
       start: { lng: 0, lat: 0 },
-      finish: { lng: 0, lat: 0 },
+      finishLine: {
+        point1: { lng: -0.1, lat: 0 },
+        point2: { lng: 0.1, lat: 0 },
+      },
+      gates: [],
       startHeading: 0,
       timeFactor: 1,
       maxDays: 90,
@@ -28,6 +32,8 @@ function makeSession(overrides: Partial<Session> = {}): Session {
     windSpeed: { u: 0, v: -10 }, // Wind from north by default
     currentSource: null,
     nextSources: [],
+    nextGateIndex: 0,
+    gateTimes: [],
     finishTime: null,
     ...overrides,
   };

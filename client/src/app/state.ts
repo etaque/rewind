@@ -69,6 +69,8 @@ export type Session = {
   currentSource: WindRasterSource | null;
   nextSources: WindRasterSource[];
   windSpeed: WindSpeed;
+  nextGateIndex: number; // 0..gates.length for intermediate gates, gates.length for finish
+  gateTimes: number[]; // course time when each gate was crossed
   finishTime: number | null; // null = racing, number = finished at race time
 };
 
@@ -79,6 +81,7 @@ export type AppAction =
   | { type: "TACK" }
   | { type: "TOGGLE_TWA_LOCK" }
   | { type: "VMG_LOCK" }
+  | { type: "GATE_CROSSED"; gateIndex: number; courseTime: number }
   // Multiplayer actions
   | {
       type: "RACE_CREATED";
@@ -140,6 +143,8 @@ function createPlayingState(
       currentSource,
       nextSources,
       windSpeed: { u: 0, v: 0 },
+      nextGateIndex: 0,
+      gateTimes: [],
       finishTime: null,
     },
   };
@@ -157,7 +162,20 @@ export function appReducer(state: AppState, action: AppAction): AppState {
       if (state.tag !== "Playing") return state;
       return produce(state, (draft) => {
         const tickResult = tick(state.session, action.delta);
-        Object.assign(draft.session, tickResult);
+        // Apply tick result (excluding gateCrossed which we handle separately)
+        const { gateCrossed, ...sessionUpdates } = tickResult;
+        Object.assign(draft.session, sessionUpdates);
+
+        // Handle gate crossing
+        if (gateCrossed !== null) {
+          const numGates = draft.session.course.gates.length;
+          draft.session.gateTimes.push(tickResult.courseTime);
+          draft.session.nextGateIndex = gateCrossed + 1;
+          // If crossed finish line, set finish time
+          if (gateCrossed === numGates) {
+            draft.session.finishTime = tickResult.courseTime;
+          }
+        }
       });
 
     case "TURN":
@@ -190,6 +208,21 @@ export function appReducer(state: AppState, action: AppAction): AppState {
       return produce(state, (draft) => {
         draft.session.targetHeading = vmgHeading;
         draft.session.lockedTWA = null;
+      });
+    }
+
+    case "GATE_CROSSED": {
+      if (state.tag !== "Playing") return state;
+      // Validate this is the expected next gate
+      if (action.gateIndex !== state.session.nextGateIndex) return state;
+      const numGates = state.session.course.gates.length;
+      return produce(state, (draft) => {
+        draft.session.gateTimes.push(action.courseTime);
+        draft.session.nextGateIndex = action.gateIndex + 1;
+        // If crossed finish line (gate index === numGates), set finish time
+        if (action.gateIndex === numGates) {
+          draft.session.finishTime = action.courseTime;
+        }
       });
     }
 

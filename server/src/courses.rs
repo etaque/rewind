@@ -7,6 +7,21 @@ pub struct LngLat {
 }
 
 #[derive(Clone, Debug, Serialize)]
+pub struct Gate {
+    pub point1: LngLat,
+    pub point2: LngLat,
+}
+
+impl Gate {
+    pub fn midpoint(&self) -> LngLat {
+        LngLat {
+            lng: (self.point1.lng + self.point2.lng) / 2.0,
+            lat: (self.point1.lat + self.point2.lat) / 2.0,
+        }
+    }
+}
+
+#[derive(Clone, Debug, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct Course {
     pub key: String,
@@ -14,7 +29,8 @@ pub struct Course {
     pub start_time: i64,
     pub start: LngLat,
     pub start_heading: f64,
-    pub finish: LngLat,
+    pub finish_line: Gate,
+    pub gates: Vec<Gate>,
     pub time_factor: u16,
     pub max_days: u8,
 }
@@ -41,10 +57,17 @@ pub fn all() -> Vec<Course> {
                 lat: 48.7870,
             },
             start_heading: 300.0,
-            finish: LngLat {
-                lng: -61.53,
-                lat: 16.23,
+            finish_line: Gate {
+                point1: LngLat {
+                    lng: -61.53,
+                    lat: 16.03,
+                },
+                point2: LngLat {
+                    lng: -61.53,
+                    lat: 16.43,
+                },
             },
+            gates: vec![],
             time_factor: 5000,
             max_days: 21,
         },
@@ -58,10 +81,17 @@ pub fn all() -> Vec<Course> {
                 lat: 46.470243284275966,
             },
             start_heading: 270.0,
-            finish: LngLat {
-                lng: -1.788456535301071,
-                lat: 46.470243284275966,
+            finish_line: Gate {
+                point1: LngLat {
+                    lng: -1.988456535301071,
+                    lat: 46.470243284275966,
+                },
+                point2: LngLat {
+                    lng: -1.588456535301071,
+                    lat: 46.470243284275966,
+                },
             },
+            gates: vec![],
             time_factor: 10000,
             max_days: 90,
         },
@@ -75,10 +105,17 @@ pub fn all() -> Vec<Course> {
                 lat: -33.86,
             },
             start_heading: 180.0,
-            finish: LngLat {
-                lng: 147.50,
-                lat: -43.10,
+            finish_line: Gate {
+                point1: LngLat {
+                    lng: 147.30,
+                    lat: -43.10,
+                },
+                point2: LngLat {
+                    lng: 147.70,
+                    lat: -43.10,
+                },
             },
+            gates: vec![],
             time_factor: 2000,
             max_days: 5,
         },

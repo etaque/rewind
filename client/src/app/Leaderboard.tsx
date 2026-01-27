@@ -57,7 +57,7 @@ export default function Leaderboard({
               <span className={isFinished ? "text-green-400" : "text-gray-400"}>
                 {isFinished
                   ? formatRaceTime(entry.finishTime!, courseStartTime)
-                  : formatDistance(entry.distanceToFinish)}
+                  : formatDistance(entry.distanceToNextGate)}
               </span>
             </div>
           );

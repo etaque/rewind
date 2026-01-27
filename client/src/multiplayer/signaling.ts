@@ -138,6 +138,14 @@ export class SignalingClient {
     });
   }
 
+  sendGateCrossed(gateIndex: number, courseTime: number) {
+    this.send({
+      type: "GateCrossed",
+      gateIndex,
+      courseTime,
+    });
+  }
+
   disconnect() {
     if (this.ws) {
       this.ws.close();

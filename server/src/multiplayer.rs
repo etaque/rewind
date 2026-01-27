@@ -42,6 +42,10 @@ pub enum ClientMessage {
         lat: f32,
         heading: f32,
     },
+    GateCrossed {
+        gate_index: usize,
+        course_time: i64,
+    },
 }
 
 /// Messages sent from server to client
@@ -112,7 +116,8 @@ impl From<&WindReport> for WindRasterSource {
 pub struct LeaderboardEntry {
     pub player_id: String,
     pub player_name: String,
-    pub distance_to_finish: f64,
+    pub next_gate_index: usize,
+    pub distance_to_next_gate: f64,
     pub finish_time: Option<i64>,
 }
 
@@ -134,7 +139,8 @@ pub struct Player {
     pub tx: mpsc::UnboundedSender<ServerMessage>,
     pub position: Option<(f64, f64)>, // (lng, lat)
     pub heading: f32,
-    pub finish_time: Option<i64>, // None = racing, Some(time) = finished
+    pub next_gate_index: usize,       // 0..gates.len() for gates, gates.len() for finish
+    pub finish_time: Option<i64>,     // None = racing, Some(time) = finished
     pub path_history: Vec<PathPoint>, // Accumulated path for replay
     pub last_sample_instant: Option<Instant>, // For 100ms real-time sampling
 }
@@ -222,39 +228,32 @@ impl Race {
         self.players.is_empty() && inactive_duration.num_minutes() >= 1
     }
 
-    fn compute_leaderboard(
-        &mut self,
-        race_time: i64,
-    ) -> (Vec<LeaderboardEntry>, Vec<FinishedPlayer>) {
-        const FINISH_THRESHOLD_NM: f64 = 10.0;
-
-        let mut newly_finished: Vec<FinishedPlayer> = Vec::new();
+    fn compute_leaderboard(&self) -> Vec<LeaderboardEntry> {
+        let num_gates = self.course.gates.len();
 
         let mut entries: Vec<LeaderboardEntry> = self
             .players
-            .values_mut()
+            .values()
             .filter_map(|player| {
                 let (lng, lat) = player.position?;
-                let distance =
-                    haversine_distance(lat, lng, self.course.finish.lat, self.course.finish.lng);
 
-                // Detect finish (if not already finished and within threshold)
-                if player.finish_time.is_none() && distance <= FINISH_THRESHOLD_NM {
-                    player.finish_time = Some(race_time);
-
-                    // Collect data for saving (clone path_history before it's cleared)
-                    newly_finished.push(FinishedPlayer {
-                        player_id: player.id.clone(),
-                        player_name: player.name.clone(),
-                        finish_time: race_time,
-                        path_history: std::mem::take(&mut player.path_history),
-                    });
-                }
+                // Calculate distance to next gate (or finish line)
+                let distance = if player.next_gate_index < num_gates {
+                    // Distance to next intermediate gate
+                    let gate = &self.course.gates[player.next_gate_index];
+                    let midpoint = gate.midpoint();
+                    haversine_distance(lat, lng, midpoint.lat, midpoint.lng)
+                } else {
+                    // Distance to finish line
+                    let midpoint = self.course.finish_line.midpoint();
+                    haversine_distance(lat, lng, midpoint.lat, midpoint.lng)
+                };
 
                 Some(LeaderboardEntry {
                     player_id: player.id.clone(),
                     player_name: player.name.clone(),
-                    distance_to_finish: if player.finish_time.is_some() {
+                    next_gate_index: player.next_gate_index,
+                    distance_to_next_gate: if player.finish_time.is_some() {
                         0.0
                     } else {
                         distance
@@ -264,18 +263,56 @@ impl Race {
             })
             .collect();
 
-        // Sort: finished first (by time), then by distance
+        // Sort: finished first (by time), then by gate progress (more gates = better), then by distance
         entries.sort_by(|a, b| match (&a.finish_time, &b.finish_time) {
             (Some(ta), Some(tb)) => ta.cmp(tb),
             (Some(_), None) => std::cmp::Ordering::Less,
             (None, Some(_)) => std::cmp::Ordering::Greater,
-            (None, None) => a
-                .distance_to_finish
-                .partial_cmp(&b.distance_to_finish)
-                .unwrap_or(std::cmp::Ordering::Equal),
+            (None, None) => {
+                // Higher gate index = further in race = better position
+                match b.next_gate_index.cmp(&a.next_gate_index) {
+                    std::cmp::Ordering::Equal => a
+                        .distance_to_next_gate
+                        .partial_cmp(&b.distance_to_next_gate)
+                        .unwrap_or(std::cmp::Ordering::Equal),
+                    other => other,
+                }
+            }
         });
 
-        (entries, newly_finished)
+        entries
+    }
+
+    fn record_gate_crossing(
+        &mut self,
+        player_id: &str,
+        gate_index: usize,
+        course_time: i64,
+    ) -> Option<FinishedPlayer> {
+        let num_gates = self.course.gates.len();
+        let player = self.players.get_mut(player_id)?;
+
+        // Validate gate index matches expected next gate
+        if gate_index != player.next_gate_index {
+            return None;
+        }
+
+        // Advance to next gate
+        player.next_gate_index = gate_index + 1;
+
+        // Check if this was the finish line crossing
+        if gate_index == num_gates {
+            player.finish_time = Some(course_time);
+
+            return Some(FinishedPlayer {
+                player_id: player.id.clone(),
+                player_name: player.name.clone(),
+                finish_time: course_time,
+                path_history: std::mem::take(&mut player.path_history),
+            });
+        }
+
+        None
     }
 }
 
@@ -376,43 +413,15 @@ impl RaceManager {
             loop {
                 tokio::time::sleep(tokio::time::Duration::from_secs(2)).await;
 
-                // Collect finished players while holding write lock
-                let finished_to_save: Vec<(String, i64, FinishedPlayer)> = {
-                    let mut races = races_clone.write().await;
-                    let mut to_save = Vec::new();
+                let races = races_clone.read().await;
 
-                    for race in races.values_mut() {
-                        if race.race_started() && !race.race_ended {
-                            // Calculate current race time
-                            let now = Utc::now().timestamp_millis();
-                            let race_time = race
-                                .race_start_time
-                                .map(|start| race.course.race_time(now - start))
-                                .unwrap_or(0);
-
-                            let (leaderboard, newly_finished) = race.compute_leaderboard(race_time);
-
-                            // Collect finished players for async save
-                            for finished in newly_finished {
-                                to_save.push((
-                                    race.course.key.clone(),
-                                    race.course.start_time,
-                                    finished,
-                                ));
-                            }
-
-                            race.broadcast_all(ServerMessage::Leaderboard {
-                                entries: leaderboard,
-                            });
-                        }
+                for race in races.values() {
+                    if race.race_started() && !race.race_ended {
+                        let leaderboard = race.compute_leaderboard();
+                        race.broadcast_all(ServerMessage::Leaderboard {
+                            entries: leaderboard,
+                        });
                     }
-
-                    to_save
-                };
-
-                // Save finished players outside the lock
-                for (course_key, race_start_time, finished) in finished_to_save {
-                    tokio::spawn(save_race_result(course_key, race_start_time, finished));
                 }
             }
         });
@@ -444,6 +453,7 @@ impl RaceManager {
             tx,
             position: None,
             heading: 0.0,
+            next_gate_index: 0,
             finish_time: None,
             path_history: Vec::new(),
             last_sample_instant: None,
@@ -475,6 +485,7 @@ impl RaceManager {
             tx,
             position: None,
             heading: 0.0,
+            next_gate_index: 0,
             finish_time: None,
             path_history: Vec::new(),
             last_sample_instant: None,
@@ -583,6 +594,41 @@ impl RaceManager {
             },
             Some(player_id),
         );
+    }
+
+    pub async fn record_gate_crossing(
+        &self,
+        player_id: &str,
+        gate_index: usize,
+        course_time: i64,
+    ) {
+        let player_races = self.player_races.read().await;
+        let Some(race_id) = player_races.get(player_id).cloned() else {
+            return;
+        };
+        drop(player_races);
+
+        let finished_to_save: Option<(String, i64, FinishedPlayer)> = {
+            let mut races = self.races.write().await;
+            let Some(race) = races.get_mut(&race_id) else {
+                return;
+            };
+
+            if let Some(finished) = race.record_gate_crossing(player_id, gate_index, course_time) {
+                Some((
+                    race.course.key.clone(),
+                    race.course.start_time,
+                    finished,
+                ))
+            } else {
+                None
+            }
+        };
+
+        // Save finished player outside the lock
+        if let Some((course_key, race_start_time, finished)) = finished_to_save {
+            tokio::spawn(save_race_result(course_key, race_start_time, finished));
+        }
     }
 
     pub async fn start_race(&self, player_id: &str) -> anyhow::Result<()> {
@@ -768,6 +814,7 @@ mod tests {
             tx,
             position: None,
             heading: 0.0,
+            next_gate_index: 0,
             finish_time: None,
             path_history: Vec::new(),
             last_sample_instant: None,
@@ -775,6 +822,7 @@ mod tests {
     }
 
     fn make_test_course() -> Course {
+        use crate::courses::Gate;
         Course {
             key: "vg20".to_string(),
             name: "Vendee Globe 2020".to_string(),
@@ -784,10 +832,17 @@ mod tests {
                 lat: 46.470,
             },
             start_heading: 270.0,
-            finish: crate::courses::LngLat {
-                lng: -1.788,
-                lat: 46.470,
+            finish_line: Gate {
+                point1: crate::courses::LngLat {
+                    lng: -1.888,
+                    lat: 46.470,
+                },
+                point2: crate::courses::LngLat {
+                    lng: -1.688,
+                    lat: 46.470,
+                },
             },
+            gates: vec![],
             time_factor: 2000,
             max_days: 90,
         }
@@ -1201,6 +1256,16 @@ async fn handle_client_message(
         ClientMessage::PositionUpdate { lng, lat, heading } => {
             manager
                 .broadcast_position(player_id, lng, lat, heading)
+                .await;
+            Ok(())
+        }
+
+        ClientMessage::GateCrossed {
+            gate_index,
+            course_time,
+        } => {
+            manager
+                .record_gate_crossing(player_id, gate_index, course_time)
                 .await;
             Ok(())
         }

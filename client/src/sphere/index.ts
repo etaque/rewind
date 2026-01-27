@@ -207,6 +207,11 @@ export class SphereView {
     this.render();
   }
 
+  setNextGateIndex(index: number) {
+    this.courseLine.setNextGateIndex(index);
+    this.render();
+  }
+
   updateProjectedPath(points: ProjectedPoint[]) {
     this.projectedPath.setPoints(points);
     this.render();

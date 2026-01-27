@@ -175,6 +175,13 @@ export default function App() {
     multiplayer: multiplayerRef,
   });
 
+  // Sync next gate index to SphereView for visualization
+  useEffect(() => {
+    if (session && sphereViewRef.current) {
+      sphereViewRef.current.setNextGateIndex(session.nextGateIndex);
+    }
+  }, [session?.nextGateIndex, sphereViewRef]);
+
   // Transition to Playing when countdown reaches 0
   useEffect(() => {
     if (state.tag !== "Countdown") return;

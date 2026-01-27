@@ -10,6 +10,7 @@ type GameLoopRefs = {
   position: React.MutableRefObject<LngLat | null>;
   courseTime: React.MutableRefObject<number>;
   heading: React.MutableRefObject<number>;
+  nextGateIndex: React.MutableRefObject<number>;
   interpolatedWind: React.MutableRefObject<InterpolatedWind>;
   multiplayer: React.MutableRefObject<MultiplayerClient | null>;
 };
@@ -35,6 +36,7 @@ export function useGameLoop(
     let animationId: number;
     let lastTime: number | null = null;
     let accumulatedClock = session.clock;
+    let lastGateIndex = session.nextGateIndex;
     lastWindRefreshRef.current = 0;
 
     const tick = (time: number) => {
@@ -58,6 +60,20 @@ export function useGameLoop(
               refs.courseTime.current,
             ) ?? { u: 0, v: 0 };
             dispatch({ type: "LOCAL_WIND_UPDATED", windSpeed });
+          }
+        }
+
+        // Check for gate crossing and notify server
+        const currentGateIndex = refs.nextGateIndex.current;
+        if (currentGateIndex > lastGateIndex) {
+          // Gate was crossed - notify server
+          const crossedGateIndex = lastGateIndex;
+          lastGateIndex = currentGateIndex;
+          if (refs.multiplayer.current && refs.courseTime.current) {
+            refs.multiplayer.current.sendGateCrossed(
+              crossedGateIndex,
+              refs.courseTime.current,
+            );
           }
         }
 

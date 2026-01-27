@@ -13,13 +13,19 @@ export type WindRasterSource = {
   pngUrl: string;
 };
 
+export type Gate = {
+  point1: LngLat;
+  point2: LngLat;
+};
+
 export type Course = {
   key: string;
   name: string;
   startTime: number;
   start: LngLat;
   startHeading: number;
-  finish: LngLat;
+  finishLine: Gate;
+  gates: Gate[];
   timeFactor: number;
   maxDays: number;
 };
