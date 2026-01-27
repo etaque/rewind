@@ -17,8 +17,9 @@ const testCourse: Course = {
   startTime: 1000,
   start: { lng: -10, lat: 45 },
   finishLine: {
-    point1: { lng: 9.9, lat: 45 },
-    point2: { lng: 10.1, lat: 45 },
+    center: { lng: 10, lat: 45 },
+    orientation: 0,
+    lengthNm: 12,
   },
   gates: [],
   exclusionZones: [],

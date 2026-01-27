@@ -1,6 +1,33 @@
 import { Course, Gate, LngLat } from "../models";
 
 /**
+ * Compute the two endpoints of a gate from its center, orientation, and length.
+ */
+export function gateEndpoints(gate: Gate): [LngLat, LngLat] {
+  // 1 nautical mile = 1/60 degree of latitude
+  const halfLengthDeg = gate.lengthNm / 2 / 60;
+  const orientationRad = (gate.orientation * Math.PI) / 180;
+
+  // For orientation 0 (vertical): points are north/south of center
+  // For orientation 90 (horizontal): points are east/west of center
+  const latOffset = halfLengthDeg * Math.cos(orientationRad);
+  const lngOffset =
+    (halfLengthDeg * Math.sin(orientationRad)) /
+    Math.cos((gate.center.lat * Math.PI) / 180);
+
+  return [
+    {
+      lng: gate.center.lng - lngOffset,
+      lat: gate.center.lat - latOffset,
+    },
+    {
+      lng: gate.center.lng + lngOffset,
+      lat: gate.center.lat + latOffset,
+    },
+  ];
+}
+
+/**
  * Check if two line segments intersect using cross-product method.
  * Segment 1: p1 -> p2 (boat movement)
  * Segment 2: g1 -> g2 (gate line)
@@ -31,8 +58,10 @@ function segmentsIntersect(
   const d4 = cross(p1, p2, g2);
 
   // General case: segments straddle each other
-  if (((d1 > 0 && d2 < 0) || (d1 < 0 && d2 > 0)) &&
-      ((d3 > 0 && d4 < 0) || (d3 < 0 && d4 > 0))) {
+  if (
+    ((d1 > 0 && d2 < 0) || (d1 < 0 && d2 > 0)) &&
+    ((d3 > 0 && d4 < 0) || (d3 < 0 && d4 > 0))
+  ) {
     return true;
   }
 
@@ -49,7 +78,8 @@ function segmentsIntersect(
  * Check if boat movement crosses a gate.
  */
 function crossesGate(prevPos: LngLat, newPos: LngLat, gate: Gate): boolean {
-  return segmentsIntersect(prevPos, newPos, gate.point1, gate.point2);
+  const [point1, point2] = gateEndpoints(gate);
+  return segmentsIntersect(prevPos, newPos, point1, point2);
 }
 
 /**

@@ -14,8 +14,9 @@ export type WindRasterSource = {
 };
 
 export type Gate = {
-  point1: LngLat;
-  point2: LngLat;
+  center: LngLat;
+  orientation: number; // degrees, 0 = vertical (N-S), 90 = horizontal (E-W)
+  lengthNm: number; // length in nautical miles
 };
 
 export type ExclusionZone = {

@@ -11,8 +11,9 @@ function makeSession(overrides: Partial<Session> = {}): Session {
       startTime: 0,
       start: { lng: 0, lat: 0 },
       finishLine: {
-        point1: { lng: -0.1, lat: 0 },
-        point2: { lng: 0.1, lat: 0 },
+        center: { lng: 0, lat: 0 },
+        orientation: 90,
+        lengthNm: 12,
       },
       gates: [],
       exclusionZones: [],

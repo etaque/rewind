@@ -7,17 +7,58 @@ pub struct LngLat {
 }
 
 #[derive(Clone, Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
 pub struct Gate {
-    pub point1: LngLat,
-    pub point2: LngLat,
+    pub center: LngLat,
+    pub orientation: f64, // degrees, 0 = north-south (vertical), 90 = east-west (horizontal)
+    pub length_nm: f64,   // length in nautical miles
 }
 
 impl Gate {
-    pub fn midpoint(&self) -> LngLat {
-        LngLat {
-            lng: (self.point1.lng + self.point2.lng) / 2.0,
-            lat: (self.point1.lat + self.point2.lat) / 2.0,
+    /// Create a vertical (north-south) gate
+    pub fn vertical(lng: f64, lat: f64, length_nm: f64) -> Self {
+        Gate {
+            center: LngLat { lng, lat },
+            orientation: 0.0,
+            length_nm,
         }
+    }
+
+    /// Create a horizontal (east-west) gate
+    pub fn horizontal(lng: f64, lat: f64, length_nm: f64) -> Self {
+        Gate {
+            center: LngLat { lng, lat },
+            orientation: 90.0,
+            length_nm,
+        }
+    }
+
+    /// Compute the two endpoints of the gate
+    pub fn endpoints(&self) -> (LngLat, LngLat) {
+        // 1 nautical mile = 1/60 degree of latitude
+        let half_length_deg = (self.length_nm / 2.0) / 60.0;
+        let orientation_rad = self.orientation.to_radians();
+
+        // For orientation 0 (vertical): points are north/south of center
+        // For orientation 90 (horizontal): points are east/west of center
+        let lat_offset = half_length_deg * orientation_rad.cos();
+        let lng_offset =
+            half_length_deg * orientation_rad.sin() / self.center.lat.to_radians().cos();
+
+        (
+            LngLat {
+                lng: self.center.lng - lng_offset,
+                lat: self.center.lat - lat_offset,
+            },
+            LngLat {
+                lng: self.center.lng + lng_offset,
+                lat: self.center.lat + lat_offset,
+            },
+        )
+    }
+
+    pub fn midpoint(&self) -> LngLat {
+        self.center.clone()
     }
 }
 
@@ -64,16 +105,7 @@ pub fn all() -> Vec<Course> {
                 lat: 48.7870,
             },
             start_heading: 300.0,
-            finish_line: Gate {
-                point1: LngLat {
-                    lng: -61.53,
-                    lat: 16.03,
-                },
-                point2: LngLat {
-                    lng: -61.53,
-                    lat: 16.43,
-                },
-            },
+            finish_line: Gate::vertical(-61.53, 16.23, 24.0), // ~24 NM vertical gate
             gates: vec![],
             exclusion_zones: vec![],
             time_factor: 5000,
@@ -89,19 +121,14 @@ pub fn all() -> Vec<Course> {
                 lat: 46.470243284275966,
             },
             start_heading: 270.0,
-            finish_line: Gate {
-                point1: LngLat {
-                    lng: -1.988456535301071,
-                    lat: 46.470243284275966,
-                },
-                point2: LngLat {
-                    lng: -1.588456535301071,
-                    lat: 46.470243284275966,
-                },
-            },
-            gates: vec![],
+            finish_line: Gate::horizontal(-1.788456535301071, 46.470243284275966, 24.0),
+            gates: vec![
+                Gate::vertical(20.0, -39.9, 612.0),   // Cape of Good Hope (land to AEZ)
+                Gate::vertical(114.0, -43.6, 1104.0), // Cape Leeuwin (land to AEZ)
+                Gate::vertical(-67.0, -57.2, 150.0),  // Cape Horn (land to AEZ)
+            ],
             exclusion_zones: vec![vendee_globe_aez()],
-            time_factor: 10000,
+            time_factor: 8000,
             max_days: 90,
         },
         Course {
@@ -114,16 +141,7 @@ pub fn all() -> Vec<Course> {
                 lat: -33.86,
             },
             start_heading: 180.0,
-            finish_line: Gate {
-                point1: LngLat {
-                    lng: 147.30,
-                    lat: -43.10,
-                },
-                point2: LngLat {
-                    lng: 147.70,
-                    lat: -43.10,
-                },
-            },
+            finish_line: Gate::horizontal(147.50, -43.10, 24.0), // ~24 NM horizontal gate
             gates: vec![],
             exclusion_zones: vec![],
             time_factor: 2000,

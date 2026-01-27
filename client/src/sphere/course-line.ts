@@ -1,6 +1,7 @@
 import { geoDistance, geoPath } from "d3-geo";
 import { Course, Gate, LngLat } from "../models";
 import { Scene } from "./scene";
+import { gateEndpoints } from "../app/gate-crossing";
 
 // Fixed screen radius in pixels
 const MARKER_RADIUS_PX = 8;
@@ -114,6 +115,7 @@ export default class CourseLine {
     color: string,
     lineWidth: number,
   ) {
+    const [point1, point2] = gateEndpoints(gate);
     const path = geoPath(scene.projection, context);
 
     const line: GeoJSON.Feature<GeoJSON.LineString> = {
@@ -122,8 +124,8 @@ export default class CourseLine {
       geometry: {
         type: "LineString",
         coordinates: [
-          [gate.point1.lng, gate.point1.lat],
-          [gate.point2.lng, gate.point2.lat],
+          [point1.lng, point1.lat],
+          [point2.lng, point2.lat],
         ],
       },
     };
@@ -136,8 +138,8 @@ export default class CourseLine {
     context.stroke();
 
     // Draw buoys at gate endpoints
-    this.drawBuoy(scene, context, gate.point1, color);
-    this.drawBuoy(scene, context, gate.point2, color);
+    this.drawBuoy(scene, context, point1, color);
+    this.drawBuoy(scene, context, point2, color);
   }
 
   private drawBuoy(
@@ -186,8 +188,5 @@ export default class CourseLine {
 }
 
 function gateMidpoint(gate: Gate): LngLat {
-  return {
-    lng: (gate.point1.lng + gate.point2.lng) / 2,
-    lat: (gate.point1.lat + gate.point2.lat) / 2,
-  };
+  return gate.center;
 }
