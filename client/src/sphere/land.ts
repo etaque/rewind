@@ -28,12 +28,21 @@ export default class Land {
     context.clearRect(0, 0, this.canvas.width, this.canvas.height);
     context.scale(scene.dpr, scene.dpr);
 
-    context.strokeStyle = "rgba(200, 180, 140, 0.5)";
-    context.fillStyle = "rgba(34, 45, 34, 0.6)";
+    // Draw land with shadow/glow effect
+    context.shadowColor = "rgba(0, 0, 0, 0.4)";
+    context.shadowBlur = 12;
+    context.shadowOffsetX = 0;
+    context.shadowOffsetY = 0;
+
+    context.fillStyle = "rgba(255, 255, 255, 0.15)";
+    context.strokeStyle = "rgba(34, 45, 34, 0.3)";
     context.beginPath();
     path(this.land);
-    context.stroke();
     context.fill();
+
+    // Reset shadow before stroke to keep coastline crisp
+    context.shadowBlur = 0;
+    context.stroke();
 
     context.strokeStyle = "rgba(255, 255, 255, 0.08)";
     context.beginPath();
