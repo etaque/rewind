@@ -5,8 +5,8 @@ import * as utils from "../utils";
 
 const MAX_AGE = 1200;
 const PARTICLES_COUNT = 1000;
-const ALPHA_DECAY = 0.92;
-const TRAVEL_SPEED = 45;
+const ALPHA_DECAY = 0.96;
+const TRAVEL_SPEED = 25;
 
 type Particle = {
   pix: Pixel;
