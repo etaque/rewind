@@ -46,6 +46,7 @@ pub struct Course {
     pub key: String,
     pub name: String,
     pub description: String,
+    pub polar: String,
     pub start_time: i64,
     pub start: LngLat,
     pub start_heading: f64,
@@ -73,6 +74,7 @@ pub fn all() -> Vec<Course> {
             key: "mt23".to_string(),
             name: "Mini Transat 2023".to_string(),
             description: "Solo transatlantic race for 6.50m boats, from France to the Caribbean via the Canaries".to_string(),
+            polar: "mini-650".to_string(),
             // 2023-09-25T13:38:00Z in milliseconds
             start_time: 1695649080000,
             start: LngLat {
@@ -106,6 +108,7 @@ pub fn all() -> Vec<Course> {
             key: "rdr22".to_string(),
             name: "Route du Rhum 2022".to_string(),
             description: "Solo transatlantic race from Saint-Malo to Guadeloupe".to_string(),
+            polar: "vr-imoca-full-pack".to_string(),
             // 2022-11-09T13:15:00Z in milliseconds
             start_time: 1668002100000,
             start: LngLat {
@@ -124,6 +127,7 @@ pub fn all() -> Vec<Course> {
             key: "ore21".to_string(),
             name: "The Ocean Race Europe 2021".to_string(),
             description: "Offshore race from Lorient to Genoa via Cascais".to_string(),
+            polar: "vr-imoca-full-pack".to_string(),
             // 2021-05-29T11:45:00Z (13:45 CEST) in milliseconds
             start_time: 1622285100000,
             start: LngLat {
@@ -157,6 +161,7 @@ pub fn all() -> Vec<Course> {
             key: "vg20".to_string(),
             name: "Vendee Globe 2020".to_string(),
             description: "Solo non-stop around the world race via the three great capes".to_string(),
+            polar: "vr-imoca-full-pack".to_string(),
             // 2020-11-08T11:00:00+01:00 in milliseconds
             start_time: 1604833200000,
             start: LngLat {

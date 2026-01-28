@@ -28,6 +28,7 @@ export type Course = {
   key: string;
   name: string;
   description: string;
+  polar: string;
   startTime: number;
   start: LngLat;
   startHeading: number;

@@ -87,7 +87,7 @@ export function tick(session: Session, delta: number): TickResult {
 
   // Calculate TWA and boat speed from polar
   const twa = calculateTWA(heading, windDirNorm);
-  let boatSpeed = getBoatSpeed(tws, twa);
+  let boatSpeed = getBoatSpeed(session.polar, tws, twa);
 
   // Move boat based on speed and heading
   // Boat speed is in knots, delta is in ms

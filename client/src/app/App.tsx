@@ -12,7 +12,7 @@ import {
   useCourses,
   useGhosts,
   useSphereView,
-  useWindLoader,
+  useRaceDataLoader,
   useWindSourceUpdater,
   useSessionRefs,
   useIdleWind,
@@ -82,8 +82,8 @@ export default function App() {
     coursesRef,
   );
 
-  // Wind loading (lobby)
-  useWindLoader(
+  // Race data loading (lobby)
+  useRaceDataLoader(
     state.tag === "Lobby" && state.wind.status === "loading",
     lobbyCourse,
     state.tag === "Lobby" ? state.windRasterSources : null,
@@ -278,6 +278,7 @@ export default function App() {
               courseStartTime={state.session.course.startTime}
             />
             <PolarDiagram
+              polar={state.session.polar}
               tws={getWindSpeedKnots(state.session.windSpeed)}
               twa={calculateTWA(
                 state.session.heading,

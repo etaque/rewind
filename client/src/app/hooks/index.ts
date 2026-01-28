@@ -4,6 +4,6 @@ export { useMultiplayer } from "./useMultiplayer";
 export { useCourses } from "./useCourses";
 export { useGhosts } from "./useGhosts";
 export { useSphereView } from "./useSphereView";
-export { useWindLoader, useWindSourceUpdater } from "./useWindLoader";
+export { useRaceDataLoader, useWindSourceUpdater } from "./useRaceDataLoader";
 export { useSessionRefs } from "./useSessionRefs";
 export { useIdleWind } from "./useIdleWind";

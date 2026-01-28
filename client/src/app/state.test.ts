@@ -9,12 +9,14 @@ import {
   RaceState,
 } from "./state";
 import { Course, WindRasterSource } from "../models";
+import { PolarData } from "./polar";
 
 // Test fixtures
 const testCourse: Course = {
   key: "test-course",
   name: "Test Course",
   description: "Test course description",
+  polar: "vr-imoca-full-pack",
   startTime: 1000,
   start: { lng: -10, lat: 45 },
   finishLine: {
@@ -28,6 +30,13 @@ const testCourse: Course = {
   startHeading: 90,
   timeFactor: 60,
   maxDays: 90,
+};
+
+const testPolar: PolarData = {
+  table: { "10": { "0": 0, "90": 10, "180": 8 } },
+  twsValues: [10],
+  twaValues: [0, 90, 180],
+  maxSpeed: 10,
 };
 
 const testRace: RaceState = {
@@ -54,6 +63,7 @@ function makeLobbyState(
     race: testRace,
     windRasterSources: [],
     wind: asyncState.success(undefined),
+    polar: testPolar,
     ...overrides,
   };
 }
@@ -71,6 +81,7 @@ function makeCountdownState(
     course: testCourse,
     race: testRace,
     windRasterSources: [],
+    polar: testPolar,
     ...overrides,
   };
 }
@@ -95,6 +106,7 @@ function makePlayingState(
       lockedTWA: null,
       boatSpeed: 10,
       course: testCourse,
+      polar: testPolar,
       currentSource: testWindRasterSources[0],
       nextSources: [testWindRasterSources[1]],
       windSpeed: { u: 5, v: -10 },

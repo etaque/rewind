@@ -1,6 +1,14 @@
 import { describe, it, expect } from "vitest";
 import { calculateSignedTWA, toggleTWALock } from "./twa-lock";
 import { Session } from "./state";
+import { PolarData } from "./polar";
+
+const testPolar: PolarData = {
+  table: { "10": { "0": 0, "90": 10, "180": 8 } },
+  twsValues: [10],
+  twaValues: [0, 90, 180],
+  maxSpeed: 10,
+};
 
 // Helper to create a minimal session for testing
 function makeSession(overrides: Partial<Session> = {}): Session {
@@ -9,6 +17,7 @@ function makeSession(overrides: Partial<Session> = {}): Session {
       key: "test",
       name: "Test Course",
       description: "Test course",
+      polar: "vr-imoca-full-pack",
       startTime: 0,
       start: { lng: 0, lat: 0 },
       finishLine: {
@@ -23,6 +32,7 @@ function makeSession(overrides: Partial<Session> = {}): Session {
       timeFactor: 1,
       maxDays: 90,
     },
+    polar: testPolar,
     clock: 0,
     lastWindRefresh: 0,
     courseTime: 0,

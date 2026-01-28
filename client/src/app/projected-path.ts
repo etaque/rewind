@@ -1,6 +1,6 @@
 import { LngLat } from "../models";
 import InterpolatedWind from "../interpolated-wind";
-import { getBoatSpeed, calculateTWA } from "./polar";
+import { getBoatSpeed, calculateTWA, PolarData } from "./polar";
 import { getWindDirection, getWindSpeedKnots } from "../utils";
 
 // Projection settings
@@ -24,6 +24,7 @@ export function computeProjectedPath(
   speed: number,
   courseTime: number,
   interpolatedWind: InterpolatedWind,
+  polar: PolarData,
 ): ProjectedPoint[] {
   const points: ProjectedPoint[] = [
     { position: startPosition, time: courseTime, boatSpeed: speed },
@@ -49,7 +50,7 @@ export function computeProjectedPath(
 
     // Calculate boat speed
     const twa = calculateTWA(currentHeading, windDir);
-    const boatSpeed = getBoatSpeed(tws, twa);
+    const boatSpeed = getBoatSpeed(polar, tws, twa);
 
     // Convert speed (knots) and time to distance
     // knots = nautical miles per hour

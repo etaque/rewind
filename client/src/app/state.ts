@@ -7,6 +7,7 @@ import { toggleTWALock } from "./twa-lock";
 import { calculateVMGLockHeading } from "./vmg-lock";
 import { currentWindContext } from "./wind-context";
 import { prepareExclusionZones } from "./exclusion-zone";
+import { PolarData } from "./polar";
 
 // Enable Map support in Immer
 enableMapSet();
@@ -32,12 +33,14 @@ export type AppState =
       race: RaceState;
       windRasterSources: WindRasterSource[];
       wind: AsyncState<void>;
+      polar: PolarData | null;
     }
   | {
       tag: "Countdown";
       countdown: number;
       course: Course;
       windRasterSources: WindRasterSource[];
+      polar: PolarData;
       race: RaceState;
     }
   | {
@@ -67,6 +70,7 @@ export type Session = {
   lockedTWA: number | null; // when set, maintain this TWA as wind changes
   boatSpeed: number; // in knots
   course: Course;
+  polar: PolarData;
   currentSource: WindRasterSource | null;
   nextSources: WindRasterSource[];
   windSpeed: WindSpeed;
@@ -105,6 +109,7 @@ export type AppAction =
   | { type: "COUNTDOWN"; seconds: number }
   | { type: "START_PLAYING" }
   | { type: "WIND_LOAD_RESULT"; result: AsyncState<void> }
+  | { type: "POLAR_LOADED"; polar: PolarData }
   | { type: "LEAVE_RACE" }
   | { type: "SYNC_RACE_TIME"; raceTime: number }
   | { type: "RACE_ENDED"; reason: string }
@@ -143,6 +148,7 @@ function createPlayingState(
       lockedTWA: null,
       boatSpeed: 0,
       course: state.course,
+      polar: state.polar,
       currentSource,
       nextSources,
       windSpeed: { u: 0, v: 0 },
@@ -236,6 +242,7 @@ export function appReducer(state: AppState, action: AppAction): AppState {
         course: action.course,
         windRasterSources: action.windRasterSources,
         wind: asyncState.loading(),
+        polar: null,
         race: {
           id: action.raceId,
           myPlayerId: action.playerId,
@@ -251,6 +258,7 @@ export function appReducer(state: AppState, action: AppAction): AppState {
         course: action.course,
         windRasterSources: action.windRasterSources,
         wind: asyncState.loading(),
+        polar: null,
         race: {
           id: action.raceId,
           myPlayerId: action.playerId,
@@ -263,6 +271,12 @@ export function appReducer(state: AppState, action: AppAction): AppState {
       if (state.tag !== "Lobby") return state;
       return produce(state, (draft) => {
         draft.wind = action.result;
+      });
+
+    case "POLAR_LOADED":
+      if (state.tag !== "Lobby") return state;
+      return produce(state, (draft) => {
+        draft.polar = action.polar;
       });
 
     case "PLAYER_JOINED":
@@ -285,13 +299,27 @@ export function appReducer(state: AppState, action: AppAction): AppState {
 
     case "COUNTDOWN":
       if (state.tag !== "Lobby" && state.tag !== "Countdown") return state;
-      if (state.tag === "Lobby" && state.wind.status !== "success")
+      // Can only start countdown if wind and polar are loaded
+      if (
+        state.tag === "Lobby" &&
+        (state.wind.status !== "success" || state.polar === null)
+      )
         return state;
       if (state.tag === "Countdown" && action.seconds === 0) {
         return createPlayingState(state, state.windRasterSources);
       }
+      // Transition from Lobby to Countdown
+      if (state.tag === "Lobby") {
+        return {
+          tag: "Countdown",
+          countdown: action.seconds,
+          course: state.course,
+          windRasterSources: state.windRasterSources,
+          polar: state.polar!, // We know polar is not null from the check above
+          race: state.race,
+        };
+      }
       return produce(state, (draft) => {
-        (draft as Extract<AppState, { tag: "Countdown" }>).tag = "Countdown";
         (draft as Extract<AppState, { tag: "Countdown" }>).countdown =
           action.seconds;
       });

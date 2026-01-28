@@ -5,12 +5,13 @@ import { Course, WindRasterSource } from "../../models";
 import { AppAction } from "../state";
 import { initLandData } from "../land";
 import { currentWindContext } from "../wind-context";
+import { loadPolar } from "../polar";
 
 /**
- * Hook to handle wind data loading when entering Lobby state.
- * Initializes SphereView and loads wind rasters.
+ * Hook to handle race data loading when entering Lobby state.
+ * Loads wind rasters, polar data, and initializes land collision data.
  */
-export function useWindLoader(
+export function useRaceDataLoader(
   isLoadingWind: boolean,
   course: Course | null,
   windRasterSources: WindRasterSource[] | null,
@@ -25,8 +26,8 @@ export function useWindLoader(
     // Initialize land collision data
     initLandData();
 
-    // Load wind rasters
-    const loadWind = async () => {
+    // Load wind rasters and polar in parallel
+    const loadData = async () => {
       try {
         const [currentWindSource, nextWindSources] = currentWindContext(
           course.startTime,
@@ -34,12 +35,15 @@ export function useWindLoader(
           windRasterSources,
         );
 
-        // Load wind rasters (await all for initial load)
-        await interpolatedWindRef.current.update(
-          currentWindSource,
-          nextWindSources,
-          true, // awaitAll
-        );
+        // Load wind rasters and polar in parallel
+        const [, polar] = await Promise.all([
+          interpolatedWindRef.current.update(
+            currentWindSource,
+            nextWindSources,
+            true, // awaitAll
+          ),
+          loadPolar(course.polar),
+        ]);
 
         // Update visualization
         const factor = interpolatedWindRef.current.getInterpolationFactor(
@@ -47,6 +51,8 @@ export function useWindLoader(
         );
         sphereViewRef.current?.updateWind(interpolatedWindRef.current, factor);
 
+        // Dispatch polar loaded first, then wind success
+        dispatch({ type: "POLAR_LOADED", polar });
         dispatch({
           type: "WIND_LOAD_RESULT",
           result: { status: "success", data: undefined },
@@ -62,7 +68,7 @@ export function useWindLoader(
       }
     };
 
-    loadWind();
+    loadData();
   }, [
     isLoadingWind,
     course?.key,

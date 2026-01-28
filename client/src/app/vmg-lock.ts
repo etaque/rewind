@@ -8,7 +8,7 @@ import { getOptimalVMGHeading } from "./polar";
  * @returns Target heading for optimal VMG, or null if no wind
  */
 export function calculateVMGLockHeading(session: Session): number | null {
-  const { windSpeed, heading } = session;
+  const { windSpeed, heading, polar } = session;
 
   const tws = getWindSpeedKnots(windSpeed);
   if (tws < 1) {
@@ -17,5 +17,5 @@ export function calculateVMGLockHeading(session: Session): number | null {
   }
 
   const windDirection = getWindDirection(windSpeed);
-  return getOptimalVMGHeading(windDirection, tws, heading);
+  return getOptimalVMGHeading(polar, windDirection, tws, heading);
 }

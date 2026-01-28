@@ -1,7 +1,8 @@
 import React, { useMemo } from "react";
-import { getPolarCurve, getMaxPolarSpeed } from "./polar";
+import { getPolarCurve, getMaxPolarSpeed, PolarData } from "./polar";
 
 type PolarDiagramProps = {
+  polar: PolarData;
   tws: number; // True Wind Speed in knots
   twa: number; // True Wind Angle (0-180)
   bsp: number; // Current Boat Speed in knots
@@ -13,6 +14,7 @@ const RADIUS = (SIZE - PADDING * 2) / 2;
 const CENTER = SIZE / 2;
 
 export default React.memo(function PolarDiagram({
+  polar,
   tws,
   twa,
   bsp,
@@ -20,9 +22,12 @@ export default React.memo(function PolarDiagram({
   // Round TWS to reduce curve recalculations
   const roundedTws = Math.round(tws);
 
-  // Memoize polar curve computation (only recompute when TWS changes)
-  const polarCurve = useMemo(() => getPolarCurve(roundedTws), [roundedTws]);
-  const maxSpeed = useMemo(() => getMaxPolarSpeed(), []);
+  // Memoize polar curve computation (only recompute when TWS or polar changes)
+  const polarCurve = useMemo(
+    () => getPolarCurve(polar, roundedTws),
+    [polar, roundedTws],
+  );
+  const maxSpeed = useMemo(() => getMaxPolarSpeed(polar), [polar]);
 
   // Scale function: BSP -> radius
   const scale = (speed: number) => (speed / maxSpeed) * RADIUS;

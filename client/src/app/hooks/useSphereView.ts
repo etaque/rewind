@@ -71,6 +71,7 @@ export function useSphereView(
       session.boatSpeed,
       session.courseTime,
       interpolatedWind,
+      session.polar,
     );
     sphereViewRef.current.updateProjectedPath(projectedPath);
   }, [

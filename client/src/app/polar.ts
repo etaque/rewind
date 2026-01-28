@@ -1,63 +1,93 @@
-import polarData from "../static/vr-imoca-full-pack.json";
+/**
+ * Polar data structure: TWS -> TWA -> BSP
+ * Keys are string numbers, values are boat speeds in knots
+ */
+export type PolarData = {
+  table: Record<string, Record<string, number>>;
+  twsValues: number[];
+  twaValues: number[];
+  maxSpeed: number;
+};
 
-type PolarTable = Record<string, Record<string, number>>;
+/**
+ * Load polar data from a JSON file.
+ * @param polarName Name of the polar file (without .json extension)
+ * @returns Promise resolving to parsed PolarData
+ */
+export async function loadPolar(polarName: string): Promise<PolarData> {
+  const response = await fetch(`/static/${polarName}.json`);
+  if (!response.ok) {
+    throw new Error(`Failed to load polar: ${polarName}`);
+  }
+  const table: Record<string, Record<string, number>> = await response.json();
+  return parsePolarTable(table);
+}
 
-const polar: PolarTable = polarData;
+/**
+ * Parse a raw polar table into PolarData with precomputed values.
+ */
+export function parsePolarTable(
+  table: Record<string, Record<string, number>>,
+): PolarData {
+  const twsValues = Object.keys(table)
+    .map(Number)
+    .sort((a, b) => a - b);
 
-// Get sorted TWS values from polar
-const twsValues = Object.keys(polar)
-  .map(Number)
-  .sort((a, b) => a - b);
+  const twaValues = Object.keys(table[twsValues[0]])
+    .map(Number)
+    .sort((a, b) => a - b);
 
-// Get sorted TWA values from first TWS entry
-const twaValues = Object.keys(polar[twsValues[0]])
-  .map(Number)
-  .sort((a, b) => a - b);
+  // Compute max speed
+  let maxSpeed = 0;
+  for (const twsKey of Object.keys(table)) {
+    for (const twaKey of Object.keys(table[twsKey])) {
+      maxSpeed = Math.max(maxSpeed, table[twsKey][twaKey]);
+    }
+  }
 
-// Cache max polar speed (computed once)
-let cachedMaxPolarSpeed: number | null = null;
+  return { table, twsValues, twaValues, maxSpeed };
+}
 
 /**
  * Get the polar curve (BSP values for all TWA angles) at a given TWS.
  * Uses interpolation between TWS values for smooth curves.
+ * @param polar The polar data
  * @param tws True Wind Speed in knots
  * @returns Array of { twa, bsp } points for plotting
  */
 export function getPolarCurve(
+  polar: PolarData,
   tws: number,
 ): Array<{ twa: number; bsp: number }> {
-  return twaValues.map((twa) => ({
+  return polar.twaValues.map((twa) => ({
     twa,
-    bsp: getBoatSpeed(tws, twa),
+    bsp: getBoatSpeed(polar, tws, twa),
   }));
 }
 
 /**
  * Get the maximum BSP in the polar data (for scaling).
- * Result is cached after first computation.
+ * @param polar The polar data
  * @returns Maximum boat speed in knots
  */
-export function getMaxPolarSpeed(): number {
-  if (cachedMaxPolarSpeed !== null) {
-    return cachedMaxPolarSpeed;
-  }
-  let max = 0;
-  for (const twsKey of Object.keys(polar)) {
-    for (const twaKey of Object.keys(polar[twsKey])) {
-      max = Math.max(max, polar[twsKey][twaKey]);
-    }
-  }
-  cachedMaxPolarSpeed = max;
-  return max;
+export function getMaxPolarSpeed(polar: PolarData): number {
+  return polar.maxSpeed;
 }
 
 /**
  * Calculate boat speed from polar diagram using bilinear interpolation.
+ * @param polar The polar data
  * @param tws True Wind Speed in knots
  * @param twa True Wind Angle in degrees (0-180, symmetric)
  * @returns Boat speed in knots
  */
-export function getBoatSpeed(tws: number, twa: number): number {
+export function getBoatSpeed(
+  polar: PolarData,
+  tws: number,
+  twa: number,
+): number {
+  const { table, twsValues, twaValues } = polar;
+
   // Normalize TWA to 0-180 (polar is symmetric)
   twa = Math.abs(twa);
   if (twa > 180) twa = 360 - twa;
@@ -94,10 +124,10 @@ export function getBoatSpeed(tws: number, twa: number): number {
   }
 
   // Get four corner values
-  const v00 = polar[twsLow][twaLow];
-  const v01 = polar[twsLow][twaHigh];
-  const v10 = polar[twsHigh][twaLow];
-  const v11 = polar[twsHigh][twaHigh];
+  const v00 = table[twsLow][twaLow];
+  const v01 = table[twsLow][twaHigh];
+  const v10 = table[twsHigh][twaLow];
+  const v11 = table[twsHigh][twaHigh];
 
   // Bilinear interpolation
   const twsFrac = twsHigh === twsLow ? 0 : (tws - twsLow) / (twsHigh - twsLow);
@@ -140,11 +170,16 @@ export type VMGMode = "upwind" | "downwind";
 /**
  * Find the optimal TWA that maximizes VMG for the given wind speed.
  * Scans the polar diagram to find the best angle.
+ * @param polar The polar data
  * @param tws True Wind Speed in knots
  * @param mode 'upwind' (TWA 0-90) or 'downwind' (TWA 90-180)
  * @returns Optimal TWA in degrees
  */
-export function getOptimalVMGAngle(tws: number, mode: VMGMode): number {
+export function getOptimalVMGAngle(
+  polar: PolarData,
+  tws: number,
+  mode: VMGMode,
+): number {
   let bestVMG = -Infinity;
   let bestTWA = mode === "upwind" ? 45 : 135; // sensible defaults
 
@@ -154,7 +189,7 @@ export function getOptimalVMGAngle(tws: number, mode: VMGMode): number {
 
   // Scan in 1-degree increments for precision
   for (let twa = minTWA; twa <= maxTWA; twa++) {
-    const boatSpeed = getBoatSpeed(tws, twa);
+    const boatSpeed = getBoatSpeed(polar, tws, twa);
     const vmg = Math.abs(calculateVMG(boatSpeed, twa));
 
     if (vmg > bestVMG) {
@@ -168,12 +203,14 @@ export function getOptimalVMGAngle(tws: number, mode: VMGMode): number {
 
 /**
  * Calculate the optimal heading for VMG based on current wind and which tack we're on.
+ * @param polar The polar data
  * @param windDirection Wind direction in degrees (where wind comes FROM)
  * @param tws True Wind Speed in knots
  * @param currentHeading Current boat heading to determine port/starboard tack
  * @returns Optimal heading in degrees
  */
 export function getOptimalVMGHeading(
+  polar: PolarData,
   windDirection: number,
   tws: number,
   currentHeading: number,
@@ -183,7 +220,7 @@ export function getOptimalVMGHeading(
   const mode: VMGMode = currentTWA <= 90 ? "upwind" : "downwind";
 
   // Get optimal TWA for this mode
-  const optimalTWA = getOptimalVMGAngle(tws, mode);
+  const optimalTWA = getOptimalVMGAngle(polar, tws, mode);
 
   // Determine which side of the wind we're on (port or starboard tack)
   // Normalize the angle difference to determine tack
