@@ -57,6 +57,7 @@ export default class Stars {
 
     // Cut out the sphere area so stars don't show through transparent layers
     ctx.globalCompositeOperation = "destination-out";
+    ctx.fillStyle = "#000";
     ctx.beginPath();
     ctx.arc(
       sphereCenter.x * dpr,
