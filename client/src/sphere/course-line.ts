@@ -6,6 +6,15 @@ import { gateEndpoints } from "../app/gate-crossing";
 // Fixed screen radius in pixels
 const MARKER_RADIUS_PX = 8;
 const BUOY_RADIUS_PX = 4;
+const WAYPOINT_RADIUS_PX = 5;
+
+export type MarkerHit =
+  | { type: "start" }
+  | { type: "gateCenter"; index: number }
+  | { type: "finishCenter" }
+  | { type: "waypoint"; leg: number; index: number };
+
+type MarkerEntry = MarkerHit & { screenX: number; screenY: number };
 
 // Colors for gate states
 const GATE_COLOR_PASSED = "rgba(34, 197, 94, 0.8)"; // green
@@ -24,10 +33,22 @@ export default class CourseLine {
   canvas: HTMLCanvasElement;
   private course: Course;
   private nextGateIndex: number = 0;
+  markers: MarkerEntry[] = [];
 
   constructor(canvas: HTMLCanvasElement, course: Course) {
     this.canvas = canvas;
     this.course = course;
+  }
+
+  getMarkerAt(x: number, y: number, radius = 12): MarkerEntry | null {
+    // Search in reverse so topmost-rendered markers have priority
+    for (let i = this.markers.length - 1; i >= 0; i--) {
+      const m = this.markers[i];
+      const dx = m.screenX - x;
+      const dy = m.screenY - y;
+      if (dx * dx + dy * dy <= radius * radius) return m;
+    }
+    return null;
   }
 
   setCourse(course: Course) {
@@ -44,6 +65,9 @@ export default class CourseLine {
     const numGates = gates.length;
     const finishMidpoint = gateMidpoint(finishLine);
 
+    // Reset markers for this render pass
+    this.markers = [];
+
     // Build list of leg endpoints: [start, gate0, gate1, ..., gateN, finish]
     const legPoints: LngLat[] = [
       start,
@@ -51,7 +75,7 @@ export default class CourseLine {
       finishMidpoint,
     ];
 
-    // Draw all legs
+    // Draw all legs and waypoint dots
     for (let legIndex = 0; legIndex < legPoints.length - 1; legIndex++) {
       const from = legPoints[legIndex];
       const to = legPoints[legIndex + 1];
@@ -67,9 +91,25 @@ export default class CourseLine {
       }
 
       this.drawCourseLine(scene, context, from, to, waypoints, legState);
+
+      // Draw waypoint dots and record markers
+      for (let wpIdx = 0; wpIdx < waypoints.length; wpIdx++) {
+        const wp = waypoints[wpIdx];
+        const projected = this.projectIfVisible(scene, wp);
+        if (projected) {
+          this.drawWaypointDot(context, projected[0], projected[1]);
+          this.markers.push({
+            type: "waypoint",
+            leg: legIndex,
+            index: wpIdx,
+            screenX: projected[0],
+            screenY: projected[1],
+          });
+        }
+      }
     }
 
-    // Draw intermediate gates
+    // Draw intermediate gates and record markers
     for (let i = 0; i < numGates; i++) {
       const gate = gates[i];
       let color: string;
@@ -81,15 +121,45 @@ export default class CourseLine {
         color = GATE_COLOR_FUTURE;
       }
       this.drawGate(scene, context, gate, color, 2);
+
+      const projected = this.projectIfVisible(scene, gate.center);
+      if (projected) {
+        this.markers.push({
+          type: "gateCenter",
+          index: i,
+          screenX: projected[0],
+          screenY: projected[1],
+        });
+      }
     }
 
-    // Draw finish line
+    // Draw finish line and record marker
     const finishColor =
       this.nextGateIndex === numGates ? GATE_COLOR_NEXT : FINISH_LINE_COLOR;
     this.drawGate(scene, context, finishLine, finishColor, 3);
+    {
+      const projected = this.projectIfVisible(scene, finishLine.center);
+      if (projected) {
+        this.markers.push({
+          type: "finishCenter",
+          screenX: projected[0],
+          screenY: projected[1],
+        });
+      }
+    }
 
-    // Draw start marker (red)
+    // Draw start marker (red) and record marker
     this.drawCircle(scene, context, start, "#ef4444");
+    {
+      const projected = this.projectIfVisible(scene, start);
+      if (projected) {
+        this.markers.push({
+          type: "start",
+          screenX: projected[0],
+          screenY: projected[1],
+        });
+      }
+    }
   }
 
   private drawCourseLine(
@@ -218,6 +288,31 @@ export default class CourseLine {
     context.fill();
     context.strokeStyle = "#ffffff";
     context.lineWidth = 1.5;
+    context.stroke();
+  }
+
+  private projectIfVisible(
+    scene: Scene,
+    position: LngLat,
+  ): [number, number] | null {
+    const rotate = scene.projection.rotate();
+    const center: [number, number] = [-rotate[0], -rotate[1]];
+    const point: [number, number] = [position.lng, position.lat];
+    if (geoDistance(center, point) > Math.PI / 2) return null;
+    return scene.projection([position.lng, position.lat]) ?? null;
+  }
+
+  private drawWaypointDot(
+    context: CanvasRenderingContext2D,
+    x: number,
+    y: number,
+  ) {
+    context.beginPath();
+    context.arc(x, y, WAYPOINT_RADIUS_PX, 0, Math.PI * 2);
+    context.fillStyle = "rgba(59, 130, 246, 0.8)"; // blue
+    context.fill();
+    context.strokeStyle = "#ffffff";
+    context.lineWidth = 1;
     context.stroke();
   }
 }

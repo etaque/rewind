@@ -470,6 +470,13 @@ export default function RaceChoiceScreen() {
           )}
         </div>
       </div>
+
+      <a
+        href="#/editor"
+        className="text-slate-500 hover:text-slate-300 text-xs transition-colors"
+      >
+        Course Editor
+      </a>
     </div>
   );
 }

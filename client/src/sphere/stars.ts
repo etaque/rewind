@@ -55,8 +55,9 @@ export default class Stars {
       ctx.fill();
     }
 
-    // Cut out the sphere area so stars don't show through transparent layers
-    ctx.globalCompositeOperation = "destination-out";
+    // Fill the sphere area with a dark ocean color so stars don't show
+    // through when upper layers (e.g. wind texture) are transparent
+    ctx.fillStyle = "#050d1a";
     ctx.beginPath();
     ctx.arc(
       sphereCenter.x * dpr,
@@ -66,6 +67,5 @@ export default class Stars {
       Math.PI * 2,
     );
     ctx.fill();
-    ctx.globalCompositeOperation = "source-over";
   }
 }

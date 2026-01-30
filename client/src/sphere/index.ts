@@ -13,7 +13,7 @@ import Wake from "./wake";
 import WindTexture from "./wind-texture";
 import WindParticles from "./wind-particles";
 import GhostBoats from "./ghost-boats";
-import CourseLine from "./course-line";
+import CourseLine, { MarkerHit } from "./course-line";
 import ProjectedPath from "./projected-path";
 import ExclusionZoneRenderer from "./exclusion-zone";
 import { ProjectedPoint } from "../app/projected-path";
@@ -54,6 +54,11 @@ export class SphereView {
   v0?: versor.Cartesian;
   q0?: versor.Versor;
   r0?: versor.Euler;
+
+  onClickCoord: ((coord: LngLat) => void) | null = null;
+  onDragMarker: ((marker: MarkerHit, coord: LngLat) => void) | null = null;
+  onDragMarkerEnd: (() => void) | null = null;
+  private draggingMarker: MarkerHit | null = null;
 
   moving = false;
   private renderGeneration = 0;
@@ -151,6 +156,20 @@ export class SphereView {
     this.zoom = d3
       .zoom<HTMLElement, unknown>()
       .scaleExtent([0.8, MAX_SCALE])
+      .filter((e: Event) => {
+        // Always allow wheel (zoom)
+        if (e.type === "wheel") return true;
+        // Block pan if pointer is on a marker
+        if (
+          this.courseLine &&
+          (e.type === "mousedown" || e.type === "pointerdown")
+        ) {
+          const me = e as MouseEvent;
+          const hit = this.courseLine.getMarkerAt(me.clientX, me.clientY);
+          if (hit) return false;
+        }
+        return true;
+      })
       .on("start", (e: d3.D3ZoomEvent<HTMLElement, unknown>) => {
         // Cancel any running view animation when user starts interacting
         d3.select(this.node).interrupt("view-animation");
@@ -197,14 +216,43 @@ export class SphereView {
 
     d3.select<HTMLElement, unknown>(this.node).call(this.zoom);
 
-    // Click handler to print lng/lat coordinates
+    // Click handler for coordinate selection
     d3.select(this.node).on("click", (e: MouseEvent) => {
       const coords = this.projection.invert?.([e.clientX, e.clientY]);
       if (coords) {
         const [lng, lat] = coords;
-        console.log(`lng: ${lng.toFixed(4)}, lat: ${lat.toFixed(4)}`);
+        if (this.onClickCoord) {
+          this.onClickCoord({ lng, lat });
+        }
       }
     });
+
+    // Pointer event listeners for marker drag
+    d3.select(this.node)
+      .on("pointerdown.markerdrag", (e: PointerEvent) => {
+        if (!this.courseLine || !this.onDragMarker) return;
+        const hit = this.courseLine.getMarkerAt(e.clientX, e.clientY);
+        if (!hit) return;
+        this.draggingMarker = hit;
+        (e.target as HTMLElement).setPointerCapture(e.pointerId);
+        e.preventDefault();
+      })
+      .on("pointermove.markerdrag", (e: PointerEvent) => {
+        if (!this.draggingMarker || !this.onDragMarker) return;
+        const coords = this.projection.invert?.([e.clientX, e.clientY]);
+        if (coords) {
+          this.onDragMarker(this.draggingMarker, {
+            lng: coords[0],
+            lat: coords[1],
+          });
+        }
+      })
+      .on("pointerup.markerdrag", () => {
+        if (this.draggingMarker) {
+          this.draggingMarker = null;
+          this.onDragMarkerEnd?.();
+        }
+      });
   }
 
   updateWind(interpolatedWind: InterpolatedWind, interpolationFactor: number) {
