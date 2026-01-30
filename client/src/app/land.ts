@@ -7,7 +7,7 @@ import type {
   MultiPolygon,
   GeoJsonProperties,
 } from "geojson";
-import landData from "../static/land-110m.json";
+import landData from "../static/land-50m.json";
 import { Topology, Objects, Point } from "topojson-specification";
 
 type LandFeature = {
@@ -32,17 +32,34 @@ export function initLandData(): Promise<void> {
       GeoJsonProperties
     >;
 
-    const index = new Index(land.features.length);
+    const individualFeatures: LandFeature[] = land.features.flatMap((f) => {
+      if (f.geometry.type === "MultiPolygon") {
+        return f.geometry.coordinates.map(
+          (coords): LandFeature => ({
+            type: "Feature",
+            geometry: { type: "Polygon", coordinates: coords },
+            properties: f.properties,
+          }),
+        );
+      }
+      return [f as LandFeature];
+    });
 
-    land.features.forEach((f) => {
-      const [[minX, minY], [maxX, maxY]] = geoBounds(f);
-      index.add(minX, minY, maxX, maxY);
+    const index = new Index(individualFeatures.length);
+
+    individualFeatures.forEach((f) => {
+      const [[west, south], [east, north]] = geoBounds(f);
+      // geoBounds returns west > east for polygons crossing the antimeridian.
+      // Flatbush requires minX <= maxX, so expand to full longitude range.
+      const minX = west <= east ? west : -180;
+      const maxX = west <= east ? east : 180;
+      index.add(minX, south, maxX, north);
     });
 
     index.finish();
 
     flatbushIndex = index;
-    landFeatures = land.features as LandFeature[];
+    landFeatures = individualFeatures;
     resolve();
   });
 
