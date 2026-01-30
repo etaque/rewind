@@ -15,10 +15,11 @@ const FINISH_LINE_COLOR = "rgba(34, 197, 94, 0.9)"; // green
 
 // Colors for leg states
 const LEG_COLOR_PASSED = "rgba(100, 100, 100, 0.3)";
-const LEG_COLOR_CURRENT = "rgba(250, 204, 21, 0.6)";
-const LEG_COLOR_FUTURE = "rgba(255, 255, 255, 0.2)";
+const LEG_COLOR_UPCOMING = "rgba(250, 204, 21, 0.6)";
 
-type LegState = "passed" | "current" | "future";
+type LegState = "passed" | "upcoming";
+
+const SPLINE_SEGMENTS = 20;
 
 export default class CourseLine {
   canvas: HTMLCanvasElement;
@@ -51,22 +52,37 @@ export default class CourseLine {
       finishMidpoint,
     ];
 
-    // Draw all legs
+    // Build one continuous coordinate path, tracking where each leg boundary falls
+    const allCoords: [number, number][] = [[start.lng, start.lat]];
+    const legBoundaries: number[] = [0];
+
     for (let legIndex = 0; legIndex < legPoints.length - 1; legIndex++) {
-      const from = legPoints[legIndex];
-      const to = legPoints[legIndex + 1];
       const waypoints = routeWaypoints[legIndex] ?? [];
-
-      let legState: LegState;
-      if (legIndex < this.nextGateIndex) {
-        legState = "passed";
-      } else if (legIndex === this.nextGateIndex) {
-        legState = "current";
-      } else {
-        legState = "future";
+      for (const wp of waypoints) {
+        allCoords.push([wp.lng, wp.lat]);
       }
+      const to = legPoints[legIndex + 1];
+      allCoords.push([to.lng, to.lat]);
+      legBoundaries.push(allCoords.length - 1);
+    }
 
-      this.drawCourseLine(scene, context, from, to, waypoints, legState);
+    // Apply one continuous spline so gate junctions are smooth
+    const useSpline = allCoords.length >= 3;
+    const splined = useSpline
+      ? catmullRomSpline(allCoords, SPLINE_SEGMENTS)
+      : allCoords;
+    const factor = useSpline ? SPLINE_SEGMENTS : 1;
+
+    // Draw each leg as a slice of the splined path
+    for (let legIndex = 0; legIndex < legBoundaries.length - 1; legIndex++) {
+      const fromIdx = legBoundaries[legIndex] * factor;
+      const toIdx = legBoundaries[legIndex + 1] * factor;
+      const legCoords = splined.slice(fromIdx, toIdx + 1);
+
+      const legState: LegState =
+        legIndex < this.nextGateIndex ? "passed" : "upcoming";
+
+      this.drawLeg(scene, context, legCoords, legState);
     }
 
     // Draw intermediate gates
@@ -92,48 +108,30 @@ export default class CourseLine {
     this.drawCircle(scene, context, start, "#ef4444");
   }
 
-  private drawCourseLine(
+  private drawLeg(
     scene: Scene,
     context: CanvasRenderingContext2D,
-    from: LngLat,
-    to: LngLat,
-    waypoints: LngLat[],
+    coordinates: [number, number][],
     legState: LegState,
   ) {
     const path = geoPath(scene.projection, context);
 
-    // Build coordinates array: from -> waypoints -> to
-    const coordinates: [number, number][] = [
-      [from.lng, from.lat],
-      ...waypoints.map((wp): [number, number] => [wp.lng, wp.lat]),
-      [to.lng, to.lat],
-    ];
-
     const line: GeoJSON.Feature<GeoJSON.LineString> = {
       type: "Feature",
       properties: {},
-      geometry: {
-        type: "LineString",
-        coordinates,
-      },
+      geometry: { type: "LineString", coordinates },
     };
 
-    // Apply styling based on leg state
     switch (legState) {
       case "passed":
         context.strokeStyle = LEG_COLOR_PASSED;
         context.lineWidth = 1;
         context.setLineDash([]);
         break;
-      case "current":
-        context.strokeStyle = LEG_COLOR_CURRENT;
+      case "upcoming":
+        context.strokeStyle = LEG_COLOR_UPCOMING;
         context.lineWidth = 2;
         context.setLineDash([8, 6]);
-        break;
-      case "future":
-        context.strokeStyle = LEG_COLOR_FUTURE;
-        context.lineWidth = 1;
-        context.setLineDash([6, 8]);
         break;
     }
 
@@ -224,4 +222,46 @@ export default class CourseLine {
 
 function gateMidpoint(gate: Gate): LngLat {
   return gate.center;
+}
+
+function catmullRomPoint(
+  p0: [number, number],
+  p1: [number, number],
+  p2: [number, number],
+  p3: [number, number],
+  t: number,
+): [number, number] {
+  const t2 = t * t;
+  const t3 = t2 * t;
+  return [
+    0.5 *
+      (2 * p1[0] +
+        (-p0[0] + p2[0]) * t +
+        (2 * p0[0] - 5 * p1[0] + 4 * p2[0] - p3[0]) * t2 +
+        (-p0[0] + 3 * p1[0] - 3 * p2[0] + p3[0]) * t3),
+    0.5 *
+      (2 * p1[1] +
+        (-p0[1] + p2[1]) * t +
+        (2 * p0[1] - 5 * p1[1] + 4 * p2[1] - p3[1]) * t2 +
+        (-p0[1] + 3 * p1[1] - 3 * p2[1] + p3[1]) * t3),
+  ];
+}
+
+function catmullRomSpline(
+  points: [number, number][],
+  segments: number,
+): [number, number][] {
+  // Duplicate first and last points for endpoint tangents
+  const ext = [points[0], ...points, points[points.length - 1]];
+  const result: [number, number][] = [];
+
+  for (let i = 1; i < ext.length - 2; i++) {
+    for (let j = 0; j < segments; j++) {
+      result.push(
+        catmullRomPoint(ext[i - 1], ext[i], ext[i + 1], ext[i + 2], j / segments),
+      );
+    }
+  }
+  result.push(points[points.length - 1]);
+  return result;
 }
