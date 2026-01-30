@@ -9,6 +9,9 @@ export default defineConfig({
   },
   envDir: "..",
   envPrefix: "REWIND_",
+  build: {
+    chunkSizeWarningLimit: 600,
+  },
   test: {
     globals: true,
     environment: "node",

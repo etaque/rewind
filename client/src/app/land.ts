@@ -7,7 +7,6 @@ import type {
   MultiPolygon,
   GeoJsonProperties,
 } from "geojson";
-import landData from "../static/land-50m.json";
 import { Topology, Objects, Point } from "topojson-specification";
 
 type LandFeature = {
@@ -23,10 +22,13 @@ let initPromise: Promise<void> | null = null;
 export function initLandData(): Promise<void> {
   if (initPromise) return initPromise;
 
-  initPromise = new Promise((resolve) => {
+  initPromise = (async () => {
+    const { default: landData } = await import("../static/land-50m.json");
+
     const land = feature(
       landData as unknown as Topology<Objects<GeoJsonProperties>>,
-      landData.objects.land as unknown as Point<GeoJsonProperties>,
+      (landData as unknown as Topology<Objects<GeoJsonProperties>>).objects
+        .land as unknown as Point<GeoJsonProperties>,
     ) as unknown as FeatureCollection<
       Polygon | MultiPolygon,
       GeoJsonProperties
@@ -60,8 +62,7 @@ export function initLandData(): Promise<void> {
 
     flatbushIndex = index;
     landFeatures = individualFeatures;
-    resolve();
-  });
+  })();
 
   return initPromise;
 }
