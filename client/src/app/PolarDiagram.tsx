@@ -8,10 +8,12 @@ type PolarDiagramProps = {
   bsp: number; // Current Boat Speed in knots
 };
 
-const SIZE = 180;
+const WIDTH = 120;
+const HEIGHT = 180;
 const PADDING = 25;
-const RADIUS = (SIZE - PADDING * 2) / 2;
-const CENTER = SIZE / 2;
+const RADIUS = (HEIGHT - PADDING * 2) / 2;
+const CENTER_X = PADDING;
+const CENTER_Y = HEIGHT / 2;
 
 export default React.memo(function PolarDiagram({
   polar,
@@ -38,8 +40,8 @@ export default React.memo(function PolarDiagram({
     const r = scale(speed);
     const angle = (twaAngle - 90) * (Math.PI / 180); // Rotate so 0 is up
     return {
-      x: CENTER + r * Math.cos(angle),
-      y: CENTER + r * Math.sin(angle),
+      x: CENTER_X + r * Math.cos(angle),
+      y: CENTER_Y + r * Math.sin(angle),
     };
   };
 
@@ -47,16 +49,6 @@ export default React.memo(function PolarDiagram({
   const pathData = polarCurve
     .map((point, i) => {
       const { x, y } = polarToCartesian(point.twa, point.bsp);
-      return `${i === 0 ? "M" : "L"} ${x.toFixed(1)} ${y.toFixed(1)}`;
-    })
-    .join(" ");
-
-  // Mirror the curve for port side (negative TWA)
-  const mirroredPathData = polarCurve
-    .slice()
-    .reverse()
-    .map((point, i) => {
-      const { x, y } = polarToCartesian(-point.twa, point.bsp);
       return `${i === 0 ? "M" : "L"} ${x.toFixed(1)} ${y.toFixed(1)}`;
     })
     .join(" ");
@@ -70,30 +62,45 @@ export default React.memo(function PolarDiagram({
   return (
     <div className="absolute bottom-4 left-4 bg-black/60 rounded-lg p-2">
       <svg
-        width={SIZE}
-        height={SIZE}
-        viewBox={`0 0 ${SIZE} ${SIZE}`}
+        width={WIDTH}
+        height={HEIGHT}
+        viewBox={`0 0 ${WIDTH} ${HEIGHT}`}
         className="text-white"
       >
-        {/* Grid circles for speed scale */}
+        {/* Grid semicircles for speed scale */}
         <g stroke="currentColor" strokeOpacity={0.2} fill="none">
-          {gridSpeeds.map((speed) => (
-            <circle key={speed} cx={CENTER} cy={CENTER} r={scale(speed)} />
-          ))}
+          {gridSpeeds.map((speed) => {
+            const r = scale(speed);
+            return (
+              <path
+                key={speed}
+                d={`M ${CENTER_X} ${CENTER_Y - r} A ${r} ${r} 0 0 1 ${CENTER_X} ${CENTER_Y + r}`}
+              />
+            );
+          })}
         </g>
 
         {/* Radial lines for TWA reference */}
         <g stroke="currentColor" strokeOpacity={0.2}>
           {/* 0 degrees (upwind) */}
-          <line x1={CENTER} y1={CENTER} x2={CENTER} y2={PADDING} />
-          {/* 90 degrees (beam reach) - both sides */}
-          <line x1={CENTER} y1={CENTER} x2={SIZE - PADDING} y2={CENTER} />
-          <line x1={CENTER} y1={CENTER} x2={PADDING} y2={CENTER} />
+          <line x1={CENTER_X} y1={CENTER_Y} x2={CENTER_X} y2={PADDING} />
+          {/* 90 degrees (beam reach) */}
+          <line
+            x1={CENTER_X}
+            y1={CENTER_Y}
+            x2={CENTER_X + RADIUS}
+            y2={CENTER_Y}
+          />
           {/* 180 degrees (downwind) */}
-          <line x1={CENTER} y1={CENTER} x2={CENTER} y2={SIZE - PADDING} />
+          <line
+            x1={CENTER_X}
+            y1={CENTER_Y}
+            x2={CENTER_X}
+            y2={HEIGHT - PADDING}
+          />
         </g>
 
-        {/* Polar curve - starboard tack */}
+        {/* Polar curve */}
         <path
           d={pathData}
           fill="none"
@@ -103,20 +110,10 @@ export default React.memo(function PolarDiagram({
           strokeLinejoin="round"
         />
 
-        {/* Polar curve - port tack (mirrored) */}
-        <path
-          d={mirroredPathData}
-          fill="none"
-          stroke="#22d3ee"
-          strokeWidth={2}
-          strokeLinecap="round"
-          strokeLinejoin="round"
-        />
-
         {/* Line from center to current position */}
         <line
-          x1={CENTER}
-          y1={CENTER}
+          x1={CENTER_X}
+          y1={CENTER_Y}
           x2={currentPos.x}
           y2={currentPos.y}
           stroke="#f472b6"
@@ -141,16 +138,13 @@ export default React.memo(function PolarDiagram({
           fontFamily="monospace"
           textAnchor="middle"
         >
-          <text x={CENTER} y={12}>
+          <text x={CENTER_X} y={12}>
             0
           </text>
-          <text x={SIZE - 8} y={CENTER + 4}>
+          <text x={CENTER_X + RADIUS + 15} y={CENTER_Y + 4}>
             90
           </text>
-          <text x={8} y={CENTER + 4}>
-            90
-          </text>
-          <text x={CENTER} y={SIZE - 4}>
+          <text x={CENTER_X} y={HEIGHT - 4}>
             180
           </text>
         </g>
