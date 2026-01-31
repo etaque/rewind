@@ -15,8 +15,7 @@ import WindParticles from "./wind-particles";
 import GhostBoats from "./ghost-boats";
 import { polarToBoatType } from "./boat-geometry";
 import CourseLine from "./course-line";
-import ProjectedPath from "./projected-path";
-import { ProjectedPoint } from "../app/projected-path";
+
 import Stars from "./stars";
 
 const MAX_SCALE = 12;
@@ -48,8 +47,6 @@ export class SphereView {
   windTexture: WindTexture;
   ghostBoats: GhostBoats;
   courseLine: CourseLine | null = null;
-  projectedPath: ProjectedPath;
-
   v0?: versor.Cartesian;
   q0?: versor.Versor;
   r0?: versor.Euler;
@@ -134,8 +131,6 @@ export class SphereView {
     this.wake = new Wake(landCanvas);
     this.boat = new Boat(landCanvas);
     this.ghostBoats = new GhostBoats(landCanvas);
-    this.projectedPath = new ProjectedPath(landCanvas);
-
     // Only create course-related renderers if we have a course
     if (course) {
       this.courseLine = new CourseLine(landCanvas, course);
@@ -254,11 +249,6 @@ export class SphereView {
 
   setNextGateIndex(index: number) {
     this.courseLine?.setNextGateIndex(index);
-    this.render();
-  }
-
-  updateProjectedPath(points: ProjectedPoint[]) {
-    this.projectedPath.setPoints(points);
     this.render();
   }
 
@@ -438,9 +428,8 @@ export class SphereView {
     this.land.render(scene, this.moving).then(() => {
       // Skip if a newer render has started
       if (currentGeneration !== this.renderGeneration) return;
-      // Draw course line, projected path, wake and boats on top of land
+      // Draw course line, wake and boats on top of land
       this.courseLine?.render(scene);
-      this.projectedPath.render(scene);
       this.wake.render(scene);
       const boatType = this.course ? polarToBoatType(this.course.polar) : "imoca";
       this.ghostBoats.render(scene, boatType);

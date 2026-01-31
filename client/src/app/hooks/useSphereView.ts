@@ -3,7 +3,7 @@ import { SphereView } from "../../sphere";
 import InterpolatedWind from "../../interpolated-wind";
 import { Course } from "../../models";
 import { Session } from "../state";
-import { computeProjectedPath } from "../projected-path";
+
 
 export type SphereViewState = {
   sphereViewRef: React.MutableRefObject<SphereView | null>;
@@ -49,7 +49,7 @@ export function useSphereView(
     }
   }, [lobbyCourse?.key]);
 
-  // Sync position, heading, wind, and projected path to SphereView during gameplay
+  // Sync position, heading, and wind to SphereView during gameplay
   useEffect(() => {
     if (!session) return;
     if (!sphereViewRef.current) return;
@@ -64,16 +64,6 @@ export function useSphereView(
     const factor = interpolatedWind.getInterpolationFactor(session.courseTime);
     sphereViewRef.current.updateWind(interpolatedWind, factor);
 
-    // Compute and update projected path
-    const projectedPath = computeProjectedPath(
-      session.position,
-      session.heading,
-      session.boatSpeed,
-      session.courseTime,
-      interpolatedWind,
-      session.polar,
-    );
-    sphereViewRef.current.updateProjectedPath(projectedPath);
   }, [
     session?.position,
     session?.heading,
