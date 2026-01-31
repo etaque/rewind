@@ -18,7 +18,7 @@ import CourseLine from "./course-line";
 
 import Stars from "./stars";
 
-const MAX_SCALE = 12;
+const MAX_SCALE = 50;
 
 /** Get device pixel ratio, capped at 2 for performance */
 function getDPR(): number {
@@ -144,6 +144,7 @@ export class SphereView {
     this.zoom = d3
       .zoom<HTMLElement, unknown>()
       .scaleExtent([0.8, MAX_SCALE])
+      .wheelDelta((e) => -e.deltaY * (e.deltaMode === 1 ? 0.05 : e.deltaMode ? 1 : 0.005))
       .on("start", (e: d3.D3ZoomEvent<HTMLElement, unknown>) => {
         // Cancel any running view animation when user starts interacting
         d3.select(this.node).interrupt("view-animation");
@@ -294,8 +295,15 @@ export class SphereView {
 
   zoomToMax() {
     const baseScale = 500;
-    const targetScale = baseScale * MAX_SCALE;
+    // Use half of MAX_SCALE for gameplay zoom, leaving room for user to zoom in more
+    const targetScale = baseScale * MAX_SCALE * 0.5;
     this.animateToView(this.position.lng, this.position.lat, targetScale, 1000);
+  }
+
+  /** Center the map on the boat without changing zoom level */
+  centerOnBoat() {
+    const currentScale = this.projection.scale();
+    this.animateToView(this.position.lng, this.position.lat, currentScale, 300);
   }
 
   /**

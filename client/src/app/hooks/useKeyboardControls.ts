@@ -1,5 +1,6 @@
 import { useEffect } from "react";
 import { AppAction } from "../state";
+import { SphereView } from "../../sphere";
 
 /**
  * Hook to handle keyboard controls when playing.
@@ -8,10 +9,12 @@ import { AppAction } from "../state";
  * - Arrow Up: Lock to optimal upwind VMG heading
  * - Arrow Down: Lock to optimal downwind VMG heading
  * - Space: Tack
+ * - X: Center map on boat
  */
 export function useKeyboardControls(
   isPlaying: boolean,
   dispatch: React.Dispatch<AppAction>,
+  sphereViewRef: React.RefObject<SphereView | null>,
 ) {
   useEffect(() => {
     if (!isPlaying) return;
@@ -37,6 +40,8 @@ export function useKeyboardControls(
         e.preventDefault();
         e.stopPropagation();
         dispatch({ type: "TACK" });
+      } else if (e.key === "x" || e.key === "X") {
+        sphereViewRef.current?.centerOnBoat();
       }
     };
 
@@ -52,5 +57,5 @@ export function useKeyboardControls(
       window.removeEventListener("keydown", handleKeyDown);
       window.removeEventListener("keyup", handleKeyUp);
     };
-  }, [isPlaying, dispatch]);
+  }, [isPlaying, dispatch, sphereViewRef]);
 }

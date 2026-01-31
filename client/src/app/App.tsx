@@ -163,7 +163,7 @@ export default function App() {
   );
 
   // Keyboard controls
-  useKeyboardControls(state.tag === "Playing", dispatch);
+  useKeyboardControls(state.tag === "Playing", dispatch, sphereViewRef);
 
   // Escape key to quit race
   useEffect(() => {
