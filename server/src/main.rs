@@ -42,5 +42,7 @@ async fn main() {
                 .await
                 .unwrap()
         }
+        Command::DumpCourses { file } => courses::dump(file).unwrap(),
+        Command::RestoreCourses { file } => courses::restore(file).unwrap(),
     }
 }

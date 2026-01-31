@@ -1,3 +1,5 @@
+use std::path::PathBuf;
+
 use chrono::NaiveDate;
 use clap::{Parser, Subcommand};
 
@@ -25,5 +27,12 @@ pub enum Command {
     RebuildDb {
         #[arg(short, long, default_value_t = false)]
         truncate: bool,
+    },
+    DumpCourses {
+        #[arg(long)]
+        file: Option<PathBuf>,
+    },
+    RestoreCourses {
+        file: PathBuf,
     },
 }

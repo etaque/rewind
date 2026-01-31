@@ -1,6 +1,10 @@
+use std::path::PathBuf;
+
 use anyhow::Result;
 use rusqlite::{Connection, OptionalExtension};
 use serde::{Deserialize, Serialize};
+
+use crate::db;
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct LngLat {
@@ -282,5 +286,44 @@ pub fn update(conn: &Connection, key: &str, course: &Course) -> Result<()> {
 
 pub fn delete(conn: &Connection, key: &str) -> Result<()> {
     conn.execute("DELETE FROM courses WHERE key = ?1", [key])?;
+    Ok(())
+}
+
+// ============================================================================
+// CLI commands
+// ============================================================================
+
+pub fn dump(path: Option<PathBuf>) -> Result<()> {
+    let courses = db::with_connection(|conn| get_all(conn))?;
+    let json = serde_json::to_string_pretty(&courses)?;
+
+    match path {
+        Some(p) => {
+            std::fs::write(&p, &json)?;
+            log::info!("Dumped {} courses to {}", courses.len(), p.display());
+        }
+        None => print!("{json}"),
+    }
+    Ok(())
+}
+
+pub fn restore(path: PathBuf) -> Result<()> {
+    let contents = std::fs::read_to_string(&path)?;
+    let courses: Vec<Course> = serde_json::from_str(&contents)?;
+
+    db::with_connection(|conn| {
+        for course in &courses {
+            match insert(conn, course) {
+                Ok(_) => log::info!("Inserted course '{}'", course.key),
+                Err(_) => {
+                    update(conn, &course.key, course)?;
+                    log::info!("Updated course '{}'", course.key);
+                }
+            }
+        }
+        Ok(())
+    })?;
+
+    log::info!("Restored {} courses from {}", courses.len(), path.display());
     Ok(())
 }
