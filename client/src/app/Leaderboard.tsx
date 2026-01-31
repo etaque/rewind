@@ -39,7 +39,7 @@ export default function Leaderboard({
   }
 
   return (
-    <div className="absolute top-4 right-4 bg-black/60 text-white px-4 py-3 rounded-lg font-mono text-sm min-w-48 pointer-events-auto">
+    <div className="absolute top-4 left-4 bg-black/60 text-white px-4 py-3 rounded-lg font-mono text-sm min-w-48 pointer-events-auto">
       <div className="text-gray-400 text-xs mb-2 uppercase tracking-wide">
         Leaderboard
       </div>

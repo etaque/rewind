@@ -22,6 +22,7 @@ import { CountdownDisplay } from "./race";
 import { calculateTWA } from "./polar";
 import { getWindDirection, getWindSpeedKnots } from "../utils";
 import FinishOverlay from "./FinishOverlay";
+import KeyBindings from "./KeyBindings";
 import { RaceContext, RaceContextValue } from "./race-context";
 
 // Re-export for backward compatibility
@@ -292,6 +293,7 @@ export default function App() {
         {state.tag === "Playing" && (
           <>
             <Hud session={state.session} />
+            <KeyBindings />
             <Leaderboard
               entries={state.leaderboard}
               myPlayerId={state.race.myPlayerId}
