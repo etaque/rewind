@@ -5,6 +5,7 @@ import CursorWind from "./CursorWind";
 import Leaderboard from "./Leaderboard";
 import PolarDiagram from "./PolarDiagram";
 import RaceChoiceScreen from "./RaceChoiceScreen";
+import CourseEditor from "./CourseEditor";
 import {
   useKeyboardControls,
   useGameLoop,
@@ -26,7 +27,10 @@ import { RaceContext, RaceContextValue } from "./race-context";
 // Re-export for backward compatibility
 export type { RecordedGhost } from "./hooks/useGhosts";
 
+type View = "race" | "editor";
+
 export default function App() {
+  const [view, setView] = useState<View>("race");
   const [state, dispatch] = useReducer(appReducer, initialState);
   const [showQuitConfirm, setShowQuitConfirm] = useState(false);
 
@@ -37,6 +41,7 @@ export default function App() {
     setSelectedCourseKey,
     coursesRef,
     selectedCourseRef,
+    refreshCourses,
   } = useCourses();
 
   // Derive session-related values
@@ -209,6 +214,15 @@ export default function App() {
     }
   }, [state.tag === "Countdown" ? state.countdown : false]);
 
+  const handleOpenEditor = useCallback(() => {
+    setView("editor");
+  }, []);
+
+  const handleCloseEditor = useCallback(() => {
+    refreshCourses();
+    setView("race");
+  }, [refreshCourses]);
+
   // Build the race context value
   const raceContextValue = useMemo<RaceContextValue>(
     () => ({
@@ -227,6 +241,7 @@ export default function App() {
       startRace: multiplayerCallbacks.onStartRace,
       leaveRace: multiplayerCallbacks.onLeaveRace,
       selectCourse: handleSelectCourse,
+      openEditor: handleOpenEditor,
       addGhost,
       removeGhost,
     }),
@@ -237,10 +252,15 @@ export default function App() {
       recordedGhosts,
       multiplayerCallbacks,
       handleSelectCourse,
+      handleOpenEditor,
       addGhost,
       removeGhost,
     ],
   );
+
+  if (view === "editor") {
+    return <CourseEditor onBack={handleCloseEditor} />;
+  }
 
   return (
     <>

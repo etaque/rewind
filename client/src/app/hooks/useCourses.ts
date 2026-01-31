@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, useCallback } from "react";
 import { Course } from "../../models";
 
 const serverUrl = import.meta.env.REWIND_SERVER_URL;
@@ -9,7 +9,25 @@ export type CoursesState = {
   setSelectedCourseKey: (key: string) => void;
   coursesRef: React.MutableRefObject<Map<string, Course>>;
   selectedCourseRef: React.MutableRefObject<Course | null>;
+  refreshCourses: () => void;
 };
+
+function fetchAndSetCourses(
+  coursesRef: React.MutableRefObject<Map<string, Course>>,
+  setCourses: React.Dispatch<React.SetStateAction<Course[]>>,
+) {
+  fetch(`${serverUrl}/courses`)
+    .then((res) => res.json())
+    .then((fetchedCourses: Course[]) => {
+      const courseMap = new Map<string, Course>();
+      fetchedCourses.forEach((c) => courseMap.set(c.key, c));
+      coursesRef.current = courseMap;
+      setCourses(fetchedCourses);
+    })
+    .catch((err) => {
+      console.error("Failed to fetch courses:", err);
+    });
+}
 
 /**
  * Hook to fetch and manage available courses.
@@ -25,17 +43,11 @@ export function useCourses(): CoursesState {
 
   // Fetch courses on startup
   useEffect(() => {
-    fetch(`${serverUrl}/courses`)
-      .then((res) => res.json())
-      .then((fetchedCourses: Course[]) => {
-        const courseMap = new Map<string, Course>();
-        fetchedCourses.forEach((c) => courseMap.set(c.key, c));
-        coursesRef.current = courseMap;
-        setCourses(fetchedCourses);
-      })
-      .catch((err) => {
-        console.error("Failed to fetch courses:", err);
-      });
+    fetchAndSetCourses(coursesRef, setCourses);
+  }, []);
+
+  const refreshCourses = useCallback(() => {
+    fetchAndSetCourses(coursesRef, setCourses);
   }, []);
 
   // Sync selectedCourseRef when selectedCourseKey changes
@@ -52,5 +64,6 @@ export function useCourses(): CoursesState {
     setSelectedCourseKey,
     coursesRef,
     selectedCourseRef,
+    refreshCourses,
   };
 }

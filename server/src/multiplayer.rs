@@ -435,9 +435,7 @@ impl RaceManager {
         player_name: String,
         tx: mpsc::UnboundedSender<ServerMessage>,
     ) -> anyhow::Result<(String, Vec<WindRasterSource>)> {
-        let course = crate::courses::all()
-            .into_iter()
-            .find(|c| c.key == course_key)
+        let course = db::with_connection(|conn| crate::courses::get_by_key(conn, &course_key))?
             .ok_or(anyhow!("Course not found"))?;
 
         let reports = wind_reports::get_reports_for_course(&course)?;

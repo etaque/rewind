@@ -1,12 +1,14 @@
-use serde::Serialize;
+use anyhow::Result;
+use rusqlite::{Connection, OptionalExtension};
+use serde::{Deserialize, Serialize};
 
-#[derive(Clone, Debug, Serialize)]
+#[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct LngLat {
     pub lng: f64,
     pub lat: f64,
 }
 
-#[derive(Clone, Debug, Serialize)]
+#[derive(Clone, Debug, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct Gate {
     pub center: LngLat,
@@ -34,13 +36,13 @@ impl Gate {
     }
 }
 
-#[derive(Clone, Debug, Serialize)]
+#[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct ExclusionZone {
     pub name: String,
     pub polygon: Vec<LngLat>,
 }
 
-#[derive(Clone, Debug, Serialize)]
+#[derive(Clone, Debug, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct Course {
     pub key: String,
@@ -68,7 +70,7 @@ impl Course {
     }
 }
 
-pub fn all() -> Vec<Course> {
+fn seed_courses() -> Vec<Course> {
     vec![
         Course {
             key: "mt23".to_string(),
@@ -264,4 +266,82 @@ fn vendee_globe_aez() -> ExclusionZone {
             LngLat { lng: 180.0, lat: -90.0 },
         ],
     }
+}
+
+// ============================================================================
+// Database CRUD
+// ============================================================================
+
+pub fn init_table(conn: &Connection) -> Result<()> {
+    conn.execute_batch(
+        "
+        CREATE TABLE IF NOT EXISTS courses (
+            key TEXT PRIMARY KEY,
+            data TEXT NOT NULL,
+            created_at INTEGER NOT NULL DEFAULT (strftime('%s', 'now') * 1000),
+            updated_at INTEGER NOT NULL DEFAULT (strftime('%s', 'now') * 1000)
+        );
+        ",
+    )?;
+    Ok(())
+}
+
+pub fn seed_if_empty(conn: &Connection) -> Result<()> {
+    let count: i64 = conn.query_row("SELECT COUNT(*) FROM courses", [], |row| row.get(0))?;
+    if count == 0 {
+        for course in seed_courses() {
+            insert(conn, &course)?;
+        }
+        log::info!("Seeded {} courses into database", seed_courses().len());
+    }
+    Ok(())
+}
+
+pub fn get_all(conn: &Connection) -> Result<Vec<Course>> {
+    let mut stmt = conn.prepare("SELECT data FROM courses ORDER BY created_at")?;
+    let courses = stmt
+        .query_map([], |row| {
+            let data: String = row.get(0)?;
+            Ok(data)
+        })?
+        .filter_map(|r| r.ok())
+        .filter_map(|data| serde_json::from_str::<Course>(&data).ok())
+        .collect();
+    Ok(courses)
+}
+
+pub fn get_by_key(conn: &Connection, key: &str) -> Result<Option<Course>> {
+    let result: Option<String> = conn
+        .query_row("SELECT data FROM courses WHERE key = ?1", [key], |row| {
+            row.get(0)
+        })
+        .optional()?;
+
+    match result {
+        Some(data) => Ok(Some(serde_json::from_str::<Course>(&data)?)),
+        None => Ok(None),
+    }
+}
+
+pub fn insert(conn: &Connection, course: &Course) -> Result<()> {
+    let data = serde_json::to_string(course)?;
+    conn.execute(
+        "INSERT INTO courses (key, data) VALUES (?1, ?2)",
+        rusqlite::params![course.key, data],
+    )?;
+    Ok(())
+}
+
+pub fn update(conn: &Connection, key: &str, course: &Course) -> Result<()> {
+    let data = serde_json::to_string(course)?;
+    conn.execute(
+        "UPDATE courses SET data = ?1, updated_at = strftime('%s', 'now') * 1000 WHERE key = ?2",
+        rusqlite::params![data, key],
+    )?;
+    Ok(())
+}
+
+pub fn delete(conn: &Connection, key: &str) -> Result<()> {
+    conn.execute("DELETE FROM courses WHERE key = ?1", [key])?;
+    Ok(())
 }

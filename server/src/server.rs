@@ -3,7 +3,7 @@ use axum::{
     extract::{Path, Query, State, ws::WebSocketUpgrade},
     http::{Method, StatusCode},
     response::{IntoResponse, Response},
-    routing::{any, get},
+    routing::{any, get, put},
 };
 use bytes::Bytes;
 use object_store::ObjectStoreExt;
@@ -55,11 +55,16 @@ pub async fn run(address: std::net::SocketAddr) {
 
     let cors = CorsLayer::new()
         .allow_origin(tower_http::cors::Any)
-        .allow_methods([Method::GET]);
+        .allow_methods([Method::GET, Method::POST, Method::PUT, Method::DELETE])
+        .allow_headers([axum::http::header::CONTENT_TYPE]);
 
     let app = Router::new()
         .route("/health", get(health_handler))
-        .route("/courses", get(courses_handler))
+        .route("/courses", get(courses_handler).post(create_course_handler))
+        .route(
+            "/courses/{key}",
+            put(update_course_handler).delete(delete_course_handler),
+        )
         .route("/wind/random", get(random_wind_handler))
         .route("/multiplayer/races", get(races_handler))
         .route("/multiplayer/race", any(websocket_handler))
@@ -86,8 +91,31 @@ async fn health_handler() -> Result<String, AppError> {
     Ok(format!("OK ({} wind reports)", report_count))
 }
 
-async fn courses_handler() -> impl IntoResponse {
-    Json(courses::all())
+async fn courses_handler() -> Result<impl IntoResponse, AppError> {
+    let courses = db::with_connection(|conn| courses::get_all(conn))?;
+    Ok(Json(courses))
+}
+
+async fn create_course_handler(
+    Json(course): Json<courses::Course>,
+) -> Result<impl IntoResponse, AppError> {
+    log::info!("Course created: {} ({})", course.name, course.key);
+    db::with_connection(|conn| courses::insert(conn, &course))?;
+    Ok(StatusCode::CREATED)
+}
+
+async fn update_course_handler(
+    Path(key): Path<String>,
+    Json(course): Json<courses::Course>,
+) -> Result<impl IntoResponse, AppError> {
+    log::info!("Course updated: {} ({})", course.name, key);
+    db::with_connection(|conn| courses::update(conn, &key, &course))?;
+    Ok(StatusCode::OK)
+}
+
+async fn delete_course_handler(Path(key): Path<String>) -> Result<impl IntoResponse, AppError> {
+    db::with_connection(|conn| courses::delete(conn, &key))?;
+    Ok(StatusCode::OK)
 }
 
 async fn races_handler(State(race_manager): State<RaceManager>) -> impl IntoResponse {
