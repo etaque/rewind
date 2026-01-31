@@ -42,19 +42,40 @@ function drawTWAArc(
   // Draw arc from heading to wind direction, taking the shorter path
   ctx.beginPath();
   ctx.arc(x, y, radius, headingRad, windRad, diff < 0);
-  ctx.strokeStyle = "rgba(255, 255, 255, 0.6)";
-  ctx.lineWidth = 1.5 * dpr;
+  ctx.strokeStyle = "rgba(255, 255, 255, 0.8)";
+  ctx.lineWidth = 1 * dpr;
   ctx.stroke();
 
-  // Draw a small tick mark at the wind direction end
-  const tickLength = 4 * dpr;
-  const tickOuterRadius = radius + tickLength / 2;
-  const tickInnerRadius = radius - tickLength / 2;
-  ctx.beginPath();
-  ctx.moveTo(x + tickOuterRadius * Math.cos(windRad), y + tickOuterRadius * Math.sin(windRad));
-  ctx.lineTo(x + tickInnerRadius * Math.cos(windRad), y + tickInnerRadius * Math.sin(windRad));
+  // Draw tick marks at both ends of the arc
+  const tickLength = 2 * dpr;
+  const tickOuterRadius = radius + tickLength;
+  const tickInnerRadius = radius;
   ctx.strokeStyle = "rgba(255, 255, 255, 0.8)";
-  ctx.lineWidth = 1.5 * dpr;
+  ctx.lineWidth = 1 * dpr;
+
+  // Tick at wind direction end
+  ctx.beginPath();
+  ctx.moveTo(
+    x + tickOuterRadius * Math.cos(windRad),
+    y + tickOuterRadius * Math.sin(windRad),
+  );
+  ctx.lineTo(
+    x + tickInnerRadius * Math.cos(windRad),
+    y + tickInnerRadius * Math.sin(windRad),
+  );
+  ctx.stroke();
+
+  // Tick at heading end (pointing inward to boat)
+  const tickInnerRadiusBoat = radius - tickLength;
+  ctx.beginPath();
+  ctx.moveTo(
+    x + tickInnerRadius * Math.cos(headingRad),
+    y + tickInnerRadius * Math.sin(headingRad),
+  );
+  ctx.lineTo(
+    x + tickInnerRadiusBoat * Math.cos(headingRad),
+    y + tickInnerRadiusBoat * Math.sin(headingRad),
+  );
   ctx.stroke();
 
   ctx.restore();
@@ -137,14 +158,11 @@ export default class Boat {
     if (vmgBad) {
       const boatProj = scene.projection(point);
       if (boatProj) {
-        const glowRadius = 15 * scene.dpr;
+        const glowRadius = 10 * scene.dpr;
         context.beginPath();
         context.arc(boatProj[0], boatProj[1], glowRadius, 0, Math.PI * 2);
         context.fillStyle = "rgba(239, 68, 68, 0.4)";
         context.fill();
-        context.strokeStyle = "rgba(255, 255, 255, 0.4)";
-        context.lineWidth = 1;
-        context.stroke();
       }
     }
 
@@ -164,7 +182,14 @@ export default class Boat {
     if (windDirection !== null) {
       const boatProj = scene.projection(point);
       if (boatProj) {
-        drawTWAArc(context, boatProj[0], boatProj[1], heading, windDirection, scene.dpr);
+        drawTWAArc(
+          context,
+          boatProj[0],
+          boatProj[1],
+          heading,
+          windDirection,
+          scene.dpr,
+        );
       }
     }
 
