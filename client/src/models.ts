@@ -19,11 +19,6 @@ export type Gate = {
   lengthNm: number; // length in nautical miles
 };
 
-export type ExclusionZone = {
-  name: string;
-  polygon: LngLat[];
-};
-
 export type Course = {
   key: string;
   name: string;
@@ -34,7 +29,6 @@ export type Course = {
   startHeading: number;
   finishLine: Gate;
   gates: Gate[];
-  exclusionZones: ExclusionZone[];
   routeWaypoints: LngLat[][]; // waypoints for each leg
   timeFactor: number;
   maxDays: number;

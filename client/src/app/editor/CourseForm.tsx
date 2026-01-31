@@ -49,8 +49,6 @@ type Props = {
   onSave: () => void;
   onAddGate: () => void;
   onRemoveGate: (index: number) => void;
-  onAddExclusionZone: () => void;
-  onRemoveExclusionZone: (index: number) => void;
   saveState: AsyncState<void>;
   focusTarget?: FocusTarget;
   onSelect?: (selection: MapSelection) => void;
@@ -63,8 +61,6 @@ export default function CourseForm({
   onSave,
   onAddGate,
   onRemoveGate,
-  onAddExclusionZone,
-  onRemoveExclusionZone,
   saveState,
   focusTarget,
   onSelect,
@@ -402,38 +398,6 @@ export default function CourseForm({
           })}
         </div>
       )}
-
-      {/* Exclusion zones */}
-      <div>
-        <div className="flex items-center justify-between mb-1">
-          <label className="text-slate-400 text-xs">Exclusion Zones</label>
-          <button
-            onClick={onAddExclusionZone}
-            className="text-xs text-blue-400 hover:text-blue-300"
-          >
-            + Add Zone
-          </button>
-        </div>
-        {course.exclusionZones.length === 0 && (
-          <div className="text-slate-600 text-xs py-1">No exclusion zones</div>
-        )}
-        {course.exclusionZones.map((zone, i) => (
-          <div
-            key={i}
-            className="flex items-center gap-2 bg-slate-800 rounded px-2 py-1 mb-1"
-          >
-            <span className="text-red-400 text-xs flex-1">
-              {zone.name || `Zone ${i + 1}`} ({zone.polygon.length} points)
-            </span>
-            <button
-              onClick={() => onRemoveExclusionZone(i)}
-              className="text-red-400 hover:text-red-300 text-xs"
-            >
-              Remove
-            </button>
-          </div>
-        ))}
-      </div>
 
       <div className="space-y-1">
         <button

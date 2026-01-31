@@ -6,7 +6,6 @@ import { calculateTackTarget } from "./tack";
 import { toggleTWALock } from "./twa-lock";
 import { calculateVMGLockHeading } from "./vmg-lock";
 import { currentWindContext } from "./wind-context";
-import { prepareExclusionZones } from "./exclusion-zone";
 import { PolarData } from "./polar";
 
 // Enable Map support in Immer
@@ -129,8 +128,6 @@ function createPlayingState(
     null,
     windRasterSources,
   );
-  // Prepare exclusion zones for collision detection
-  prepareExclusionZones(state.course.exclusionZones);
   return {
     tag: "Playing",
     race: state.race,

@@ -4,7 +4,6 @@ import L from "leaflet";
 import "leaflet/dist/leaflet.css";
 import { Course, LngLat } from "../../models";
 import GateMarker from "./GateMarker";
-import ExclusionZonePolygon from "./ExclusionZonePolygon";
 import WaypointPolyline from "./WaypointPolyline";
 import { catmullRomSplineGeo } from "../../catmull-rom";
 import type { FocusTarget } from "./CourseForm";
@@ -312,15 +311,6 @@ export default function EditorMap({ course, onChange, onSelect, focusTarget }: P
           onDrag={onGateDrag(i)}
           onClick={() => onSelect?.({ type: "gate", index: i })}
           selected={selection?.type === "gate" && selection.index === i}
-        />
-      ))}
-
-      {/* Exclusion zones */}
-      {course.exclusionZones.map((zone, i) => (
-        <ExclusionZonePolygon
-          key={`zone-${i}`}
-          zone={zone}
-          index={i}
         />
       ))}
 

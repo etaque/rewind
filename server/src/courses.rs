@@ -37,12 +37,6 @@ impl Gate {
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
-pub struct ExclusionZone {
-    pub name: String,
-    pub polygon: Vec<LngLat>,
-}
-
-#[derive(Clone, Debug, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct Course {
     pub key: String,
@@ -54,7 +48,6 @@ pub struct Course {
     pub start_heading: f64,
     pub finish_line: Gate,
     pub gates: Vec<Gate>,
-    pub exclusion_zones: Vec<ExclusionZone>,
     pub route_waypoints: Vec<Vec<LngLat>>, // waypoints for each leg (start→gate0, gate0→gate1, ..., gateN→finish)
     pub time_factor: u16,
     pub max_days: u8,
@@ -88,7 +81,7 @@ fn seed_courses() -> Vec<Course> {
             gates: vec![
                 Gate::vertical(-17.9, 28.7, 24.0), // La Palma, Canary Islands
             ],
-            exclusion_zones: vec![],
+
             route_waypoints: vec![
                 // Leg 0: Start → La Palma (down Bay of Biscay, along Portuguese/Moroccan coast)
                 vec![
@@ -120,7 +113,7 @@ fn seed_courses() -> Vec<Course> {
             start_heading: 300.0,
             finish_line: Gate::vertical(-61.53, 16.23, 24.0), // ~24 NM vertical gate
             gates: vec![],
-            exclusion_zones: vec![],
+
             route_waypoints: vec![vec![]], // Single leg with no intermediate waypoints
             time_factor: 5000,
             max_days: 21,
@@ -141,7 +134,7 @@ fn seed_courses() -> Vec<Course> {
             gates: vec![
                 Gate::horizontal(-9.60, 38.55, 12.0), // Cascais, Portugal
             ],
-            exclusion_zones: vec![],
+
             route_waypoints: vec![
                 // Leg 0: Lorient → Cascais (Bay of Biscay, along Portuguese coast)
                 vec![
@@ -177,7 +170,6 @@ fn seed_courses() -> Vec<Course> {
                 Gate::vertical(114.0, -43.6, 1104.0), // Cape Leeuwin (land to AEZ)
                 Gate::vertical(-67.0, -57.2, 150.0),  // Cape Horn (land to AEZ)
             ],
-            exclusion_zones: vec![vendee_globe_aez()],
             route_waypoints: vec![
                 // Leg 0: Start → Cape of Good Hope (down Atlantic, west of Africa)
                 vec![
@@ -213,59 +205,6 @@ fn seed_courses() -> Vec<Course> {
             max_days: 90,
         },
     ]
-}
-
-/// Antarctic Exclusion Zone for Vendée Globe 2020
-/// Approximate waypoints forming a polygon around Antarctica
-/// Boats must stay NORTH of this zone
-fn vendee_globe_aez() -> ExclusionZone {
-    ExclusionZone {
-        name: "Antarctic Exclusion Zone".to_string(),
-        polygon: vec![
-            // Starting from Atlantic, going east around Antarctica
-            // Format: LngLat { lng, lat } - latitude is negative (southern hemisphere)
-            LngLat { lng: -20.0, lat: -45.0 },
-            LngLat { lng: -10.0, lat: -45.0 },
-            LngLat { lng: 0.0, lat: -45.0 },
-            LngLat { lng: 10.0, lat: -45.0 },
-            LngLat { lng: 20.0, lat: -45.0 },
-            LngLat { lng: 30.0, lat: -46.0 },
-            LngLat { lng: 40.0, lat: -46.0 },
-            LngLat { lng: 50.0, lat: -46.0 },
-            LngLat { lng: 60.0, lat: -48.0 },
-            LngLat { lng: 70.0, lat: -48.0 },
-            LngLat { lng: 80.0, lat: -50.0 },
-            LngLat { lng: 90.0, lat: -52.0 },
-            LngLat { lng: 100.0, lat: -52.0 },
-            LngLat { lng: 110.0, lat: -52.0 },
-            LngLat { lng: 120.0, lat: -54.0 },
-            LngLat { lng: 130.0, lat: -56.0 },
-            LngLat { lng: 140.0, lat: -58.0 },
-            LngLat { lng: 150.0, lat: -60.0 },
-            LngLat { lng: 160.0, lat: -62.0 },
-            LngLat { lng: 170.0, lat: -62.0 },
-            LngLat { lng: 180.0, lat: -62.0 },
-            LngLat { lng: -170.0, lat: -62.0 },
-            LngLat { lng: -160.0, lat: -62.0 },
-            LngLat { lng: -150.0, lat: -60.0 },
-            LngLat { lng: -140.0, lat: -58.0 },
-            LngLat { lng: -130.0, lat: -58.0 },
-            LngLat { lng: -120.0, lat: -56.0 },
-            LngLat { lng: -110.0, lat: -56.0 },
-            LngLat { lng: -100.0, lat: -56.0 },
-            LngLat { lng: -90.0, lat: -56.0 },
-            LngLat { lng: -80.0, lat: -58.0 },
-            LngLat { lng: -70.0, lat: -60.0 },  // Cape Horn approach
-            LngLat { lng: -60.0, lat: -55.0 },  // Past Cape Horn
-            LngLat { lng: -50.0, lat: -50.0 },
-            LngLat { lng: -40.0, lat: -48.0 },
-            LngLat { lng: -30.0, lat: -46.0 },
-            LngLat { lng: -20.0, lat: -45.0 },  // Back to start
-            // Now go to South Pole to close the polygon (everything south is excluded)
-            LngLat { lng: -20.0, lat: -90.0 },
-            LngLat { lng: 180.0, lat: -90.0 },
-        ],
-    }
 }
 
 // ============================================================================

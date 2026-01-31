@@ -25,7 +25,7 @@ const testCourse: Course = {
     lengthNm: 12,
   },
   gates: [],
-  exclusionZones: [],
+
   routeWaypoints: [[]],
   startHeading: 90,
   timeFactor: 60,

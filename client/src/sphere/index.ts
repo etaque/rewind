@@ -15,7 +15,6 @@ import WindParticles from "./wind-particles";
 import GhostBoats from "./ghost-boats";
 import CourseLine from "./course-line";
 import ProjectedPath from "./projected-path";
-import ExclusionZoneRenderer from "./exclusion-zone";
 import { ProjectedPoint } from "../app/projected-path";
 import Stars from "./stars";
 
@@ -49,7 +48,6 @@ export class SphereView {
   ghostBoats: GhostBoats;
   courseLine: CourseLine | null = null;
   projectedPath: ProjectedPath;
-  exclusionZones: ExclusionZoneRenderer | null = null;
 
   v0?: versor.Cartesian;
   q0?: versor.Versor;
@@ -140,10 +138,6 @@ export class SphereView {
     // Only create course-related renderers if we have a course
     if (course) {
       this.courseLine = new CourseLine(landCanvas, course);
-      this.exclusionZones = new ExclusionZoneRenderer(
-        landCanvas,
-        course.exclusionZones,
-      );
     }
 
     this.initialScale = this.projection.scale();
@@ -252,15 +246,6 @@ export class SphereView {
       this.courseLine = new CourseLine(this.land.canvas, course);
     } else {
       this.courseLine.setCourse(course);
-    }
-
-    if (!this.exclusionZones) {
-      this.exclusionZones = new ExclusionZoneRenderer(
-        this.land.canvas,
-        course.exclusionZones,
-      );
-    } else {
-      this.exclusionZones.setZones(course.exclusionZones);
     }
 
     this.render();
@@ -452,8 +437,7 @@ export class SphereView {
     this.land.render(scene, this.moving).then(() => {
       // Skip if a newer render has started
       if (currentGeneration !== this.renderGeneration) return;
-      // Draw exclusion zones, course line, projected path, wake and boats on top of land
-      this.exclusionZones?.render(scene);
+      // Draw course line, projected path, wake and boats on top of land
       this.courseLine?.render(scene);
       this.projectedPath.render(scene);
       this.wake.render(scene);

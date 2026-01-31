@@ -833,7 +833,6 @@ mod tests {
             start_heading: 270.0,
             finish_line: Gate::horizontal(-1.788, 46.470, 24.0),
             gates: vec![],
-            exclusion_zones: vec![],
             route_waypoints: vec![vec![]],
             time_factor: 2000,
             max_days: 90,

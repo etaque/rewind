@@ -21,7 +21,6 @@ const emptyCourse: Course = {
   startHeading: 0,
   finishLine: { center: { lng: 0, lat: 0 }, orientation: 0, lengthNm: 24 },
   gates: [],
-  exclusionZones: [],
   routeWaypoints: [[]],
   timeFactor: 2000,
   maxDays: 30,
@@ -132,35 +131,6 @@ export default function CourseEditor({ onBack }: Props) {
         (_, i) => i !== index + 1,
       );
       setEditCourse({ ...editCourse, gates, routeWaypoints });
-    },
-    [editCourse],
-  );
-
-  const handleAddExclusionZone = useCallback(() => {
-    if (!editCourse) return;
-    // Add a simple triangle at map center
-    const c = editCourse.start;
-    const exclusionZones = [
-      ...editCourse.exclusionZones,
-      {
-        name: "",
-        polygon: [
-          { lng: c.lng - 5, lat: c.lat - 5 },
-          { lng: c.lng + 5, lat: c.lat - 5 },
-          { lng: c.lng, lat: c.lat + 5 },
-        ],
-      },
-    ];
-    setEditCourse({ ...editCourse, exclusionZones });
-  }, [editCourse]);
-
-  const handleRemoveExclusionZone = useCallback(
-    (index: number) => {
-      if (!editCourse) return;
-      const exclusionZones = editCourse.exclusionZones.filter(
-        (_, i) => i !== index,
-      );
-      setEditCourse({ ...editCourse, exclusionZones });
     },
     [editCourse],
   );
@@ -280,8 +250,6 @@ export default function CourseEditor({ onBack }: Props) {
                 onSave={handleSave}
                 onAddGate={handleAddGate}
                 onRemoveGate={handleRemoveGate}
-                onAddExclusionZone={handleAddExclusionZone}
-                onRemoveExclusionZone={handleRemoveExclusionZone}
                 saveState={saveState}
                 focusTarget={focusTarget}
                 onSelect={handleMapSelect}
