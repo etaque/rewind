@@ -376,31 +376,40 @@ impl RaceManager {
         tokio::spawn(async move {
             loop {
                 tokio::time::sleep(tokio::time::Duration::from_secs(1)).await;
-                let races = races_clone.read().await;
-                for (race_id, race) in races.iter() {
-                    match race.race_start_time {
-                        Some(start_time) if !race.race_ended => {
-                            // Calculate race time (ms since race start)
-                            let now = Utc::now().timestamp_millis();
-                            let race_time = race.course.race_time(now - start_time);
 
-                            race.broadcast_all(ServerMessage::SyncRaceTime { race_time });
+                // Collect ended races under read lock
+                let mut ended_races: Vec<(String, ServerMessage)> = Vec::new();
+                {
+                    let races = races_clone.read().await;
+                    for (race_id, race) in races.iter() {
+                        match race.race_start_time {
+                            Some(start_time) if !race.race_ended => {
+                                let now = Utc::now().timestamp_millis();
+                                let race_time = race.course.race_time(now - start_time);
 
-                            // Check if race time exceeded max
-                            if race_time >= race.course.max_finish_time() {
-                                {
-                                    let mut races = races_clone.write().await;
-                                    if let Some(race) = races.get_mut(race_id) {
-                                        race.race_ended = true;
-                                    }
+                                race.broadcast_all(ServerMessage::SyncRaceTime { race_time });
+
+                                if race_time >= race.course.max_finish_time() {
+                                    ended_races.push((
+                                        race_id.clone(),
+                                        ServerMessage::RaceEnded {
+                                            reason: "Time limit reached".to_string(),
+                                        },
+                                    ));
                                 }
-                                race.broadcast_all(ServerMessage::RaceEnded {
-                                    reason: "Time limit reached".to_string(),
-                                });
-                                return;
                             }
+                            _ => {}
                         }
-                        _ => {}
+                    }
+                }
+                // Read lock is now dropped
+
+                // Apply mutations under write lock
+                for (race_id, end_msg) in ended_races {
+                    let mut races = races_clone.write().await;
+                    if let Some(race) = races.get_mut(&race_id) {
+                        race.race_ended = true;
+                        race.broadcast_all(end_msg);
                     }
                 }
             }
