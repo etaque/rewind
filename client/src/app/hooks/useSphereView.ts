@@ -84,6 +84,7 @@ export function useSphereView(
     }
     vmgBadRef.current = vmgBad;
     sphereViewRef.current.updateVMGStatus(vmgBad);
+    sphereViewRef.current.updateTWALockStatus(session.lockedTWA !== null);
 
   }, [
     session?.position,

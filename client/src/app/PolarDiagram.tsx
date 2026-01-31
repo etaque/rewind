@@ -193,7 +193,7 @@ export default React.memo(function PolarDiagram({
           fontFamily="monospace"
           textAnchor="end"
         >
-          {twa.toFixed(0)}°{twaLocked ? " L" : ""}
+          {twaLocked ? "🔒 " : ""}{twa.toFixed(0)}°
         </text>
       </svg>
     </div>
