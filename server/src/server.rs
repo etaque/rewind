@@ -1,7 +1,7 @@
 use axum::{
     Json, Router,
     extract::{Path, Query, State, ws::WebSocketUpgrade},
-    http::{Method, StatusCode},
+    http::{HeaderMap, Method, StatusCode},
     response::{IntoResponse, Response},
     routing::{any, get, put},
 };
@@ -20,17 +20,34 @@ use crate::{
 
 use super::s3;
 
+fn check_editor_password(headers: &HeaderMap) -> Result<(), AppError> {
+    let password = &config().editor_password;
+    if password.is_empty() {
+        return Err(AppError::Unauthorized);
+    }
+    match headers.get("X-Editor-Password").and_then(|v| v.to_str().ok()) {
+        Some(value) if value == password => Ok(()),
+        _ => Err(AppError::Unauthorized),
+    }
+}
+
 // Make our own error that wraps `anyhow::Error`.
-struct AppError(anyhow::Error);
+enum AppError {
+    Internal(anyhow::Error),
+    Unauthorized,
+}
 
 // Tell axum how to convert `AppError` into a response.
 impl IntoResponse for AppError {
     fn into_response(self) -> Response {
-        (
-            StatusCode::INTERNAL_SERVER_ERROR,
-            format!("Something went wrong: {}", self.0),
-        )
-            .into_response()
+        match self {
+            AppError::Internal(err) => (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                format!("Something went wrong: {}", err),
+            )
+                .into_response(),
+            AppError::Unauthorized => StatusCode::UNAUTHORIZED.into_response(),
+        }
     }
 }
 
@@ -39,7 +56,7 @@ where
     E: Into<anyhow::Error>,
 {
     fn from(err: E) -> Self {
-        Self(err.into())
+        Self::Internal(err.into())
     }
 }
 
@@ -56,10 +73,14 @@ pub async fn run(address: std::net::SocketAddr) {
     let cors = CorsLayer::new()
         .allow_origin(tower_http::cors::Any)
         .allow_methods([Method::GET, Method::POST, Method::PUT, Method::DELETE])
-        .allow_headers([axum::http::header::CONTENT_TYPE]);
+        .allow_headers([
+            axum::http::header::CONTENT_TYPE,
+            axum::http::header::HeaderName::from_static("x-editor-password"),
+        ]);
 
     let app = Router::new()
         .route("/health", get(health_handler))
+        .route("/editor/verify", get(verify_editor_password_handler))
         .route("/courses", get(courses_handler).post(create_course_handler))
         .route(
             "/courses/{key}",
@@ -91,29 +112,44 @@ async fn health_handler() -> Result<String, AppError> {
     Ok(format!("OK ({} wind reports)", report_count))
 }
 
+async fn verify_editor_password_handler(
+    headers: HeaderMap,
+) -> Result<impl IntoResponse, AppError> {
+    check_editor_password(&headers)?;
+    Ok(StatusCode::OK)
+}
+
 async fn courses_handler() -> Result<impl IntoResponse, AppError> {
     let courses = db::with_connection(|conn| courses::get_all(conn))?;
     Ok(Json(courses))
 }
 
 async fn create_course_handler(
+    headers: HeaderMap,
     Json(course): Json<courses::Course>,
 ) -> Result<impl IntoResponse, AppError> {
+    check_editor_password(&headers)?;
     log::info!("Course created: {} ({})", course.name, course.key);
     db::with_connection(|conn| courses::insert(conn, &course))?;
     Ok(StatusCode::CREATED)
 }
 
 async fn update_course_handler(
+    headers: HeaderMap,
     Path(key): Path<String>,
     Json(course): Json<courses::Course>,
 ) -> Result<impl IntoResponse, AppError> {
+    check_editor_password(&headers)?;
     log::info!("Course updated: {} ({})", course.name, key);
     db::with_connection(|conn| courses::update(conn, &key, &course))?;
     Ok(StatusCode::OK)
 }
 
-async fn delete_course_handler(Path(key): Path<String>) -> Result<impl IntoResponse, AppError> {
+async fn delete_course_handler(
+    headers: HeaderMap,
+    Path(key): Path<String>,
+) -> Result<impl IntoResponse, AppError> {
+    check_editor_password(&headers)?;
     db::with_connection(|conn| courses::delete(conn, &key))?;
     Ok(StatusCode::OK)
 }
@@ -156,7 +192,7 @@ async fn replay_handler(Path(result_id): Path<i64>) -> Result<impl IntoResponse,
             let url = config().s3.paths_url(&key);
             Ok(Json(ReplayResponse { path_url: url }))
         }
-        None => Err(AppError(anyhow::anyhow!("Race result not found"))),
+        None => Err(AppError::Internal(anyhow::anyhow!("Race result not found"))),
     }
 }
 
@@ -171,6 +207,6 @@ async fn random_wind_handler() -> Result<impl IntoResponse, AppError> {
 
     match report {
         Some(r) => Ok(Json(RandomWindResponse { png_url: r.png_url() })),
-        None => Err(AppError(anyhow::anyhow!("No wind reports available"))),
+        None => Err(AppError::Internal(anyhow::anyhow!("No wind reports available"))),
     }
 }

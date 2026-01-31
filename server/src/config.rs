@@ -43,6 +43,7 @@ impl Default for S3Config {
 pub struct Config {
     pub s3: S3Config,
     pub db_path: String,
+    pub editor_password: String,
 }
 
 pub static CONFIG: Lazy<Config> = Lazy::new(|| {
@@ -63,7 +64,10 @@ pub static CONFIG: Lazy<Config> = Lazy::new(|| {
         }
     });
 
-    Config { s3, db_path }
+    let editor_password =
+        env::var("REWIND_EDITOR_PASSWORD").unwrap_or_default();
+
+    Config { s3, db_path, editor_password }
 });
 
 pub fn config() -> &'static Config {

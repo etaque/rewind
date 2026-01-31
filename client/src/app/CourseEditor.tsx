@@ -6,6 +6,7 @@ import {
   createCourse,
   updateCourse,
   deleteCourse,
+  verifyPassword,
 } from "./editor/api";
 import CourseForm, { type FocusTarget } from "./editor/CourseForm";
 import EditorMap, { type MapSelection } from "./editor/EditorMap";
@@ -31,6 +32,10 @@ type Props = {
 };
 
 export default function CourseEditor({ onBack }: Props) {
+  const [password, setPassword] = useState<string | null>(null);
+  const [passwordInput, setPasswordInput] = useState("");
+  const [passwordError, setPasswordError] = useState<string | null>(null);
+  const [verifying, setVerifying] = useState(false);
   const [courses, setCourses] = useState<Course[]>([]);
   const [selectedKey, setSelectedKey] = useState<string | null>(null);
   const [editCourse, setEditCourse] = useState<Course | null>(null);
@@ -73,39 +78,39 @@ export default function CourseEditor({ onBack }: Props) {
   }, []);
 
   const handleSave = useCallback(async () => {
-    if (!editCourse) return;
+    if (!editCourse || !password) return;
     setSaveState(asyncState.loading());
     try {
       if (isNew) {
-        await createCourse(editCourse);
+        await createCourse(editCourse, password);
         setIsNew(false);
         setSelectedKey(editCourse.key);
       } else {
-        await updateCourse(selectedKey!, editCourse);
+        await updateCourse(selectedKey!, editCourse, password);
       }
       await loadCourses();
       setSaveState(asyncState.success(undefined));
     } catch (err) {
-      setSaveState(
-        asyncState.error(err instanceof Error ? err.message : "Save failed"),
-      );
+      const message = err instanceof Error ? err.message : "Save failed";
+      if (message === "Invalid password") setPassword(null);
+      setSaveState(asyncState.error(message));
     }
-  }, [editCourse, isNew, selectedKey, loadCourses]);
+  }, [editCourse, isNew, selectedKey, password, loadCourses]);
 
   const handleDelete = useCallback(async () => {
-    if (!selectedKey) return;
+    if (!selectedKey || !password) return;
     if (!confirm(`Delete course "${selectedKey}"?`)) return;
     try {
-      await deleteCourse(selectedKey);
+      await deleteCourse(selectedKey, password);
       setSelectedKey(null);
       setEditCourse(null);
       await loadCourses();
     } catch (err) {
-      setSaveState(
-        asyncState.error(err instanceof Error ? err.message : "Delete failed"),
-      );
+      const message = err instanceof Error ? err.message : "Delete failed";
+      if (message === "Invalid password") setPassword(null);
+      setSaveState(asyncState.error(message));
     }
-  }, [selectedKey, loadCourses]);
+  }, [selectedKey, password, loadCourses]);
 
   const handleAddGate = useCallback(() => {
     if (!editCourse) return;
@@ -163,6 +168,61 @@ export default function CourseEditor({ onBack }: Props) {
   const handleMapSelect = useCallback((selection: MapSelection) => {
     setFocusTarget({ selection, key: ++focusKeyRef.current });
   }, []);
+
+  if (password === null) {
+    return (
+      <div className="fixed inset-0 flex items-center justify-center bg-slate-950">
+        <form
+          onSubmit={async (e) => {
+            e.preventDefault();
+            if (!passwordInput || verifying) return;
+            setVerifying(true);
+            setPasswordError(null);
+            const ok = await verifyPassword(passwordInput);
+            setVerifying(false);
+            if (ok) {
+              setPassword(passwordInput);
+            } else {
+              setPasswordError("Invalid password");
+            }
+          }}
+          className="bg-slate-900 border border-slate-800 rounded-lg p-6 w-80"
+        >
+          <h2 className="text-white font-semibold mb-4">Editor Password</h2>
+          <input
+            type="password"
+            value={passwordInput}
+            onChange={(e) => {
+              setPasswordInput(e.target.value);
+              setPasswordError(null);
+            }}
+            placeholder="Enter password"
+            autoFocus
+            className="w-full bg-slate-800 border border-slate-700 rounded px-3 py-2 text-white text-sm mb-4 focus:outline-none focus:border-blue-500"
+          />
+          {passwordError && (
+            <p className="text-red-400 text-sm mb-3">{passwordError}</p>
+          )}
+          <div className="flex gap-3">
+            <button
+              type="button"
+              onClick={onBack}
+              className="flex-1 text-sm text-slate-400 hover:text-white py-2 border border-slate-700 rounded transition-all"
+            >
+              Back
+            </button>
+            <button
+              type="submit"
+              disabled={!passwordInput || verifying}
+              className="flex-1 text-sm bg-blue-600 hover:bg-blue-500 disabled:opacity-50 text-white py-2 rounded transition-all"
+            >
+              {verifying ? "Verifying..." : "Enter"}
+            </button>
+          </div>
+        </form>
+      </div>
+    );
+  }
 
   return (
     <div className="fixed inset-0 flex bg-slate-950">
