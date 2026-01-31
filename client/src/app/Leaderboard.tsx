@@ -4,6 +4,7 @@ type Props = {
   entries: LeaderboardEntry[];
   myPlayerId: string;
   courseStartTime: number;
+  onQuit: () => void;
 };
 
 function formatDistance(nm: number): string {
@@ -31,13 +32,14 @@ export default function Leaderboard({
   entries,
   myPlayerId,
   courseStartTime,
+  onQuit,
 }: Props) {
   if (entries.length === 0) {
     return null;
   }
 
   return (
-    <div className="absolute top-4 right-4 bg-black/60 text-white px-4 py-3 rounded-lg font-mono text-sm min-w-48">
+    <div className="absolute top-4 right-4 bg-black/60 text-white px-4 py-3 rounded-lg font-mono text-sm min-w-48 pointer-events-auto">
       <div className="text-gray-400 text-xs mb-2 uppercase tracking-wide">
         Leaderboard
       </div>
@@ -63,6 +65,12 @@ export default function Leaderboard({
           );
         })}
       </div>
+      <button
+        onClick={onQuit}
+        className="mt-3 w-full px-3 py-1.5 text-xs text-slate-400 hover:text-white underline decoration-slate-600 hover:decoration-white rounded transition-all cursor-pointer"
+      >
+        Quit race
+      </button>
     </div>
   );
 }

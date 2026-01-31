@@ -296,6 +296,7 @@ export default function App() {
               entries={state.leaderboard}
               myPlayerId={state.race.myPlayerId}
               courseStartTime={state.session.course.startTime}
+              onQuit={handleQuitClick}
             />
             <PolarDiagram
               polar={state.session.polar}
@@ -308,19 +309,12 @@ export default function App() {
               vmgBad={vmgBad}
               twaLocked={state.session.lockedTWA !== null}
             />
-            {state.session.finishTime !== null ? (
+            {state.session.finishTime !== null && (
               <FinishOverlay
                 finishTime={state.session.finishTime}
                 courseStartTime={state.session.course.startTime}
                 onBack={handleQuitRace}
               />
-            ) : (
-              <button
-                onClick={handleQuitClick}
-                className="fixed top-4 left-4 px-4 py-2 bg-black/60 hover:bg-black/80 text-slate-300 hover:text-white text-sm rounded-lg transition-all pointer-events-auto"
-              >
-                Abandon
-              </button>
             )}
           </>
         )}
@@ -333,7 +327,7 @@ export default function App() {
         <div className="fixed inset-0 flex items-center justify-center bg-black bg-opacity-50 z-50 pointer-events-auto">
           <div className="bg-slate-900 rounded-lg p-6 max-w-sm w-full mx-4">
             <h2 className="text-white text-lg font-semibold mb-4">
-              Abandon this race?
+              Quit this race?
             </h2>
             <div className="flex gap-3">
               <button
@@ -346,7 +340,7 @@ export default function App() {
                 onClick={handleQuitRace}
                 className="flex-1 px-4 py-2 bg-red-600 hover:bg-red-500 text-white rounded-lg transition-all"
               >
-                Abandon
+                Quit race
               </button>
             </div>
           </div>
