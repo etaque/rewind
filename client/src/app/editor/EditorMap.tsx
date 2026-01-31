@@ -6,7 +6,7 @@ import { Course, LngLat } from "../../models";
 import GateMarker from "./GateMarker";
 import ExclusionZonePolygon from "./ExclusionZonePolygon";
 import WaypointPolyline from "./WaypointPolyline";
-import { catmullRomSpline } from "../../catmull-rom";
+import { catmullRomSplineGeo } from "../../catmull-rom";
 import type { FocusTarget } from "./CourseForm";
 
 export type MapSelection =
@@ -170,7 +170,7 @@ export default function EditorMap({ course, onChange, onSelect, focusTarget }: P
 
     const useSpline = allCoords.length >= 3;
     const splined = useSpline
-      ? catmullRomSpline(allCoords, SPLINE_SEGMENTS)
+      ? catmullRomSplineGeo(allCoords, SPLINE_SEGMENTS)
       : allCoords;
     const factor = useSpline ? SPLINE_SEGMENTS : 1;
 

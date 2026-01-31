@@ -39,3 +39,27 @@ export function catmullRomSpline(
   result.push(points[points.length - 1]);
   return result;
 }
+
+export function catmullRomSplineGeo(
+  points: [number, number][],
+  segments: number,
+): [number, number][] {
+  // Unwrap longitudes so consecutive values don't jump > 180°
+  const unwrapped: [number, number][] = points.map(
+    (p) => [...p] as [number, number],
+  );
+  for (let i = 1; i < unwrapped.length; i++) {
+    while (unwrapped[i][0] - unwrapped[i - 1][0] > 180) unwrapped[i][0] -= 360;
+    while (unwrapped[i][0] - unwrapped[i - 1][0] < -180)
+      unwrapped[i][0] += 360;
+  }
+
+  const splined = catmullRomSpline(unwrapped, segments);
+
+  // Normalize longitudes back to [-180, 180]
+  for (const p of splined) {
+    while (p[0] > 180) p[0] -= 360;
+    while (p[0] < -180) p[0] += 360;
+  }
+  return splined;
+}

@@ -2,7 +2,7 @@ import { geoDistance, geoPath } from "d3-geo";
 import { Course, Gate, LngLat } from "../models";
 import { Scene } from "./scene";
 import { gateEndpoints } from "../app/gate-crossing";
-import { catmullRomSpline } from "../catmull-rom";
+import { catmullRomSplineGeo } from "../catmull-rom";
 
 // Fixed screen radius in pixels
 const MARKER_RADIUS_PX = 8;
@@ -70,7 +70,7 @@ export default class CourseLine {
     // Apply one continuous spline so gate junctions are smooth
     const useSpline = allCoords.length >= 3;
     const splined = useSpline
-      ? catmullRomSpline(allCoords, SPLINE_SEGMENTS)
+      ? catmullRomSplineGeo(allCoords, SPLINE_SEGMENTS)
       : allCoords;
     const factor = useSpline ? SPLINE_SEGMENTS : 1;
 
