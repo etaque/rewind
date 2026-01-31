@@ -13,6 +13,7 @@ import Wake from "./wake";
 import WindTexture from "./wind-texture";
 import WindParticles from "./wind-particles";
 import GhostBoats from "./ghost-boats";
+import { polarToBoatType } from "./boat-geometry";
 import CourseLine from "./course-line";
 import ProjectedPath from "./projected-path";
 import { ProjectedPoint } from "../app/projected-path";
@@ -441,10 +442,11 @@ export class SphereView {
       this.courseLine?.render(scene);
       this.projectedPath.render(scene);
       this.wake.render(scene);
-      this.ghostBoats.render(scene);
+      const boatType = this.course ? polarToBoatType(this.course.polar) : "imoca";
+      this.ghostBoats.render(scene, boatType);
       // Only render boat if we have a course (i.e., we're in a race context)
       if (this.course) {
-        this.boat.render(scene, this.position, this.heading);
+        this.boat.render(scene, this.position, this.heading, boatType);
       }
     });
 

@@ -2,7 +2,7 @@ import { geoDistance, geoPath } from "d3-geo";
 import { LngLat } from "../models";
 import { Scene } from "./scene";
 import { PeerState } from "../multiplayer/types";
-import { createBoatPolygon, getBoatSizeKm } from "./boat-geometry";
+import { BoatType, createBoatPolygon, getBoatSizeKm } from "./boat-geometry";
 
 export type RecordedGhostPosition = {
   name: string;
@@ -49,7 +49,7 @@ export default class GhostBoats {
     this.recordedGhosts = ghosts;
   }
 
-  render(scene: Scene) {
+  render(scene: Scene, boatType: BoatType = "imoca") {
     const context = this.canvas.getContext("2d")!;
     const path = geoPath(scene.projection, context);
     const rotate = scene.projection.rotate();
@@ -64,11 +64,11 @@ export default class GhostBoats {
       const point: [number, number] = [peer.position.lng, peer.position.lat];
       if (geoDistance(center, point) > Math.PI / 2) return;
 
-      // Create boat triangle
       const boatPolygon = createBoatPolygon(
         peer.position,
         peer.heading,
         sizeKm,
+        boatType,
       );
 
       context.beginPath();
@@ -106,8 +106,7 @@ export default class GhostBoats {
       const point: [number, number] = [ghost.lng, ghost.lat];
       if (geoDistance(center, point) > Math.PI / 2) return;
 
-      // Create boat triangle
-      const boatPolygon = createBoatPolygon(position, ghost.heading, sizeKm);
+      const boatPolygon = createBoatPolygon(position, ghost.heading, sizeKm, boatType);
 
       context.beginPath();
       path(boatPolygon);

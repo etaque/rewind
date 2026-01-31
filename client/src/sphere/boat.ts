@@ -1,7 +1,7 @@
 import { geoDistance, geoPath } from "d3-geo";
 import { LngLat } from "../models";
 import { Scene } from "./scene";
-import { createBoatPolygon, getBoatSizeKm } from "./boat-geometry";
+import { BoatType, createBoatPolygon, getBoatSizeKm } from "./boat-geometry";
 
 export default class Boat {
   canvas: HTMLCanvasElement;
@@ -10,7 +10,7 @@ export default class Boat {
     this.canvas = canvas;
   }
 
-  render(scene: Scene, position: LngLat, heading: number) {
+  render(scene: Scene, position: LngLat, heading: number, boatType: BoatType = "imoca") {
     // Check if point is on the visible hemisphere
     const rotate = scene.projection.rotate();
     const center: [number, number] = [-rotate[0], -rotate[1]];
@@ -24,7 +24,7 @@ export default class Boat {
     const sizeKm = getBoatSizeKm(scale);
 
     // Create boat triangle as a geo polygon
-    const boatPolygon = createBoatPolygon(position, heading, sizeKm);
+    const boatPolygon = createBoatPolygon(position, heading, sizeKm, boatType);
 
     context.beginPath();
     path(boatPolygon);
