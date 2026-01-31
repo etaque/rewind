@@ -84,7 +84,7 @@ export type AppAction =
   | { type: "TURN"; direction: Turn }
   | { type: "TACK" }
   | { type: "TOGGLE_TWA_LOCK" }
-  | { type: "VMG_LOCK" }
+  | { type: "VMG_LOCK"; mode: "upwind" | "downwind" }
   | { type: "GATE_CROSSED"; gateIndex: number; courseTime: number }
   // Multiplayer actions
   | {
@@ -209,7 +209,7 @@ export function appReducer(state: AppState, action: AppAction): AppState {
 
     case "VMG_LOCK": {
       if (state.tag !== "Playing") return state;
-      const vmgHeading = calculateVMGLockHeading(state.session);
+      const vmgHeading = calculateVMGLockHeading(state.session, action.mode);
       if (vmgHeading === null) return state;
       return produce(state, (draft) => {
         draft.session.targetHeading = vmgHeading;

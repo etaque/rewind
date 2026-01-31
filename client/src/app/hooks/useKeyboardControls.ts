@@ -4,8 +4,9 @@ import { AppAction } from "../state";
 /**
  * Hook to handle keyboard controls when playing.
  * - Arrow Left/Right: Turn boat
- * - Arrow Up: Toggle TWA lock
- * - Arrow Down: Lock to optimal VMG heading
+ * - Enter: Toggle TWA lock
+ * - Arrow Up: Lock to optimal upwind VMG heading
+ * - Arrow Down: Lock to optimal downwind VMG heading
  * - Space: Tack
  */
 export function useKeyboardControls(
@@ -20,14 +21,18 @@ export function useKeyboardControls(
         dispatch({ type: "TURN", direction: "left" });
       } else if (e.key === "ArrowRight") {
         dispatch({ type: "TURN", direction: "right" });
-      } else if (e.key === "ArrowUp") {
+      } else if (e.key === "Enter") {
         e.preventDefault();
         e.stopPropagation();
         dispatch({ type: "TOGGLE_TWA_LOCK" });
+      } else if (e.key === "ArrowUp") {
+        e.preventDefault();
+        e.stopPropagation();
+        dispatch({ type: "VMG_LOCK", mode: "upwind" });
       } else if (e.key === "ArrowDown") {
         e.preventDefault();
         e.stopPropagation();
-        dispatch({ type: "VMG_LOCK" });
+        dispatch({ type: "VMG_LOCK", mode: "downwind" });
       } else if (e.key === " ") {
         e.preventDefault();
         e.stopPropagation();

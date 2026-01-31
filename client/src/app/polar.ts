@@ -207,6 +207,7 @@ export function getOptimalVMGAngle(
  * @param windDirection Wind direction in degrees (where wind comes FROM)
  * @param tws True Wind Speed in knots
  * @param currentHeading Current boat heading to determine port/starboard tack
+ * @param mode Force upwind or downwind VMG mode
  * @returns Optimal heading in degrees
  */
 export function getOptimalVMGHeading(
@@ -214,10 +215,8 @@ export function getOptimalVMGHeading(
   windDirection: number,
   tws: number,
   currentHeading: number,
+  mode: VMGMode,
 ): number {
-  // Determine if we're sailing upwind or downwind based on current TWA
-  const currentTWA = calculateTWA(currentHeading, windDirection);
-  const mode: VMGMode = currentTWA <= 90 ? "upwind" : "downwind";
 
   // Get optimal TWA for this mode
   const optimalTWA = getOptimalVMGAngle(polar, tws, mode);
