@@ -22,7 +22,7 @@ type Props = {
   startPoint: LngLat;
   endPoint: LngLat;
   waypoints: LngLat[];
-  curvePositions?: L.LatLngExpression[];
+  curvePositions?: L.LatLngExpression[][];
   onWaypointDrag: (waypointIndex: number, lat: number, lng: number) => void;
   onAddWaypoint: (waypointIndex: number, lat: number, lng: number) => void;
   onRemoveWaypoint: (waypointIndex: number) => void;
@@ -49,7 +49,7 @@ export default function WaypointPolyline({
   return (
     <>
       <Polyline
-        positions={curvePositions ?? positions}
+        positions={curvePositions ?? [positions]}
         color="#f97316"
         weight={2}
         opacity={0.6}

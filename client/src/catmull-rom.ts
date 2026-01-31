@@ -40,21 +40,24 @@ export function catmullRomSpline(
   return result;
 }
 
+export function unwrapLongitudes(
+  points: [number, number][],
+): [number, number][] {
+  const result: [number, number][] = points.map(
+    (p) => [...p] as [number, number],
+  );
+  for (let i = 1; i < result.length; i++) {
+    while (result[i][0] - result[i - 1][0] > 180) result[i][0] -= 360;
+    while (result[i][0] - result[i - 1][0] < -180) result[i][0] += 360;
+  }
+  return result;
+}
+
 export function catmullRomSplineGeo(
   points: [number, number][],
   segments: number,
 ): [number, number][] {
-  // Unwrap longitudes so consecutive values don't jump > 180°
-  const unwrapped: [number, number][] = points.map(
-    (p) => [...p] as [number, number],
-  );
-  for (let i = 1; i < unwrapped.length; i++) {
-    while (unwrapped[i][0] - unwrapped[i - 1][0] > 180) unwrapped[i][0] -= 360;
-    while (unwrapped[i][0] - unwrapped[i - 1][0] < -180)
-      unwrapped[i][0] += 360;
-  }
-
-  const splined = catmullRomSpline(unwrapped, segments);
+  const splined = catmullRomSpline(unwrapLongitudes(points), segments);
 
   // Normalize longitudes back to [-180, 180]
   for (const p of splined) {

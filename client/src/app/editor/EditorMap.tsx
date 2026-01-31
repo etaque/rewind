@@ -55,6 +55,66 @@ function MapFocus({ position, focusKey }: { position: LngLat | null; focusKey: n
   return null;
 }
 
+/**
+ * Split a [lat, lng] polyline at antimeridian crossings, then duplicate
+ * each segment at ±360° so the path is visible regardless of which
+ * world copy Leaflet is showing (needed because worldCopyJump shifts
+ * the view but not polyline coordinates).
+ */
+function splitAtAntimeridian(
+  coords: L.LatLngExpression[],
+): L.LatLngExpression[][] {
+  if (coords.length < 2) return [coords];
+
+  const segments: L.LatLngExpression[][] = [];
+  let current: L.LatLngExpression[] = [coords[0]];
+
+  for (let i = 1; i < coords.length; i++) {
+    const [lat1, lng1] = coords[i - 1] as [number, number];
+    const [lat2, lng2] = coords[i] as [number, number];
+    const dLng = lng2 - lng1;
+
+    if (dLng > 180 || dLng < -180) {
+      // Interpolate the latitude at the crossing point
+      const lng2Unwrapped = dLng > 180 ? lng2 - 360 : lng2 + 360;
+      const crossLng = dLng > 180 ? -180 : 180;
+      const t = (crossLng - lng1) / (lng2Unwrapped - lng1);
+      const crossLat = lat1 + t * (lat2 - lat1);
+
+      current.push([crossLat, crossLng] as L.LatLngExpression);
+      segments.push(current);
+      current = [[crossLat, -crossLng] as L.LatLngExpression];
+    }
+
+    current.push(coords[i]);
+  }
+
+  segments.push(current);
+
+  // No crossing — return as-is
+  if (segments.length === 1) return segments;
+
+  // Duplicate each segment at ±360° so both sides of the split are
+  // visible when the map view is near the antimeridian.
+  const result: L.LatLngExpression[][] = [];
+  for (const seg of segments) {
+    result.push(seg);
+    result.push(
+      seg.map((p) => {
+        const [lat, lng] = p as [number, number];
+        return [lat, lng + 360] as L.LatLngExpression;
+      }),
+    );
+    result.push(
+      seg.map((p) => {
+        const [lat, lng] = p as [number, number];
+        return [lat, lng - 360] as L.LatLngExpression;
+      }),
+    );
+  }
+  return result;
+}
+
 export default function EditorMap({ course, onChange, onSelect, focusTarget }: Props) {
   const startMarkerRef = useRef<L.Marker>(null);
 
@@ -174,13 +234,18 @@ export default function EditorMap({ course, onChange, onSelect, focusTarget }: P
       : allCoords;
     const factor = useSpline ? SPLINE_SEGMENTS : 1;
 
-    // Slice splined result into per-leg curves as [lat, lng] for Leaflet
-    const curves: L.LatLngExpression[][] = [];
+    // Slice splined result into per-leg curves as [lat, lng] for Leaflet,
+    // splitting at antimeridian crossings so Leaflet never draws a
+    // map-spanning line from 178° to -178°.
+    const curves: L.LatLngExpression[][][] = [];
     for (let i = 0; i < legBoundaries.length - 1; i++) {
       const fromIdx = legBoundaries[i] * factor;
       const toIdx = legBoundaries[i + 1] * factor;
       const legCoords = splined.slice(fromIdx, toIdx + 1);
-      curves.push(legCoords.map(([lng, lat]) => [lat, lng] as L.LatLngExpression));
+      const latLngs = legCoords.map(
+        ([lng, lat]) => [lat, lng] as L.LatLngExpression,
+      );
+      curves.push(splitAtAntimeridian(latLngs));
     }
     return curves;
   }, [course.start, course.gates, course.finishLine.center, course.routeWaypoints]);
