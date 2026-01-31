@@ -1,5 +1,10 @@
 import React, { useMemo } from "react";
-import { getPolarCurve, getMaxPolarSpeed, PolarData } from "./polar";
+import {
+  getPolarCurve,
+  getMaxPolarSpeed,
+  getOptimalVMGAngle,
+  PolarData,
+} from "./polar";
 
 type PolarDiagramProps = {
   polar: PolarData;
@@ -33,6 +38,16 @@ export default React.memo(function PolarDiagram({
   );
   const maxSpeed = useMemo(() => getMaxPolarSpeed(polar), [polar]);
 
+  // Compute optimal VMG angles for bad-zone hatching
+  const optimalUpwindTWA = useMemo(
+    () => getOptimalVMGAngle(polar, roundedTws, "upwind"),
+    [polar, roundedTws],
+  );
+  const optimalDownwindTWA = useMemo(
+    () => getOptimalVMGAngle(polar, roundedTws, "downwind"),
+    [polar, roundedTws],
+  );
+
   // Scale function: BSP -> radius
   const scale = (speed: number) => (speed / maxSpeed) * RADIUS;
 
@@ -58,17 +73,34 @@ export default React.memo(function PolarDiagram({
   // Current position marker
   const currentPos = polarToCartesian(twa, bsp);
 
+  // Build a pie-wedge SVG path from twaStart to twaEnd at the given radius
+  const wedgePath = (twaStart: number, twaEnd: number) => {
+    const toAngle = (twa: number) => (twa - 90) * (Math.PI / 180);
+    const a1 = toAngle(twaStart);
+    const a2 = toAngle(twaEnd);
+    const x1 = CENTER_X + RADIUS * Math.cos(a1);
+    const y1 = CENTER_Y + RADIUS * Math.sin(a1);
+    const x2 = CENTER_X + RADIUS * Math.cos(a2);
+    const y2 = CENTER_Y + RADIUS * Math.sin(a2);
+    const largeArc = twaEnd - twaStart > 180 ? 1 : 0;
+    return `M ${CENTER_X} ${CENTER_Y} L ${x1.toFixed(1)} ${y1.toFixed(1)} A ${RADIUS} ${RADIUS} 0 ${largeArc} 1 ${x2.toFixed(1)} ${y2.toFixed(1)} Z`;
+  };
+
   // Grid circles at 10 and 20 knots
   const gridSpeeds = [10, 20];
 
   return (
-    <div className={`absolute bottom-4 left-4 rounded-lg p-2 ${vmgBad ? "bg-red-900/60" : "bg-black/60"}`}>
+    <div className="absolute bottom-4 left-4 rounded-lg p-2 bg-black/60">
       <svg
         width={WIDTH}
         height={HEIGHT}
         viewBox={`0 0 ${WIDTH} ${HEIGHT}`}
         className="text-white"
       >
+        {/* Bad VMG sectors — highlight the active zone when boat is in it */}
+        <path d={wedgePath(0, optimalUpwindTWA)} fill="#ef4444" fillOpacity={vmgBad && twa < optimalUpwindTWA ? 0.4 : 0.08} />
+        <path d={wedgePath(optimalDownwindTWA, 180)} fill="#ef4444" fillOpacity={vmgBad && twa > optimalDownwindTWA ? 0.4 : 0.08} />
+
         {/* Grid semicircles for speed scale */}
         <g stroke="currentColor" strokeOpacity={0.2} fill="none">
           {gridSpeeds.map((speed) => {
@@ -106,21 +138,11 @@ export default React.memo(function PolarDiagram({
         <path
           d={pathData}
           fill="none"
-          stroke="#22d3ee"
+          stroke="#ffffff"
+          strokeOpacity={0.6}
           strokeWidth={2}
           strokeLinecap="round"
           strokeLinejoin="round"
-        />
-
-        {/* Line from center to current position */}
-        <line
-          x1={CENTER_X}
-          y1={CENTER_Y}
-          x2={currentPos.x}
-          y2={currentPos.y}
-          stroke={vmgBad ? "#ef4444" : "#22c55e"}
-          strokeWidth={1}
-          strokeDasharray="2,2"
         />
 
         {/* Current position marker: green circle (good VMG) or red triangle (bad VMG) */}
