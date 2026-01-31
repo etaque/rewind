@@ -23,6 +23,10 @@ export type TickResult = {
 const TACK_TURN_RATE = 90;
 const MANUAL_TURN_RATE = 45;
 
+// Inertia time constant in seconds (wall-clock).
+// Higher = more sluggish, lower = more responsive.
+const INERTIA_TAU = 1;
+
 export function tick(session: Session, delta: number): TickResult {
   const newClock = session.clock + delta;
   const newCourseTime =
@@ -86,7 +90,10 @@ export function tick(session: Session, delta: number): TickResult {
 
   // Calculate TWA and boat speed from polar
   const twa = calculateTWA(heading, windDirNorm);
-  let boatSpeed = getBoatSpeed(session.polar, tws, twa);
+  const targetSpeed = getBoatSpeed(session.polar, tws, twa);
+  const dt = delta / 1000;
+  const alpha = 1 - Math.exp(-dt / INERTIA_TAU);
+  let boatSpeed = session.boatSpeed + (targetSpeed - session.boatSpeed) * alpha;
 
   // Move boat based on speed and heading
   // Boat speed is in knots, delta is in ms
