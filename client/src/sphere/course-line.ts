@@ -5,7 +5,6 @@ import { gateEndpoints } from "../app/gate-crossing";
 import { catmullRomSplineGeo } from "../catmull-rom";
 
 // Fixed screen radius in pixels
-const MARKER_RADIUS_PX = 8;
 const BUOY_RADIUS_PX = 4;
 
 // Colors for gate states
@@ -105,8 +104,6 @@ export default class CourseLine {
       this.nextGateIndex === numGates ? GATE_COLOR_NEXT : FINISH_LINE_COLOR;
     this.drawGate(scene, context, finishLine, finishColor, 3);
 
-    // Draw start marker (red)
-    this.drawCircle(scene, context, start, "#ef4444");
   }
 
   private drawLeg(
@@ -196,29 +193,6 @@ export default class CourseLine {
     context.fill();
   }
 
-  private drawCircle(
-    scene: Scene,
-    context: CanvasRenderingContext2D,
-    position: LngLat,
-    color: string,
-  ) {
-    // Check if point is on the visible hemisphere
-    const rotate = scene.projection.rotate();
-    const center: [number, number] = [-rotate[0], -rotate[1]];
-    const point: [number, number] = [position.lng, position.lat];
-    if (geoDistance(center, point) > Math.PI / 2) return;
-
-    const projected = scene.projection([position.lng, position.lat]);
-    if (!projected) return;
-
-    context.beginPath();
-    context.arc(projected[0], projected[1], MARKER_RADIUS_PX, 0, Math.PI * 2);
-    context.fillStyle = color;
-    context.fill();
-    context.strokeStyle = "#ffffff";
-    context.lineWidth = 1.5;
-    context.stroke();
-  }
 }
 
 function gateMidpoint(gate: Gate): LngLat {
