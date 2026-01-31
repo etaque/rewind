@@ -10,7 +10,7 @@ export default class Boat {
     this.canvas = canvas;
   }
 
-  render(scene: Scene, position: LngLat, heading: number, boatType: BoatType = "imoca") {
+  render(scene: Scene, position: LngLat, heading: number, boatType: BoatType = "imoca", vmgBad: boolean = false) {
     // Check if point is on the visible hemisphere
     const rotate = scene.projection.rotate();
     const center: [number, number] = [-rotate[0], -rotate[1]];
@@ -22,6 +22,21 @@ export default class Boat {
 
     const scale = scene.projection.scale();
     const sizeKm = getBoatSizeKm(scale);
+
+    // Red glow under boat when VMG is bad
+    if (vmgBad) {
+      const boatProj = scene.projection(point);
+      if (boatProj) {
+        const glowRadius = 15 * scene.dpr;
+        context.beginPath();
+        context.arc(boatProj[0], boatProj[1], glowRadius, 0, Math.PI * 2);
+        context.fillStyle = "rgba(239, 68, 68, 0.4)";
+        context.fill();
+        context.strokeStyle = "rgba(255, 255, 255, 0.4)";
+        context.lineWidth = 1;
+        context.stroke();
+      }
+    }
 
     // Create boat triangle as a geo polygon
     const boatPolygon = createBoatPolygon(position, heading, sizeKm, boatType);

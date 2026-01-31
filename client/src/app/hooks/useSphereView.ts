@@ -3,12 +3,15 @@ import { SphereView } from "../../sphere";
 import InterpolatedWind from "../../interpolated-wind";
 import { Course } from "../../models";
 import { Session } from "../state";
+import { calculateTWA, getOptimalVMGAngle } from "../polar";
+import { getWindDirection, msToKnots, getWindSpeed } from "../../utils";
 
 
 export type SphereViewState = {
   sphereViewRef: React.MutableRefObject<SphereView | null>;
   sphereNodeRef: React.RefObject<HTMLDivElement>;
   interpolatedWindRef: React.MutableRefObject<InterpolatedWind>;
+  vmgBad: boolean;
   resetWind: () => void;
 };
 
@@ -23,6 +26,7 @@ export function useSphereView(
   const sphereViewRef = useRef<SphereView | null>(null);
   const sphereNodeRef = useRef<HTMLDivElement>(null!);
   const interpolatedWindRef = useRef<InterpolatedWind>(new InterpolatedWind());
+  const vmgBadRef = useRef(false);
 
   // Initialize SphereView immediately (without a course for idle view)
   useEffect(() => {
@@ -64,6 +68,23 @@ export function useSphereView(
     const factor = interpolatedWind.getInterpolationFactor(session.courseTime);
     sphereViewRef.current.updateWind(interpolatedWind, factor);
 
+    // Compute VMG status with padding to avoid flickering at the boundary
+    const VMG_PADDING = 5; // degrees
+    const windDir = getWindDirection(session.windSpeed);
+    const tws = msToKnots(getWindSpeed(session.windSpeed));
+    const twa = calculateTWA(session.heading, windDir);
+
+    let vmgBad = false;
+    if (session.targetHeading === null) {
+      if (twa <= 90) {
+        vmgBad = twa < getOptimalVMGAngle(session.polar, tws, "upwind") - VMG_PADDING;
+      } else {
+        vmgBad = twa > getOptimalVMGAngle(session.polar, tws, "downwind") + VMG_PADDING;
+      }
+    }
+    vmgBadRef.current = vmgBad;
+    sphereViewRef.current.updateVMGStatus(vmgBad);
+
   }, [
     session?.position,
     session?.heading,
@@ -80,6 +101,7 @@ export function useSphereView(
     sphereViewRef,
     sphereNodeRef,
     interpolatedWindRef,
+    vmgBad: vmgBadRef.current,
     resetWind,
   };
 }

@@ -52,6 +52,7 @@ export class SphereView {
   r0?: versor.Euler;
 
   moving = false;
+  private vmgBad = false;
   private renderGeneration = 0;
 
   private zoom: d3.ZoomBehavior<HTMLElement, unknown>;
@@ -222,6 +223,10 @@ export class SphereView {
 
     const [lng, lat] = coords;
     return this.interpolatedWind.speedAt({ lng, lat }, courseTime);
+  }
+
+  updateVMGStatus(bad: boolean) {
+    this.vmgBad = bad;
   }
 
   updatePosition(pos: LngLat, heading: number, boatSpeed: number = 0) {
@@ -435,7 +440,7 @@ export class SphereView {
       this.ghostBoats.render(scene, boatType);
       // Only render boat if we have a course (i.e., we're in a race context)
       if (this.course) {
-        this.boat.render(scene, this.position, this.heading, boatType);
+        this.boat.render(scene, this.position, this.heading, boatType, this.vmgBad);
       }
     });
 

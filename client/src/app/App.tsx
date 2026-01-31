@@ -49,7 +49,7 @@ export default function App() {
   const lobbyCourse = state.tag === "Lobby" ? state.course : null;
 
   // SphereView management
-  const { sphereViewRef, sphereNodeRef, interpolatedWindRef, resetWind } =
+  const { sphereViewRef, sphereNodeRef, interpolatedWindRef, vmgBad, resetWind } =
     useSphereView(session, lobbyCourse);
 
   // Load random wind for idle globe view (before any race is created)
@@ -305,6 +305,7 @@ export default function App() {
                 getWindDirection(state.session.windSpeed),
               )}
               bsp={state.session.boatSpeed}
+              vmgBad={vmgBad}
             />
             {state.session.finishTime !== null ? (
               <FinishOverlay

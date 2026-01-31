@@ -6,6 +6,7 @@ type PolarDiagramProps = {
   tws: number; // True Wind Speed in knots
   twa: number; // True Wind Angle (0-180)
   bsp: number; // Current Boat Speed in knots
+  vmgBad: boolean;
 };
 
 const WIDTH = 120;
@@ -20,6 +21,7 @@ export default React.memo(function PolarDiagram({
   tws,
   twa,
   bsp,
+  vmgBad,
 }: PolarDiagramProps) {
   // Round TWS to reduce curve recalculations
   const roundedTws = Math.round(tws);
@@ -60,7 +62,7 @@ export default React.memo(function PolarDiagram({
   const gridSpeeds = [10, 20];
 
   return (
-    <div className="absolute bottom-4 left-4 bg-black/60 rounded-lg p-2">
+    <div className={`absolute bottom-4 left-4 rounded-lg p-2 ${vmgBad ? "bg-red-900/60" : "bg-black/60"}`}>
       <svg
         width={WIDTH}
         height={HEIGHT}
@@ -116,20 +118,29 @@ export default React.memo(function PolarDiagram({
           y1={CENTER_Y}
           x2={currentPos.x}
           y2={currentPos.y}
-          stroke="#f472b6"
+          stroke={vmgBad ? "#ef4444" : "#22c55e"}
           strokeWidth={1}
           strokeDasharray="2,2"
         />
 
-        {/* Current position marker */}
-        <circle
-          cx={currentPos.x}
-          cy={currentPos.y}
-          r={5}
-          fill="#f472b6"
-          stroke="white"
-          strokeWidth={1}
-        />
+        {/* Current position marker: green circle (good VMG) or red triangle (bad VMG) */}
+        {vmgBad ? (
+          <polygon
+            points={`${currentPos.x.toFixed(1)},${(currentPos.y - 5).toFixed(1)} ${(currentPos.x - 4.3).toFixed(1)},${(currentPos.y + 2.5).toFixed(1)} ${(currentPos.x + 4.3).toFixed(1)},${(currentPos.y + 2.5).toFixed(1)}`}
+            fill="#ef4444"
+            stroke="white"
+            strokeWidth={1}
+          />
+        ) : (
+          <circle
+            cx={currentPos.x}
+            cy={currentPos.y}
+            r={4}
+            fill="#22c55e"
+            stroke="white"
+            strokeWidth={1}
+          />
+        )}
 
         {/* TWA labels */}
         <g
