@@ -2,15 +2,20 @@ import { geoDistance, geoPath } from "d3-geo";
 import type { LineString } from "geojson";
 import { LngLat } from "../models";
 import { Scene } from "./scene";
+import { getBoatSizeKm } from "./boat-geometry";
 
 // Maximum number of wake points to keep
 const MAX_WAKE_POINTS = 10000;
 // Minimum distance between wake points in km
 const MIN_DISTANCE_KM = 2;
-// Max boat speed for color scaling (knots)
-const MAX_SPEED = 30;
-// Batch size for rendering (draw multiple segments per path for performance)
-const BATCH_SIZE = 20;
+// Gradient zone = 1.5x boat icon length
+const GRADIENT_ZONE_FACTOR = 1.5;
+// Line width for the entire wake
+const LINE_WIDTH = 2.5;
+// Alpha values
+const TAIL_ALPHA = 0.3;
+const GRADIENT_ALPHA_NEAR = 0.7;
+const GRADIENT_ALPHA_FAR = 0.3;
 
 type WakePoint = {
   pos: LngLat;
@@ -52,38 +57,38 @@ export default class Wake {
     const rotate = scene.projection.rotate();
     const center: [number, number] = [-rotate[0], -rotate[1]];
     const path = geoPath(scene.projection, context);
+    const n = this.points.length;
 
-    // Group segments by similar color/opacity for batched rendering
-    let currentBatch: Array<[number, number][]> = [];
-    let currentStyle: { color: string; opacity: number } | null = null;
+    // Compute gradient zone length in km from boat icon size
+    const gradientZoneKm =
+      GRADIENT_ZONE_FACTOR * getBoatSizeKm(scene.projection.scale());
 
-    const flushBatch = () => {
-      if (currentBatch.length === 0 || !currentStyle) return;
+    // Pre-compute cumulative distance from the last point (nearest to boat) backward.
+    // distFromBoat[i] = distance in km from point[i] to point[n-1].
+    const distFromBoat = new Float64Array(n);
+    distFromBoat[n - 1] = 0;
+    for (let i = n - 2; i >= 0; i--) {
+      distFromBoat[i] =
+        distFromBoat[i + 1] +
+        haversineDistance(this.points[i].pos, this.points[i + 1].pos);
+    }
 
-      context.beginPath();
-      for (const coords of currentBatch) {
-        const line: LineString = {
-          type: "LineString",
-          coordinates: coords,
-        };
-        path(line);
-      }
-      context.strokeStyle = currentStyle.color;
-      context.globalAlpha = currentStyle.opacity;
-      context.lineWidth = 2;
-      context.lineCap = "round";
-      context.lineJoin = "round";
-      context.stroke();
-      currentBatch = [];
-    };
+    // --- Tail pass: batch-render all segments beyond the gradient zone ---
+    context.beginPath();
+    let hasTailSegments = false;
 
-    for (let i = 1; i < this.points.length; i++) {
+    for (let i = 1; i < n; i++) {
+      // Segment goes from points[i-1] to points[i].
+      // The closer end to the boat is points[i] (higher index = newer).
+      // If the closer end is still beyond the gradient zone, it's a tail segment.
+      if (distFromBoat[i] < gradientZoneKm) continue;
+
       const p0 = this.points[i - 1];
       const p1 = this.points[i];
-
-      // Check if both endpoints are on back hemisphere - skip entirely
       const point0: [number, number] = [p0.pos.lng, p0.pos.lat];
       const point1: [number, number] = [p1.pos.lng, p1.pos.lat];
+
+      // Skip segments on the back hemisphere
       if (
         geoDistance(center, point0) > Math.PI / 2 &&
         geoDistance(center, point1) > Math.PI / 2
@@ -91,72 +96,64 @@ export default class Wake {
         continue;
       }
 
-      // Calculate opacity based on position in array (older = more faded)
-      const age = (this.points.length - i) / this.points.length;
-      const opacity = Math.pow(1 - age, 0.6) * 0.9;
-
-      // Speed-based color: blue (slow) -> cyan -> green -> yellow -> red (fast)
-      const avgSpeed = (p0.speed + p1.speed) / 2;
-      const color = speedToColor(avgSpeed);
-
-      // Quantize opacity for batching (round to nearest 0.1)
-      const quantizedOpacity = Math.round(opacity * 10) / 10;
-
-      // Check if we need to start a new batch
-      if (
-        currentStyle === null ||
-        currentStyle.color !== color ||
-        currentStyle.opacity !== quantizedOpacity ||
-        currentBatch.length >= BATCH_SIZE
-      ) {
-        flushBatch();
-        currentStyle = { color, opacity: quantizedOpacity };
-      }
-
-      currentBatch.push([point0, point1]);
+      const line: LineString = {
+        type: "LineString",
+        coordinates: [point0, point1],
+      };
+      path(line);
+      hasTailSegments = true;
     }
 
-    // Flush remaining segments
-    flushBatch();
+    if (hasTailSegments) {
+      context.strokeStyle = "white";
+      context.globalAlpha = TAIL_ALPHA;
+      context.lineWidth = LINE_WIDTH;
+      context.lineCap = "round";
+      context.lineJoin = "round";
+      context.stroke();
+    }
+
+    // --- Gradient pass: render segments within the gradient zone individually ---
+    // Alpha gradient from GRADIENT_ALPHA_NEAR (near boat) to GRADIENT_ALPHA_FAR (zone edge)
+    for (let i = 1; i < n; i++) {
+      // The closer end to the boat is points[i].
+      if (distFromBoat[i] >= gradientZoneKm) continue;
+
+      const p0 = this.points[i - 1];
+      const p1 = this.points[i];
+      const point0: [number, number] = [p0.pos.lng, p0.pos.lat];
+      const point1: [number, number] = [p1.pos.lng, p1.pos.lat];
+
+      // Skip segments on the back hemisphere
+      if (
+        geoDistance(center, point0) > Math.PI / 2 &&
+        geoDistance(center, point1) > Math.PI / 2
+      ) {
+        continue;
+      }
+
+      // Interpolate alpha from near (t=0) to far (t=1)
+      const midDist = (distFromBoat[i - 1] + distFromBoat[i]) / 2;
+      const t = Math.min(midDist / gradientZoneKm, 1);
+      const alpha =
+        GRADIENT_ALPHA_NEAR + (GRADIENT_ALPHA_FAR - GRADIENT_ALPHA_NEAR) * t;
+
+      context.beginPath();
+      const line: LineString = {
+        type: "LineString",
+        coordinates: [point0, point1],
+      };
+      path(line);
+      context.strokeStyle = "white";
+      context.globalAlpha = alpha;
+      context.lineWidth = LINE_WIDTH;
+      context.lineCap = "round";
+      context.lineJoin = "round";
+      context.stroke();
+    }
+
     context.globalAlpha = 1;
   }
-}
-
-// Convert speed (knots) to a color using a heat map
-function speedToColor(speed: number): string {
-  // Normalize speed to 0-1 range
-  const t = Math.min(speed / MAX_SPEED, 1);
-
-  // Color stops: blue -> cyan -> green -> yellow -> red
-  let r: number, g: number, b: number;
-
-  if (t < 0.25) {
-    // Blue to Cyan
-    const s = t / 0.25;
-    r = 100;
-    g = Math.round(150 + 105 * s);
-    b = 255;
-  } else if (t < 0.5) {
-    // Cyan to Green
-    const s = (t - 0.25) / 0.25;
-    r = Math.round(100 - 50 * s);
-    g = 255;
-    b = Math.round(255 - 155 * s);
-  } else if (t < 0.75) {
-    // Green to Yellow
-    const s = (t - 0.5) / 0.25;
-    r = Math.round(50 + 205 * s);
-    g = 255;
-    b = 100;
-  } else {
-    // Yellow to Red
-    const s = (t - 0.75) / 0.25;
-    r = 255;
-    g = Math.round(255 - 155 * s);
-    b = Math.round(100 - 100 * s);
-  }
-
-  return `rgb(${r},${g},${b})`;
 }
 
 function haversineDistance(p1: LngLat, p2: LngLat): number {
