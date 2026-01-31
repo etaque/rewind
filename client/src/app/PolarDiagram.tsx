@@ -12,6 +12,7 @@ type PolarDiagramProps = {
   twa: number; // True Wind Angle (0-180)
   bsp: number; // Current Boat Speed in knots
   vmgBad: boolean;
+  twaLocked: boolean;
 };
 
 const WIDTH = 120;
@@ -27,6 +28,7 @@ export default React.memo(function PolarDiagram({
   twa,
   bsp,
   vmgBad,
+  twaLocked,
 }: PolarDiagramProps) {
   // Round TWS to reduce curve recalculations
   const roundedTws = Math.round(tws);
@@ -164,7 +166,7 @@ export default React.memo(function PolarDiagram({
           />
         )}
 
-        {/* TWA labels */}
+        {/* TWA axis labels */}
         <g
           fill="#9ca3af"
           fontSize={10}
@@ -181,6 +183,18 @@ export default React.memo(function PolarDiagram({
             180
           </text>
         </g>
+
+        {/* Current TWA value */}
+        <text
+          x={WIDTH - 4}
+          y={twa < 90 ? 16 : HEIGHT - 6}
+          fill="white"
+          fontSize={13}
+          fontFamily="monospace"
+          textAnchor="end"
+        >
+          {twa.toFixed(0)}°{twaLocked ? " L" : ""}
+        </text>
       </svg>
     </div>
   );

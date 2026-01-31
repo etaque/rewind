@@ -306,6 +306,7 @@ export default function App() {
               )}
               bsp={state.session.boatSpeed}
               vmgBad={vmgBad}
+              twaLocked={state.session.lockedTWA !== null}
             />
             {state.session.finishTime !== null ? (
               <FinishOverlay
