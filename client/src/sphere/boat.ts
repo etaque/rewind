@@ -4,6 +4,63 @@ import { Scene } from "./scene";
 import { BoatType, createBoatPolygon, getBoatSizeKm } from "./boat-geometry";
 
 /**
+ * Draw a TWA arc from boat heading to wind direction.
+ * @param ctx Canvas 2D context
+ * @param x Boat center X position
+ * @param y Boat center Y position
+ * @param heading Boat heading in degrees (0 = north, clockwise)
+ * @param windDirection Wind direction in degrees (direction wind is coming FROM)
+ * @param dpr Device pixel ratio
+ */
+function drawTWAArc(
+  ctx: CanvasRenderingContext2D,
+  x: number,
+  y: number,
+  heading: number,
+  windDirection: number,
+  dpr: number,
+): void {
+  const radius = 14 * dpr;
+
+  // Convert navigation angles to canvas angles
+  // Navigation: 0° = north, angles increase clockwise
+  // Canvas: 0 = east (right), angles increase counterclockwise (but y is flipped, so visually clockwise)
+  // Formula: canvasAngle = (navAngle - 90) * π/180
+  const headingRad = ((heading - 90) * Math.PI) / 180;
+  const windRad = ((windDirection - 90) * Math.PI) / 180;
+
+  // Calculate signed angular difference, normalized to [-π, π]
+  let diff = windRad - headingRad;
+  while (diff > Math.PI) diff -= 2 * Math.PI;
+  while (diff < -Math.PI) diff += 2 * Math.PI;
+
+  // Don't draw if facing directly into the wind (TWA ≈ 0)
+  if (Math.abs(diff) < 0.05) return;
+
+  ctx.save();
+
+  // Draw arc from heading to wind direction, taking the shorter path
+  ctx.beginPath();
+  ctx.arc(x, y, radius, headingRad, windRad, diff < 0);
+  ctx.strokeStyle = "rgba(255, 255, 255, 0.6)";
+  ctx.lineWidth = 1.5 * dpr;
+  ctx.stroke();
+
+  // Draw a small tick mark at the wind direction end
+  const tickLength = 4 * dpr;
+  const tickOuterRadius = radius + tickLength / 2;
+  const tickInnerRadius = radius - tickLength / 2;
+  ctx.beginPath();
+  ctx.moveTo(x + tickOuterRadius * Math.cos(windRad), y + tickOuterRadius * Math.sin(windRad));
+  ctx.lineTo(x + tickInnerRadius * Math.cos(windRad), y + tickInnerRadius * Math.sin(windRad));
+  ctx.strokeStyle = "rgba(255, 255, 255, 0.8)";
+  ctx.lineWidth = 1.5 * dpr;
+  ctx.stroke();
+
+  ctx.restore();
+}
+
+/**
  * Draw a small padlock icon at the given position.
  * @param ctx Canvas 2D context
  * @param x Center X position
@@ -62,6 +119,7 @@ export default class Boat {
     boatType: BoatType = "imoca",
     vmgBad: boolean = false,
     twaLocked: boolean = false,
+    windDirection: number | null = null,
   ) {
     // Check if point is on the visible hemisphere
     const rotate = scene.projection.rotate();
@@ -102,13 +160,36 @@ export default class Boat {
     context.lineWidth = 1.5;
     context.stroke();
 
-    // Draw lock icon when TWA is locked
-    if (twaLocked) {
+    // Draw TWA arc from boat heading to wind direction
+    if (windDirection !== null) {
       const boatProj = scene.projection(point);
       if (boatProj) {
-        const offsetX = 12 * scene.dpr;
-        const offsetY = -6 * scene.dpr;
-        drawLockIcon(context, boatProj[0] + offsetX, boatProj[1] + offsetY, 8, scene.dpr);
+        drawTWAArc(context, boatProj[0], boatProj[1], heading, windDirection, scene.dpr);
+      }
+    }
+
+    // Draw lock icon when TWA is locked, positioned at the center of the arc
+    if (twaLocked && windDirection !== null) {
+      const boatProj = scene.projection(point);
+      if (boatProj) {
+        // Calculate midpoint angle between heading and wind direction
+        const headingRad = ((heading - 90) * Math.PI) / 180;
+        const windRad = ((windDirection - 90) * Math.PI) / 180;
+
+        // Get signed difference normalized to [-π, π]
+        let diff = windRad - headingRad;
+        while (diff > Math.PI) diff -= 2 * Math.PI;
+        while (diff < -Math.PI) diff += 2 * Math.PI;
+
+        // Midpoint angle is heading + half the difference
+        const midAngle = headingRad + diff / 2;
+
+        // Position lock outside the arc (arc radius is 14, lock at ~22)
+        const lockRadius = 22 * scene.dpr;
+        const lockX = boatProj[0] + lockRadius * Math.cos(midAngle);
+        const lockY = boatProj[1] + lockRadius * Math.sin(midAngle);
+
+        drawLockIcon(context, lockX, lockY, 8, scene.dpr);
       }
     }
   }

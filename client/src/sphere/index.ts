@@ -54,6 +54,7 @@ export class SphereView {
   moving = false;
   private vmgBad = false;
   private twaLocked = false;
+  private windDirection: number | null = null;
   private renderGeneration = 0;
 
   private zoom: d3.ZoomBehavior<HTMLElement, unknown>;
@@ -232,6 +233,10 @@ export class SphereView {
 
   updateTWALockStatus(locked: boolean) {
     this.twaLocked = locked;
+  }
+
+  updateWindDirection(direction: number | null) {
+    this.windDirection = direction;
   }
 
   updatePosition(pos: LngLat, heading: number, boatSpeed: number = 0) {
@@ -445,7 +450,7 @@ export class SphereView {
       this.ghostBoats.render(scene, boatType);
       // Only render boat if we have a course (i.e., we're in a race context)
       if (this.course) {
-        this.boat.render(scene, this.position, this.heading, boatType, this.vmgBad, this.twaLocked);
+        this.boat.render(scene, this.position, this.heading, boatType, this.vmgBad, this.twaLocked, this.windDirection);
       }
     });
 
