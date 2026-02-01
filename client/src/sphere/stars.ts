@@ -55,7 +55,7 @@ export default class Stars {
       ctx.fill();
     }
 
-    // Cut out the sphere area so stars don't show through transparent layers
+    // Fill sphere with deep ocean blue base color
     ctx.globalCompositeOperation = "destination-out";
     ctx.fillStyle = "#000";
     ctx.beginPath();
@@ -68,5 +68,7 @@ export default class Stars {
     );
     ctx.fill();
     ctx.globalCompositeOperation = "source-over";
+    ctx.fillStyle = "#0a1628";
+    ctx.fill();
   }
 }

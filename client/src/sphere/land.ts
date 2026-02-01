@@ -125,13 +125,14 @@ export default class Land {
     ctx.scale(scene.dpr, scene.dpr);
 
     // Draw land with shadow/glow effect
-    ctx.shadowColor = "rgba(0, 0, 0, 0.4)";
-    ctx.shadowBlur = 12;
+    ctx.shadowColor = "rgba(0, 0, 0, 0.6)";
+    ctx.shadowBlur = 6;
     ctx.shadowOffsetX = 0;
     ctx.shadowOffsetY = 0;
 
-    ctx.fillStyle = "rgba(255, 255, 255, 0.15)";
-    ctx.strokeStyle = "rgba(34, 45, 34, 0.3)";
+    ctx.fillStyle = "rgba(180, 165, 140, 0.25)";
+    ctx.strokeStyle = "rgba(255, 255, 255, 0.6)";
+    ctx.lineWidth = 1.5;
     ctx.beginPath();
     path(land);
     ctx.fill();

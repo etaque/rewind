@@ -46,6 +46,7 @@ export class SphereView {
   particles: WindParticles;
   windTexture: WindTexture;
   ghostBoats: GhostBoats;
+  private boatCanvas: HTMLCanvasElement;
   courseLine: CourseLine | null = null;
   v0?: versor.Cartesian;
   q0?: versor.Versor;
@@ -95,10 +96,23 @@ export class SphereView {
 
     this.stars = new Stars(starsCanvas);
 
+    const landCanvas = d3
+      .select(this.node)
+      .append("canvas")
+      .attr("class", "land fixed")
+      .style("width", `${this.width}px`)
+      .style("height", `${this.height}px`)
+      .attr("width", this.width * dpr)
+      .attr("height", this.height * dpr)
+      .node()!;
+
+    this.land = new Land(landCanvas);
+
     const textureCanvas = d3
       .select(this.node)
       .append("canvas")
       .attr("class", "wind-texture fixed opacity-80")
+      .style("mix-blend-mode", "screen")
       .style("width", `${this.width}px`)
       .style("height", `${this.height}px`)
       .attr("width", this.width * dpr)
@@ -120,23 +134,23 @@ export class SphereView {
 
     this.particles = new WindParticles(particlesCanvas, dpr);
 
-    const landCanvas = d3
+    const boatCanvas = d3
       .select(this.node)
       .append("canvas")
-      .attr("class", "land fixed")
+      .attr("class", "boat fixed")
       .style("width", `${this.width}px`)
       .style("height", `${this.height}px`)
       .attr("width", this.width * dpr)
       .attr("height", this.height * dpr)
       .node()!;
 
-    this.land = new Land(landCanvas);
-    this.wake = new Wake(landCanvas);
-    this.boat = new Boat(landCanvas);
-    this.ghostBoats = new GhostBoats(landCanvas);
+    this.boatCanvas = boatCanvas;
+    this.wake = new Wake(boatCanvas);
+    this.boat = new Boat(boatCanvas);
+    this.ghostBoats = new GhostBoats(boatCanvas);
     // Only create course-related renderers if we have a course
     if (course) {
-      this.courseLine = new CourseLine(landCanvas, course);
+      this.courseLine = new CourseLine(boatCanvas, course);
     }
 
     this.initialScale = this.projection.scale();
@@ -255,7 +269,7 @@ export class SphereView {
 
     // Create course renderers if they don't exist yet
     if (!this.courseLine) {
-      this.courseLine = new CourseLine(this.land.canvas, course);
+      this.courseLine = new CourseLine(this.boatCanvas, course);
     } else {
       this.courseLine.setCourse(course);
     }
@@ -451,7 +465,11 @@ export class SphereView {
     this.land.render(scene, this.moving).then(() => {
       // Skip if a newer render has started
       if (currentGeneration !== this.renderGeneration) return;
-      // Draw course line, wake and boats on top of land
+      // Clear boat canvas and draw course line, wake and boats
+      const boatCtx = this.boatCanvas.getContext("2d")!;
+      boatCtx.setTransform(1, 0, 0, 1, 0, 0);
+      boatCtx.clearRect(0, 0, this.boatCanvas.width, this.boatCanvas.height);
+      boatCtx.scale(scene.dpr, scene.dpr);
       this.courseLine?.render(scene);
       this.wake.render(scene);
       const boatType = this.course ? polarToBoatType(this.course.polar) : "imoca";
