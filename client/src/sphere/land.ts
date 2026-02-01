@@ -18,8 +18,8 @@ export default class Land {
   private highResPromise?: Promise<d3.GeoPermissibleObjects>;
 
   // Cache for rendered land
-  private cache: OffscreenCanvas;
-  private cacheCtx: OffscreenCanvasRenderingContext2D;
+  private cache: HTMLCanvasElement;
+  private cacheCtx: CanvasRenderingContext2D;
   private cacheValid = false;
   private lastRotation?: [number, number, number];
   private lastScale?: number;
@@ -28,7 +28,9 @@ export default class Land {
 
   constructor(canvas: HTMLCanvasElement) {
     this.canvas = canvas;
-    this.cache = new OffscreenCanvas(canvas.width, canvas.height);
+    this.cache = document.createElement("canvas");
+    this.cache.width = canvas.width;
+    this.cache.height = canvas.height;
     this.cacheCtx = this.cache.getContext("2d")!;
   }
 
