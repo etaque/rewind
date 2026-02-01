@@ -64,6 +64,7 @@ export type Session = {
   serverRaceTime: number;
   position: LngLat;
   turning: Turn;
+  turningDuration: number; // seconds the turn key has been held
   heading: number;
   targetHeading: number | null; // for progressive tacking
   lockedTWA: number | null; // when set, maintain this TWA as wind changes
@@ -140,6 +141,7 @@ function createPlayingState(
       serverRaceTime: state.course.startTime,
       position: state.course.start,
       turning: null,
+      turningDuration: 0,
       heading: state.course.startHeading,
       targetHeading: null,
       lockedTWA: null,
@@ -188,6 +190,9 @@ export function appReducer(state: AppState, action: AppAction): AppState {
       if (state.tag !== "Playing") return state;
       return produce(state, (draft) => {
         draft.session.turning = action.direction;
+        if (action.direction === null || action.direction !== state.session.turning) {
+          draft.session.turningDuration = 0;
+        }
         draft.session.targetHeading = null;
         draft.session.lockedTWA = null;
       });

@@ -14,6 +14,7 @@ export type TickResult = {
   heading: number;
   targetHeading: number | null;
   lockedTWA: number | null;
+  turningDuration: number;
   currentSource: WindRasterSource | null;
   nextSources: WindRasterSource[];
   gateCrossed: number | null; // gate index if crossed this tick, null otherwise
@@ -21,7 +22,11 @@ export type TickResult = {
 
 // Turn rate in degrees per second during a tack
 const TACK_TURN_RATE = 90;
-const MANUAL_TURN_RATE = 45;
+// Manual turn rate ramps from MIN to MAX over time
+const MIN_TURN_RATE = 35;
+const MAX_TURN_RATE = 70;
+// Time constant for the exponential ramp (seconds)
+const TURN_ACCEL_TAU = 0.12;
 
 // Inertia time constant in seconds (wall-clock).
 // Higher = more sluggish, lower = more responsive.
@@ -40,12 +45,15 @@ export function tick(session: Session, delta: number): TickResult {
 
   let heading = session.heading;
 
-  // Handle turning
+  // Handle turning with acceleration
+  let turningDuration = session.turningDuration;
   if (session.turning !== null) {
     const deltaSeconds = delta / 1000;
-    const maxTurn = MANUAL_TURN_RATE * deltaSeconds;
+    const rate = MIN_TURN_RATE + (MAX_TURN_RATE - MIN_TURN_RATE) * (1 - Math.exp(-turningDuration / TURN_ACCEL_TAU));
+    const maxTurn = rate * deltaSeconds;
     const factor = session.turning === "left" ? -1 : 1;
     heading = (heading + factor * maxTurn + 360) % 360;
+    turningDuration += deltaSeconds;
   }
 
   // Handle progressive turning during tack
@@ -147,6 +155,7 @@ export function tick(session: Session, delta: number): TickResult {
     heading,
     targetHeading,
     lockedTWA,
+    turningDuration,
     currentSource: currentSource,
     nextSources: nextSources,
     gateCrossed,
