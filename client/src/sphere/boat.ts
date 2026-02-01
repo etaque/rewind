@@ -40,42 +40,31 @@ function drawTWAArc(
   ctx.save();
 
   // Draw arc from heading to wind direction, taking the shorter path
+  const arcWidth = 1 * dpr;
   ctx.beginPath();
   ctx.arc(x, y, radius, headingRad, windRad, diff < 0);
   ctx.strokeStyle = "rgba(255, 255, 255, 0.8)";
-  ctx.lineWidth = 1 * dpr;
+  ctx.lineWidth = arcWidth;
+  ctx.lineCap = "butt";
   ctx.stroke();
 
-  // Draw tick marks at both ends of the arc
+  // Tick marks at both ends of the arc
   const tickLength = 2 * dpr;
-  const tickOuterRadius = radius + tickLength;
-  const tickInnerRadius = radius;
   ctx.strokeStyle = "rgba(255, 255, 255, 0.8)";
   ctx.lineWidth = 1 * dpr;
 
-  // Tick at wind direction end
+  // Wind tick: radial line outside the arc
+  const windOuterR = radius + tickLength;
   ctx.beginPath();
-  ctx.moveTo(
-    x + tickOuterRadius * Math.cos(windRad),
-    y + tickOuterRadius * Math.sin(windRad),
-  );
-  ctx.lineTo(
-    x + tickInnerRadius * Math.cos(windRad),
-    y + tickInnerRadius * Math.sin(windRad),
-  );
+  ctx.moveTo(x + radius * Math.cos(windRad), y + radius * Math.sin(windRad));
+  ctx.lineTo(x + windOuterR * Math.cos(windRad), y + windOuterR * Math.sin(windRad));
   ctx.stroke();
 
-  // Tick at heading end (pointing inward to boat)
-  const tickInnerRadiusBoat = radius - tickLength;
+  // Boat tick: radial line inside the arc
+  const boatInnerR = radius - tickLength;
   ctx.beginPath();
-  ctx.moveTo(
-    x + tickInnerRadius * Math.cos(headingRad),
-    y + tickInnerRadius * Math.sin(headingRad),
-  );
-  ctx.lineTo(
-    x + tickInnerRadiusBoat * Math.cos(headingRad),
-    y + tickInnerRadiusBoat * Math.sin(headingRad),
-  );
+  ctx.moveTo(x + radius * Math.cos(headingRad), y + radius * Math.sin(headingRad));
+  ctx.lineTo(x + boatInnerR * Math.cos(headingRad), y + boatInnerR * Math.sin(headingRad));
   ctx.stroke();
 
   ctx.restore();
