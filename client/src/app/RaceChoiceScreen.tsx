@@ -1,7 +1,8 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { RaceInfo } from "./race";
 import { useRaceContext } from "./race-context";
 import { generateNickname } from "./nickname";
+import { getOrCreatePlayerId } from "./player-id";
 
 const PLAYER_NAME_KEY = "rewind:player_name";
 const serverUrl = import.meta.env.REWIND_SERVER_URL;
@@ -10,6 +11,7 @@ type HallOfFameEntry = {
   id: number;
   rank: number;
   playerName: string;
+  playerId: string | null;
   finishTime: number;
   raceDate: number;
 };
@@ -35,6 +37,7 @@ export default function RaceChoiceScreen() {
   const [playerName, setPlayerName] = useState("");
   const [availableRaces, setAvailableRaces] = useState<RaceInfo[]>([]);
   const [hallOfFame, setHallOfFame] = useState<HallOfFameEntry[]>([]);
+  const myPersistentId = useMemo(() => getOrCreatePlayerId(), []);
 
   const playerList = Array.from(players.values());
   const ghostList = Array.from(recordedGhosts.values());
@@ -281,34 +284,38 @@ export default function RaceChoiceScreen() {
                   </div>
                 ) : (
                   <div className="space-y-1 max-h-48 overflow-y-auto">
-                    {hallOfFame.map((entry) => (
-                      <div
-                        key={entry.id}
-                        className="flex items-center justify-between bg-slate-800 rounded-lg px-3 py-2"
-                      >
-                        <div className="flex items-center gap-3">
-                          <span
-                            className={`text-sm font-bold w-5 ${
-                              entry.rank === 1
-                                ? "text-yellow-400"
-                                : entry.rank === 2
-                                  ? "text-slate-300"
-                                  : entry.rank === 3
-                                    ? "text-amber-600"
-                                    : "text-slate-500"
-                            }`}
-                          >
-                            #{entry.rank}
-                          </span>
-                          <span className="text-white text-sm">
-                            {entry.playerName}
+                    {hallOfFame.map((entry) => {
+                      const isMe = entry.playerId === myPersistentId;
+                      return (
+                        <div
+                          key={entry.id}
+                          className="flex items-center justify-between bg-slate-800 rounded-lg px-3 py-2"
+                        >
+                          <div className="flex items-center gap-3">
+                            <span
+                              className={`text-sm font-bold w-5 ${
+                                entry.rank === 1
+                                  ? "text-yellow-400"
+                                  : entry.rank === 2
+                                    ? "text-slate-300"
+                                    : entry.rank === 3
+                                      ? "text-amber-600"
+                                      : "text-slate-500"
+                              }`}
+                            >
+                              #{entry.rank}
+                            </span>
+                            <span className={`text-sm ${isMe ? "text-cyan-300" : "text-white"}`}>
+                              {entry.playerName}
+                              {isMe && <span className="text-cyan-400 text-xs ml-1">(you)</span>}
+                            </span>
+                          </div>
+                          <span className="text-green-400 font-mono text-xs">
+                            {formatTime(entry.finishTime)}
                           </span>
                         </div>
-                        <span className="text-green-400 font-mono text-xs">
-                          {formatTime(entry.finishTime)}
-                        </span>
-                      </div>
-                    ))}
+                      );
+                    })}
                   </div>
                 )}
               </div>
@@ -391,6 +398,7 @@ export default function RaceChoiceScreen() {
                   <div className="space-y-1 max-h-32 overflow-y-auto">
                     {hallOfFame.map((entry) => {
                       const isAdded = recordedGhosts.has(entry.id);
+                      const isMe = entry.playerId === myPersistentId;
                       return (
                         <div
                           key={entry.id}
@@ -410,8 +418,9 @@ export default function RaceChoiceScreen() {
                             >
                               #{entry.rank}
                             </span>
-                            <span className="text-white text-sm">
+                            <span className={`text-sm ${isMe ? "text-cyan-300" : "text-white"}`}>
                               {entry.playerName}
+                              {isMe && <span className="text-cyan-400 text-xs ml-1">(you)</span>}
                             </span>
                           </div>
                           <div className="flex items-center gap-3">

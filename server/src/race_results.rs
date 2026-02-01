@@ -18,6 +18,7 @@ pub struct HallOfFameEntry {
     pub id: i64, // For fetching replay
     pub rank: u32,
     pub player_name: String,
+    pub player_id: Option<String>,
     pub finish_time: i64,
     pub race_date: i64, // Unix timestamp ms
 }
@@ -41,6 +42,17 @@ pub fn init_table(conn: &Connection) -> Result<()> {
         CREATE INDEX IF NOT EXISTS idx_leaderboard ON race_results(course_key, finish_time);
         ",
     )?;
+
+    // Migration: add player_id column if missing
+    let has_player_id: bool = conn
+        .prepare("PRAGMA table_info(race_results)")?
+        .query_map([], |row| row.get::<_, String>(1))?
+        .any(|name| name.map_or(false, |n| n == "player_id"));
+
+    if !has_player_id {
+        conn.execute_batch("ALTER TABLE race_results ADD COLUMN player_id TEXT")?;
+    }
+
     Ok(())
 }
 
@@ -49,14 +61,15 @@ pub fn save_result(
     conn: &Connection,
     course_key: &str,
     player_name: &str,
+    player_id: &str,
     finish_time: i64,
     race_start_time: i64,
     path_s3_key: &str,
 ) -> Result<i64> {
     conn.execute(
-        "INSERT INTO race_results (course_key, player_name, finish_time, race_start_time, path_s3_key)
-         VALUES (?1, ?2, ?3, ?4, ?5)",
-        params![course_key, player_name, finish_time, race_start_time, path_s3_key],
+        "INSERT INTO race_results (course_key, player_name, player_id, finish_time, race_start_time, path_s3_key)
+         VALUES (?1, ?2, ?3, ?4, ?5, ?6)",
+        params![course_key, player_name, player_id, finish_time, race_start_time, path_s3_key],
     )?;
     Ok(conn.last_insert_rowid())
 }
@@ -68,7 +81,7 @@ pub fn get_leaderboard(
     limit: u32,
 ) -> Result<Vec<HallOfFameEntry>> {
     let mut stmt = conn.prepare(
-        "SELECT id, player_name, finish_time, race_start_time
+        "SELECT id, player_name, player_id, finish_time, race_start_time
          FROM race_results
          WHERE course_key = ?1
          ORDER BY finish_time ASC
@@ -80,8 +93,9 @@ pub fn get_leaderboard(
             Ok((
                 row.get::<_, i64>(0)?,
                 row.get::<_, String>(1)?,
-                row.get::<_, i64>(2)?,
+                row.get::<_, Option<String>>(2)?,
                 row.get::<_, i64>(3)?,
+                row.get::<_, i64>(4)?,
             ))
         })?
         .collect::<Result<Vec<_>, _>>()?;
@@ -90,10 +104,11 @@ pub fn get_leaderboard(
         .into_iter()
         .enumerate()
         .map(
-            |(i, (id, player_name, finish_time, race_start_time))| HallOfFameEntry {
+            |(i, (id, player_name, player_id, finish_time, race_start_time))| HallOfFameEntry {
                 id,
                 rank: (i + 1) as u32,
                 player_name,
+                player_id,
                 finish_time: finish_time - race_start_time, // Convert to elapsed duration
                 race_date: race_start_time,
             },

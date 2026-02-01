@@ -4,6 +4,7 @@ import { Course } from "../../models";
 import { PlayerInfo, PeerState } from "../../multiplayer/types";
 import { SphereView } from "../../sphere";
 import { AppAction } from "../state";
+import { getOrCreatePlayerId } from "../player-id";
 
 type MultiplayerCallbacks = {
   onCreateRace: (playerName: string) => Promise<void>;
@@ -115,7 +116,7 @@ export function useMultiplayer(
       const client = createMultiplayerClient();
       multiplayerRef.current = client;
       await client.connect();
-      client.createRace(course.key, playerName);
+      client.createRace(course.key, playerName, getOrCreatePlayerId());
     },
     [createMultiplayerClient, courseRef],
   );
@@ -132,7 +133,7 @@ export function useMultiplayer(
       const client = createMultiplayerClient();
       multiplayerRef.current = client;
       await client.connect();
-      client.joinRace(raceId, playerName);
+      client.joinRace(raceId, playerName, getOrCreatePlayerId());
     },
     [createMultiplayerClient],
   );

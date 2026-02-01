@@ -105,19 +105,21 @@ export class SignalingClient {
     }
   }
 
-  createRace(courseKey: string, playerName: string) {
+  createRace(courseKey: string, playerName: string, persistentId: string) {
     this.send({
       type: "CreateRace",
       courseKey: courseKey,
       playerName: playerName,
+      persistentId: persistentId,
     });
   }
 
-  joinRace(raceId: string, playerName: string) {
+  joinRace(raceId: string, playerName: string, persistentId: string) {
     this.send({
       type: "JoinRace",
       raceId: raceId,
       playerName: playerName,
+      persistentId: persistentId,
     });
   }
 

@@ -30,10 +30,12 @@ pub enum ClientMessage {
     CreateRace {
         course_key: String,
         player_name: String,
+        persistent_id: String,
     },
     JoinRace {
         race_id: String,
         player_name: String,
+        persistent_id: String,
     },
     LeaveRace,
     StartRace,
@@ -136,6 +138,7 @@ pub struct PlayerInfo {
 pub struct Player {
     pub id: String,
     pub name: String,
+    pub persistent_id: String,
     pub tx: mpsc::UnboundedSender<ServerMessage>,
     pub position: Option<(f64, f64)>, // (lng, lat)
     pub heading: f32,
@@ -306,6 +309,7 @@ impl Race {
             return Some(FinishedPlayer {
                 player_id: player.id.clone(),
                 player_name: player.name.clone(),
+                persistent_id: player.persistent_id.clone(),
                 finish_time: course_time,
                 path_history: std::mem::take(&mut player.path_history),
             });
@@ -320,6 +324,7 @@ impl Race {
 struct FinishedPlayer {
     player_id: String,
     player_name: String,
+    persistent_id: String,
     finish_time: i64,
     path_history: Vec<PathPoint>,
 }
@@ -442,6 +447,7 @@ impl RaceManager {
         course_key: String,
         player_id: String,
         player_name: String,
+        persistent_id: String,
         tx: mpsc::UnboundedSender<ServerMessage>,
     ) -> anyhow::Result<(String, Vec<WindRasterSource>)> {
         let course = db::with_connection(|conn| crate::courses::get_by_key(conn, &course_key))?
@@ -456,6 +462,7 @@ impl RaceManager {
         let player = Player {
             id: player_id.clone(),
             name: player_name,
+            persistent_id,
             tx,
             position: None,
             heading: 0.0,
@@ -480,6 +487,7 @@ impl RaceManager {
         race_id: &str,
         player_id: String,
         player_name: String,
+        persistent_id: String,
         tx: mpsc::UnboundedSender<ServerMessage>,
     ) -> anyhow::Result<(Vec<PlayerInfo>, Vec<WindRasterSource>, String, bool)> {
         let mut races = self.races.write().await;
@@ -488,6 +496,7 @@ impl RaceManager {
         let player = Player {
             id: player_id.clone(),
             name: player_name.clone(),
+            persistent_id,
             tx,
             position: None,
             heading: 0.0,
@@ -754,6 +763,7 @@ async fn save_race_result(course_key: String, race_start_time: i64, finished: Fi
             conn,
             &course_key,
             &finished.player_name,
+            &finished.persistent_id,
             finished.finish_time,
             race_start_time,
             &s3_key,
@@ -817,6 +827,7 @@ mod tests {
         Player {
             id: id.to_string(),
             name: name.to_string(),
+            persistent_id: format!("persistent-{id}"),
             tx,
             position: None,
             heading: 0.0,
@@ -1011,6 +1022,7 @@ mod tests {
                 "vg20".to_string(),
                 "player-1".to_string(),
                 "Alice".to_string(),
+                "persistent-1".to_string(),
                 tx,
             )
             .await;
@@ -1036,6 +1048,7 @@ mod tests {
                 "vg20".to_string(),
                 "player-1".to_string(),
                 "Alice".to_string(),
+                "persistent-1".to_string(),
                 tx1,
             )
             .await
@@ -1043,7 +1056,7 @@ mod tests {
 
         // Join race
         let result = manager
-            .join_race(&race_id, "player-2".to_string(), "Bob".to_string(), tx2)
+            .join_race(&race_id, "player-2".to_string(), "Bob".to_string(), "persistent-2".to_string(), tx2)
             .await;
 
         assert!(result.is_ok());
@@ -1060,7 +1073,7 @@ mod tests {
         let (tx, _rx) = mpsc::unbounded_channel();
 
         let result = manager
-            .join_race("AAAAAA", "player-1".to_string(), "Alice".to_string(), tx)
+            .join_race("AAAAAA", "player-1".to_string(), "Alice".to_string(), "persistent-1".to_string(), tx)
             .await;
 
         assert!(result.is_err());
@@ -1080,6 +1093,7 @@ mod tests {
                 "vg20".to_string(),
                 "player-1".to_string(),
                 "Alice".to_string(),
+                "persistent-1".to_string(),
                 tx,
             )
             .await
@@ -1104,6 +1118,7 @@ mod tests {
                 "vg20".to_string(),
                 "player-1".to_string(),
                 "Alice".to_string(),
+                "persistent-1".to_string(),
                 tx1,
             )
             .await
@@ -1114,6 +1129,7 @@ mod tests {
                 "vg20".to_string(),
                 "player-2".to_string(),
                 "Bob".to_string(),
+                "persistent-2".to_string(),
                 tx2,
             )
             .await
@@ -1134,6 +1150,7 @@ mod tests {
                 "vg20".to_string(),
                 "player-1".to_string(),
                 "Alice".to_string(),
+                "persistent-1".to_string(),
                 tx,
             )
             .await
@@ -1206,9 +1223,10 @@ async fn handle_client_message(
         ClientMessage::CreateRace {
             course_key,
             player_name,
+            persistent_id,
         } => {
             match manager
-                .create_race(course_key, player_id.to_string(), player_name, tx.clone())
+                .create_race(course_key, player_id.to_string(), player_name, persistent_id, tx.clone())
                 .await
             {
                 Ok((race_id, rasters)) => {
@@ -1226,9 +1244,10 @@ async fn handle_client_message(
         ClientMessage::JoinRace {
             race_id,
             player_name,
+            persistent_id,
         } => {
             match manager
-                .join_race(&race_id, player_id.to_string(), player_name, tx.clone())
+                .join_race(&race_id, player_id.to_string(), player_name, persistent_id, tx.clone())
                 .await
             {
                 Ok((players, rasters, course_key, is_creator)) => {

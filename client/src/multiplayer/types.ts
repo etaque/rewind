@@ -5,8 +5,8 @@ import { LngLat, WindRasterSource } from "../models";
 // ============================================================================
 
 export type ClientMessage =
-  | { type: "CreateRace"; courseKey: string; playerName: string }
-  | { type: "JoinRace"; raceId: string; playerName: string }
+  | { type: "CreateRace"; courseKey: string; playerName: string; persistentId: string }
+  | { type: "JoinRace"; raceId: string; playerName: string; persistentId: string }
   | { type: "LeaveRace" }
   | { type: "StartRace" }
   | { type: "PositionUpdate"; lng: number; lat: number; heading: number }
