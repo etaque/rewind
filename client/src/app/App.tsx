@@ -277,10 +277,8 @@ export default function App() {
           )}
         {state.tag === "Countdown" && (
           <>
-            <div className="fixed inset-0 flex flex-col items-center justify-center bg-black bg-opacity-10">
-              <div className="bg-slate-900 bg-opacity-90 rounded-lg p-8 max-w-md w-full mx-4 space-y-6">
-                <CountdownDisplay countdown={state.countdown} />
-              </div>
+            <div className="fixed bottom-16 inset-x-0 flex justify-center pointer-events-none">
+              <CountdownDisplay countdown={state.countdown} />
             </div>
             <button
               onClick={handleQuitClick}

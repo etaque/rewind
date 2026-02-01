@@ -80,10 +80,11 @@ export default class Land {
 
     // Determine desired resolution
     const scaleFactor = scene.projection.scale() / BASE_SCALE;
-    const wantHighRes = !moving && scaleFactor >= HIGH_RES_SCALE_THRESHOLD;
+    const shouldFetch = scaleFactor >= HIGH_RES_SCALE_THRESHOLD;
+    const wantHighRes = !moving && shouldFetch;
 
-    // Lazy-load high-res in background when first needed
-    if (wantHighRes && !this.highRes && !this.highResPromise) {
+    // Start background fetch even during movement so data is ready when zoom ends
+    if (shouldFetch && !this.highRes && !this.highResPromise) {
       this.highResPromise = getLand(HIGH_RES_PATH);
       this.highResPromise.then((data) => {
         this.highRes = data;
