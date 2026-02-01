@@ -5,14 +5,16 @@ import * as utils from "../utils";
 
 const MAX_AGE = 1200;
 const PARTICLES_COUNT = 1000;
-const ALPHA_DECAY = 0.96;
 const TRAVEL_SPEED = 15;
+const TRAIL_LENGTH = 25;
+const TRAIL_BANDS = 6;
 
 type Particle = {
   pix: Pixel;
   coord: LngLat;
   age: number;
   visible: boolean;
+  trail: Pixel[];
 };
 
 export default class Particles {
@@ -53,30 +55,53 @@ export default class Particles {
       if (previous) {
         const delta = timestamp - previous;
 
-        context.save();
-        context.scale(dpr, dpr);
-        context.beginPath();
-        context.strokeStyle = "rgba(210,210,210,0.7)";
-
+        // Move all particles (no drawing yet)
         this.particles.forEach((p) =>
           moveParticle(
             p,
             delta,
-            context,
             this.scene!,
             this.wind!,
             this.interpolationFactor,
           ),
         );
 
-        context.stroke();
-        context.restore();
+        // Clear canvas entirely — no ghost pixels possible
+        context.clearRect(0, 0, this.canvas.width, this.canvas.height);
 
-        context.globalAlpha = ALPHA_DECAY;
-        context.globalCompositeOperation = "copy";
-        context.drawImage(context.canvas, 0, 0);
-        context.globalAlpha = 1.0;
-        context.globalCompositeOperation = "source-over";
+        context.save();
+        context.scale(dpr, dpr);
+        context.strokeStyle = "rgb(210,210,210)";
+
+        // Draw trails in banded passes for efficient batched rendering
+        for (let b = 0; b < TRAIL_BANDS; b++) {
+          const alpha = 0.7 * ((b + 1) / TRAIL_BANDS) ** 2;
+          context.globalAlpha = alpha;
+          context.beginPath();
+
+          for (const p of this.particles) {
+            if (!p.visible || p.trail.length === 0) continue;
+
+            const segStart = Math.floor(
+              (b * p.trail.length) / TRAIL_BANDS,
+            );
+            const segEnd = Math.floor(
+              ((b + 1) * p.trail.length) / TRAIL_BANDS,
+            );
+
+            for (let i = segStart; i < segEnd; i++) {
+              const from = p.trail[i];
+              const to =
+                i + 1 < p.trail.length ? p.trail[i + 1] : p.pix;
+              context.moveTo(from.x, from.y);
+              context.lineTo(to.x, to.y);
+            }
+          }
+
+          context.stroke();
+        }
+
+        context.restore();
       }
       previous = timestamp;
       this.rafId = requestAnimationFrame(tick);
@@ -156,6 +181,7 @@ function generateParticles(scene: Scene): Particle[] {
         coord: coord,
         age: MAX_AGE * Math.random(),
         visible: true,
+        trail: [],
       });
     }
   }
@@ -175,7 +201,6 @@ function isOnVisibleGlobe(pix: Pixel, scene: Scene): boolean {
 function moveParticle(
   p: Particle,
   delta: number,
-  context: CanvasRenderingContext2D,
   scene: Scene,
   wind: InterpolatedWind,
   interpolationFactor: number,
@@ -192,6 +217,7 @@ function moveParticle(
 
     p.coord = newCoord;
     p.age = (MAX_AGE * Math.random()) / 4;
+    p.trail = [];
 
     const xy = scene.projection([p.coord.lng, p.coord.lat]);
     if (xy) {
@@ -243,8 +269,10 @@ function moveParticle(
     return;
   }
 
-  // Draw line from previous to new position
-  context.moveTo(p.pix.x, p.pix.y);
-  context.lineTo(newPix.x, newPix.y);
+  // Record previous position in trail and advance
+  p.trail.push(p.pix);
+  if (p.trail.length > TRAIL_LENGTH) {
+    p.trail.shift();
+  }
   p.pix = newPix;
 }
