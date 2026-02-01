@@ -92,7 +92,7 @@ function generateImage(
       data[i] = r;
       data[i + 1] = g;
       data[i + 2] = b;
-      data[i + 3] = 200;
+      data[i + 3] = 140;
     } else {
       data[i] = 0;
       data[i + 1] = 0;
