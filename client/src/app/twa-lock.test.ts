@@ -39,6 +39,7 @@ function makeSession(overrides: Partial<Session> = {}): Session {
     serverRaceTime: 0,
     position: { lng: 0, lat: 0 },
     turning: null,
+    turningDuration: 0,
     heading: 0,
     targetHeading: null,
     lockedTWA: null,

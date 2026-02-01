@@ -101,6 +101,7 @@ function makePlayingState(
       serverRaceTime: 1000,
       position: { lng: -10, lat: 45 },
       turning: null,
+      turningDuration: 0,
       heading: 90,
       targetHeading: null,
       lockedTWA: null,
