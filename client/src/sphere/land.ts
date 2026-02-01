@@ -130,7 +130,7 @@ export default class Land {
     ctx.shadowOffsetX = 0;
     ctx.shadowOffsetY = 0;
 
-    ctx.fillStyle = "rgba(180, 165, 140, 0.25)";
+    ctx.fillStyle = "rgba(194, 178, 148, 0.35)";
     ctx.strokeStyle = "rgba(0, 0, 0, 0.8)";
     ctx.lineWidth = 1.5;
     ctx.beginPath();
