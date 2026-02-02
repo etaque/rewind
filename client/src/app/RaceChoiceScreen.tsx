@@ -323,7 +323,7 @@ export default function RaceChoiceScreen() {
               {/* Race this button */}
               <button
                 onClick={handleCreateRace}
-                className="w-full bg-gradient-to-r from-green-500 to-blue-500 hover:from-green-400 hover:to-blue-400 text-white py-4 rounded-lg font-semibold transition-all text-lg"
+                className="w-full bg-gradient-to-r from-cyan-500 to-blue-500 hover:from-cyan-400 hover:to-blue-400 text-white py-4 rounded-lg font-semibold transition-all text-lg"
               >
                 Race this
               </button>
@@ -466,7 +466,7 @@ export default function RaceChoiceScreen() {
               {windReady && isCreator && (
                 <button
                   onClick={startRace}
-                  className="w-full bg-gradient-to-r from-green-500 to-blue-500 hover:from-green-400 hover:to-blue-400 text-white py-4 rounded-lg font-semibold transition-all text-lg"
+                  className="w-full bg-gradient-to-r from-emerald-500 to-green-500 hover:from-emerald-400 hover:to-green-400 text-white py-4 rounded-lg font-semibold transition-all text-lg"
                 >
                   {totalCompetitors === 1 ? "Start Solo" : "Start Race"}
                 </button>
