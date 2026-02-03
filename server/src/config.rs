@@ -42,7 +42,7 @@ impl Default for S3Config {
 #[derive(Debug)]
 pub struct Config {
     pub s3: S3Config,
-    pub db_path: String,
+    pub database_url: String,
     pub editor_password: String,
 }
 
@@ -56,18 +56,18 @@ pub static CONFIG: Lazy<Config> = Lazy::new(|| {
             .expect("Missing S3 config. Required env vars: REWIND_S3_GRIB_BUCKET, REWIND_S3_RASTER_BUCKET, REWIND_S3_ENDPOINT, REWIND_S3_REGION, REWIND_S3_ACCESS_KEY, REWIND_S3_SECRET_KEY")
     };
 
-    let db_path = env::var("REWIND_DB_PATH").unwrap_or_else(|_| {
+    let database_url = env::var("REWIND_DATABASE_URL").unwrap_or_else(|_| {
         if cfg!(test) {
-            ":memory:".to_string()
+            "sqlite::memory:".to_string()
         } else {
-            "./rewind.db".to_string()
+            "sqlite:./rewind.db?mode=rwc".to_string()
         }
     });
 
     let editor_password =
         env::var("REWIND_EDITOR_PASSWORD").unwrap_or_default();
 
-    Config { s3, db_path, editor_password }
+    Config { s3, database_url, editor_password }
 });
 
 pub fn config() -> &'static Config {

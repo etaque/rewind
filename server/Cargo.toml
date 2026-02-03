@@ -28,7 +28,7 @@ grib = "0.7"
 png = "0.17"
 
 # Database
-rusqlite = { version = "0.32", features = ["bundled"] }
+sqlx = { version = "0.8", features = ["runtime-tokio", "sqlite"] }
 
 # Utils
 anyhow = "1"

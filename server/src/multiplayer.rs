@@ -12,8 +12,7 @@ use std::time::{Duration, Instant};
 use tokio::sync::{RwLock, mpsc};
 
 use crate::{
-    courses::Course,
-    db,
+    courses::{self, Course},
     race_results::{self, PathPoint},
     s3,
     wind_reports::{self, WindReport},
@@ -206,7 +205,7 @@ impl Race {
 
     fn broadcast(&self, message: ServerMessage, exclude: Option<&str>) {
         for (id, player) in &self.players {
-            if exclude.map_or(true, |ex| ex != id) {
+            if exclude.is_none_or(|ex| ex != id) {
                 let _ = player.tx.send(message.clone());
             }
         }
@@ -450,10 +449,11 @@ impl RaceManager {
         persistent_id: String,
         tx: mpsc::UnboundedSender<ServerMessage>,
     ) -> anyhow::Result<(String, Vec<WindRasterSource>)> {
-        let course = db::with_connection(|conn| crate::courses::get_by_key(conn, &course_key))?
+        let course = courses::get_by_key(&course_key)
+            .await?
             .ok_or(anyhow!("Course not found"))?;
 
-        let reports = wind_reports::get_reports_for_course(&course)?;
+        let reports = wind_reports::get_reports_for_course(&course).await?;
         let rasters: Vec<WindRasterSource> = reports.iter().map(|r| r.into()).collect();
 
         let race_id = generate_race_id();
@@ -758,18 +758,16 @@ async fn save_race_result(course_key: String, race_start_time: i64, finished: Fi
     }
 
     // Save to database
-    if let Err(e) = db::with_connection(|conn| {
-        race_results::save_result(
-            conn,
-            &course_key,
-            &finished.player_name,
-            &finished.persistent_id,
-            finished.finish_time,
-            race_start_time,
-            &s3_key,
-        )?;
-        Ok(())
-    }) {
+    if let Err(e) = race_results::save_result(
+        &course_key,
+        &finished.player_name,
+        &finished.persistent_id,
+        finished.finish_time,
+        race_start_time,
+        &s3_key,
+    )
+    .await
+    {
         log::error!("Failed to save race result to database: {}", e);
         return;
     }
@@ -780,6 +778,136 @@ async fn save_race_result(course_key: String, race_start_time: i64, finished: Fi
         course_key,
         finished.finish_time
     );
+}
+
+// ============================================================================
+// WebSocket Handler
+// ============================================================================
+
+pub async fn handle_websocket(ws: WebSocket, manager: RaceManager) {
+    let (mut ws_tx, mut ws_rx) = ws.split();
+    let (tx, mut rx) = mpsc::unbounded_channel::<ServerMessage>();
+
+    let player_id = generate_id();
+
+    // Task to forward server messages to WebSocket
+    let forward_task = tokio::spawn(async move {
+        while let Some(msg) = rx.recv().await {
+            if let Ok(json) = serde_json::to_string(&msg)
+                && ws_tx.send(Message::Text(json.into())).await.is_err()
+            {
+                break;
+            }
+        }
+    });
+
+    // Process incoming messages
+    while let Some(result) = ws_rx.next().await {
+        match result {
+            Ok(msg) => match msg {
+                Message::Text(text) => match serde_json::from_str::<ClientMessage>(&text) {
+                    Ok(client_msg) => {
+                        handle_client_message(&manager, &player_id, tx.clone(), client_msg).await;
+                    }
+                    Err(err) => {
+                        log::error!("Failed to decode message: {}", err);
+                    }
+                },
+                Message::Close(_) => break,
+                _ => {}
+            },
+            Err(_) => break,
+        }
+    }
+
+    // Cleanup on disconnect
+    manager.leave_race(&player_id).await;
+    forward_task.abort();
+}
+
+async fn handle_client_message(
+    manager: &RaceManager,
+    player_id: &str,
+    tx: mpsc::UnboundedSender<ServerMessage>,
+    message: ClientMessage,
+) {
+    let result: anyhow::Result<()> = match message {
+        ClientMessage::CreateRace {
+            course_key,
+            player_name,
+            persistent_id,
+        } => {
+            match manager
+                .create_race(course_key, player_id.to_string(), player_name, persistent_id, tx.clone())
+                .await
+            {
+                Ok((race_id, rasters)) => {
+                    let _ = tx.send(ServerMessage::RaceCreated {
+                        race_id,
+                        player_id: player_id.to_string(),
+                        wind_raster_sources: rasters,
+                    });
+                    Ok(())
+                }
+                Err(e) => Err(e),
+            }
+        }
+
+        ClientMessage::JoinRace {
+            race_id,
+            player_name,
+            persistent_id,
+        } => {
+            match manager
+                .join_race(&race_id, player_id.to_string(), player_name, persistent_id, tx.clone())
+                .await
+            {
+                Ok((players, rasters, course_key, is_creator)) => {
+                    let _ = tx.send(ServerMessage::RaceJoined {
+                        race_id,
+                        player_id: player_id.to_string(),
+                        course_key,
+                        wind_raster_sources: rasters,
+                        players,
+                        is_creator,
+                    });
+                    Ok(())
+                }
+                Err(e) => Err(e),
+            }
+        }
+
+        ClientMessage::LeaveRace => {
+            manager.leave_race(player_id).await;
+            Ok(())
+        }
+
+        ClientMessage::StartRace => manager.start_race(player_id).await,
+
+        ClientMessage::PositionUpdate { lng, lat, heading } => {
+            manager
+                .broadcast_position(player_id, lng, lat, heading)
+                .await;
+            Ok(())
+        }
+
+        ClientMessage::GateCrossed {
+            gate_index,
+            course_time,
+        } => {
+            manager
+                .record_gate_crossing(player_id, gate_index, course_time)
+                .await;
+            Ok(())
+        }
+    };
+
+    if let Err(error) = result {
+        log::error!("Failed to handle client message: {}", error);
+        let _ = tx.send(ServerMessage::Error {
+            message: error.to_string(),
+        });
+    }
 }
 
 #[cfg(test)]
@@ -1014,6 +1142,8 @@ mod tests {
 
     #[tokio::test]
     async fn test_race_manager_create_race() {
+        crate::db::init_test().await.unwrap();
+
         let manager = RaceManager::new();
         let (tx, _rx) = mpsc::unbounded_channel();
 
@@ -1038,6 +1168,8 @@ mod tests {
 
     #[tokio::test]
     async fn test_race_manager_join_race() {
+        crate::db::init_test().await.unwrap();
+
         let manager = RaceManager::new();
         let (tx1, _rx1) = mpsc::unbounded_channel();
         let (tx2, _rx2) = mpsc::unbounded_channel();
@@ -1085,6 +1217,8 @@ mod tests {
 
     #[tokio::test]
     async fn test_race_manager_leave_race() {
+        crate::db::init_test().await.unwrap();
+
         let manager = RaceManager::new();
         let (tx, _rx) = mpsc::unbounded_channel();
 
@@ -1109,6 +1243,8 @@ mod tests {
 
     #[tokio::test]
     async fn test_race_manager_list_races() {
+        crate::db::init_test().await.unwrap();
+
         let manager = RaceManager::new();
         let (tx1, _rx1) = mpsc::unbounded_channel();
         let (tx2, _rx2) = mpsc::unbounded_channel();
@@ -1142,6 +1278,8 @@ mod tests {
 
     #[tokio::test]
     async fn test_race_manager_list_races_excludes_started() {
+        crate::db::init_test().await.unwrap();
+
         let manager = RaceManager::new();
         let (tx, _rx) = mpsc::unbounded_channel();
 
@@ -1165,135 +1303,5 @@ mod tests {
         let races = manager.list_races().await;
 
         assert!(races.is_empty());
-    }
-}
-
-// ============================================================================
-// WebSocket Handler
-// ============================================================================
-
-pub async fn handle_websocket(ws: WebSocket, manager: RaceManager) {
-    let (mut ws_tx, mut ws_rx) = ws.split();
-    let (tx, mut rx) = mpsc::unbounded_channel::<ServerMessage>();
-
-    let player_id = generate_id();
-
-    // Task to forward server messages to WebSocket
-    let forward_task = tokio::spawn(async move {
-        while let Some(msg) = rx.recv().await {
-            if let Ok(json) = serde_json::to_string(&msg) {
-                if ws_tx.send(Message::Text(json.into())).await.is_err() {
-                    break;
-                }
-            }
-        }
-    });
-
-    // Process incoming messages
-    while let Some(result) = ws_rx.next().await {
-        match result {
-            Ok(msg) => match msg {
-                Message::Text(text) => match serde_json::from_str::<ClientMessage>(&text) {
-                    Ok(client_msg) => {
-                        handle_client_message(&manager, &player_id, tx.clone(), client_msg).await;
-                    }
-                    Err(err) => {
-                        log::error!("Failed to decode message: {}", err);
-                    }
-                },
-                Message::Close(_) => break,
-                _ => {}
-            },
-            Err(_) => break,
-        }
-    }
-
-    // Cleanup on disconnect
-    manager.leave_race(&player_id).await;
-    forward_task.abort();
-}
-
-async fn handle_client_message(
-    manager: &RaceManager,
-    player_id: &str,
-    tx: mpsc::UnboundedSender<ServerMessage>,
-    message: ClientMessage,
-) {
-    let result: anyhow::Result<()> = match message {
-        ClientMessage::CreateRace {
-            course_key,
-            player_name,
-            persistent_id,
-        } => {
-            match manager
-                .create_race(course_key, player_id.to_string(), player_name, persistent_id, tx.clone())
-                .await
-            {
-                Ok((race_id, rasters)) => {
-                    let _ = tx.send(ServerMessage::RaceCreated {
-                        race_id,
-                        player_id: player_id.to_string(),
-                        wind_raster_sources: rasters,
-                    });
-                    Ok(())
-                }
-                Err(e) => Err(e),
-            }
-        }
-
-        ClientMessage::JoinRace {
-            race_id,
-            player_name,
-            persistent_id,
-        } => {
-            match manager
-                .join_race(&race_id, player_id.to_string(), player_name, persistent_id, tx.clone())
-                .await
-            {
-                Ok((players, rasters, course_key, is_creator)) => {
-                    let _ = tx.send(ServerMessage::RaceJoined {
-                        race_id,
-                        player_id: player_id.to_string(),
-                        course_key,
-                        wind_raster_sources: rasters,
-                        players,
-                        is_creator,
-                    });
-                    Ok(())
-                }
-                Err(e) => Err(e),
-            }
-        }
-
-        ClientMessage::LeaveRace => {
-            manager.leave_race(player_id).await;
-            Ok(())
-        }
-
-        ClientMessage::StartRace => manager.start_race(player_id).await,
-
-        ClientMessage::PositionUpdate { lng, lat, heading } => {
-            manager
-                .broadcast_position(player_id, lng, lat, heading)
-                .await;
-            Ok(())
-        }
-
-        ClientMessage::GateCrossed {
-            gate_index,
-            course_time,
-        } => {
-            manager
-                .record_gate_crossing(player_id, gate_index, course_time)
-                .await;
-            Ok(())
-        }
-    };
-
-    if let Err(error) = result {
-        log::error!("Failed to handle client message: {}", error.to_string());
-        let _ = tx.send(ServerMessage::Error {
-            message: error.to_string(),
-        });
     }
 }

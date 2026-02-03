@@ -1,6 +1,6 @@
 use crate::config::config;
 use crate::courses::Course;
-use crate::db::with_connection;
+use crate::db;
 use crate::s3;
 use anyhow::Result;
 use chrono::serde::ts_milliseconds;
@@ -34,12 +34,11 @@ impl WindReport {
 }
 
 /// Get the total count of wind reports in the database
-pub fn get_report_count() -> Result<i64> {
-    with_connection(|conn| {
-        let count: i64 =
-            conn.query_row("SELECT COUNT(*) FROM wind_reports", [], |row| row.get(0))?;
-        Ok(count)
-    })
+pub async fn get_report_count() -> Result<i64> {
+    let row: (i64,) = sqlx::query_as("SELECT COUNT(*) FROM wind_reports")
+        .fetch_one(db::pool())
+        .await?;
+    Ok(row.0)
 }
 
 /// Get existing report times by listing PNG files in S3 (stateless, no DB needed)
@@ -63,71 +62,69 @@ pub async fn get_existing_times_from_s3() -> Result<std::collections::HashSet<i6
 
 /// Insert a wind report if it doesn't already exist (by time)
 /// Returns true if the report was inserted, false if it already existed
-pub fn upsert_wind_report(report: &WindReport) -> Result<bool> {
-    with_connection(|conn| {
-        let time_ms = report.time.timestamp_millis();
-        let result = conn.execute(
-            "INSERT INTO wind_reports (time, grib_path, png_path, source) VALUES (?, ?, ?, ?)
-            ON CONFLICT(time) DO UPDATE SET grib_path=excluded.grib_path, png_path=excluded.png_path, source=excluded.source",
-            (&time_ms, &report.grib_path, &report.png_path, &report.source),
-        )?;
-        Ok(result > 0)
-    })
+pub async fn upsert_wind_report(report: &WindReport) -> Result<bool> {
+    let time_ms = report.time.timestamp_millis();
+    let result = sqlx::query(
+        "INSERT INTO wind_reports (time, grib_path, png_path, source) VALUES (?, ?, ?, ?)
+         ON CONFLICT(time) DO UPDATE SET grib_path=excluded.grib_path, png_path=excluded.png_path, source=excluded.source",
+    )
+    .bind(time_ms)
+    .bind(&report.grib_path)
+    .bind(&report.png_path)
+    .bind(&report.source)
+    .execute(db::pool())
+    .await?;
+    Ok(result.rows_affected() > 0)
 }
 
 /// Get a random wind report from the database
-pub fn get_random_report() -> Result<Option<WindReport>> {
-    with_connection(|conn| {
-        let mut stmt = conn.prepare(
-            "SELECT time, grib_path, png_path, source FROM wind_reports ORDER BY RANDOM() LIMIT 1",
-        )?;
+pub async fn get_random_report() -> Result<Option<WindReport>> {
+    let row: Option<(i64, String, String, String)> = sqlx::query_as(
+        "SELECT time, grib_path, png_path, source FROM wind_reports ORDER BY RANDOM() LIMIT 1",
+    )
+    .fetch_optional(db::pool())
+    .await?;
 
-        let report = stmt
-            .query_row([], |row| {
-                let time_ms: i64 = row.get(0)?;
-                let time =
-                    DateTime::from_timestamp_millis(time_ms).unwrap_or_else(|| DateTime::UNIX_EPOCH);
-                Ok(WindReport {
-                    time,
-                    grib_path: row.get(1)?,
-                    png_path: row.get(2)?,
-                    source: row.get(3)?,
-                })
-            })
-            .ok();
-
-        Ok(report)
-    })
+    Ok(row.map(|(time_ms, grib_path, png_path, source)| {
+        let time = DateTime::from_timestamp_millis(time_ms).unwrap_or(DateTime::UNIX_EPOCH);
+        WindReport {
+            time,
+            grib_path,
+            png_path,
+            source,
+        }
+    }))
 }
 
 /// Get reports for a given course (within time range)
-pub fn get_reports_for_course(course: &Course) -> Result<Vec<WindReport>> {
-    with_connection(|conn| {
-        let since = course.start_time - TimeDelta::days(1).num_milliseconds();
-        let until = course.max_finish_time();
+pub async fn get_reports_for_course(course: &Course) -> Result<Vec<WindReport>> {
+    let since = course.start_time - TimeDelta::days(1).num_milliseconds();
+    let until = course.max_finish_time();
 
-        let mut stmt = conn.prepare(
-            "SELECT time, grib_path, png_path, source FROM wind_reports
-             WHERE time >= ? AND time <= ?
-             ORDER BY time",
-        )?;
+    let rows: Vec<(i64, String, String, String)> = sqlx::query_as(
+        "SELECT time, grib_path, png_path, source FROM wind_reports
+         WHERE time >= ? AND time <= ?
+         ORDER BY time",
+    )
+    .bind(since)
+    .bind(until)
+    .fetch_all(db::pool())
+    .await?;
 
-        let reports = stmt
-            .query_map([since, until], |row| {
-                let time_ms: i64 = row.get(0)?;
-                let time = DateTime::from_timestamp_millis(time_ms)
-                    .unwrap_or_else(|| DateTime::UNIX_EPOCH);
-                Ok(WindReport {
-                    time,
-                    grib_path: row.get(1)?,
-                    png_path: row.get(2)?,
-                    source: row.get(3)?,
-                })
-            })?
-            .collect::<Result<Vec<_>, _>>()?;
+    let reports = rows
+        .into_iter()
+        .map(|(time_ms, grib_path, png_path, source)| {
+            let time = DateTime::from_timestamp_millis(time_ms).unwrap_or(DateTime::UNIX_EPOCH);
+            WindReport {
+                time,
+                grib_path,
+                png_path,
+                source,
+            }
+        })
+        .collect();
 
-        Ok(reports)
-    })
+    Ok(reports)
 }
 
 /// Rebuild database from S3 listing of PNG files
@@ -140,10 +137,9 @@ pub async fn rebuild_from_s3(truncate: bool) -> Result<()> {
     // Clear existing reports
     if truncate {
         println!("Truncating wind_reports...");
-        with_connection(|conn| {
-            conn.execute("DELETE FROM wind_reports", [])?;
-            Ok(())
-        })?;
+        sqlx::query("DELETE FROM wind_reports")
+            .execute(db::pool())
+            .await?;
         println!("Done.")
     }
 
@@ -163,7 +159,7 @@ pub async fn rebuild_from_s3(truncate: bool) -> Result<()> {
         // Parse path: ncar/YYYY/MMDD/hour/uv.png
         match parse_ncar_png_path(&path) {
             Some(report) => {
-                upsert_wind_report(&report)?;
+                upsert_wind_report(&report).await?;
                 inserted_count += 1;
             }
             None => {

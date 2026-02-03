@@ -1,48 +1,76 @@
-use crate::config::config;
-use crate::{courses, race_results};
 use anyhow::Result;
-use rusqlite::Connection;
-use std::sync::Mutex;
+use once_cell::sync::OnceCell;
+use sqlx::sqlite::{SqlitePool, SqlitePoolOptions};
 
-use once_cell::sync::Lazy;
+use crate::config::config;
 
-static DB: Lazy<Mutex<Connection>> = Lazy::new(|| {
-    let path = &config().db_path;
-    log::info!("Opening database at {}", path);
-    let conn = Connection::open(path).expect("Failed to open database");
+static POOL: OnceCell<SqlitePool> = OnceCell::new();
 
-    // Initialize schema immediately
-    conn.execute_batch(
-        "
-        CREATE TABLE IF NOT EXISTS wind_reports (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            time INTEGER NOT NULL UNIQUE,
-            grib_path TEXT NOT NULL,
-            png_path TEXT NOT NULL,
-            source TEXT NOT NULL DEFAULT 'ncar',
-            created_at INTEGER NOT NULL DEFAULT (strftime('%s', 'now') * 1000)
-        );
+pub async fn init() -> Result<()> {
+    let pool = SqlitePoolOptions::new()
+        .max_connections(5)
+        .connect(&config().database_url)
+        .await?;
 
-        CREATE INDEX IF NOT EXISTS idx_wind_reports_time ON wind_reports(time);
-        ",
-    )
-    .expect("Failed to initialize database schema");
+    // Run migrations
+    sqlx::migrate!("./migrations").run(&pool).await?;
 
-    // Initialize race_results table
-    race_results::init_table(&conn).expect("Failed to initialize race_results table");
+    POOL.set(pool)
+        .map_err(|_| anyhow::anyhow!("Pool already initialized"))?;
 
-    // Initialize courses table and seed with defaults
-    courses::init_table(&conn).expect("Failed to initialize courses table");
-    courses::seed_if_empty(&conn).expect("Failed to seed courses");
+    // Seed courses if empty
+    crate::courses::seed_if_empty().await?;
 
-    Mutex::new(conn)
-});
+    Ok(())
+}
 
-/// Get a connection to the database
-pub fn with_connection<F, T>(f: F) -> Result<T>
-where
-    F: FnOnce(&Connection) -> Result<T>,
-{
-    let conn = DB.lock().unwrap();
-    f(&conn)
+pub fn pool() -> &'static SqlitePool {
+    POOL.get().expect("Database not initialized - call db::init() first")
+}
+
+#[cfg(test)]
+static TEST_INIT_DONE: OnceCell<()> = OnceCell::new();
+
+#[cfg(test)]
+pub async fn init_test() -> Result<()> {
+    use tokio::sync::Mutex;
+    use std::sync::OnceLock;
+
+    static TEST_LOCK: OnceLock<Mutex<()>> = OnceLock::new();
+    let lock = TEST_LOCK.get_or_init(|| Mutex::new(()));
+
+    // Fast path: if already fully initialized, return immediately
+    if TEST_INIT_DONE.get().is_some() {
+        return Ok(());
+    }
+
+    // Acquire async lock to serialize initialization
+    let _guard = lock.lock().await;
+
+    // Double-check after acquiring lock
+    if TEST_INIT_DONE.get().is_some() {
+        return Ok(());
+    }
+
+    // Initialize if pool not set
+    if POOL.get().is_none() {
+        let pool = SqlitePoolOptions::new()
+            .max_connections(5)
+            .connect("sqlite::memory:")
+            .await?;
+
+        // Run migrations
+        sqlx::migrate!("./migrations").run(&pool).await?;
+
+        // Try to set the pool
+        let _ = POOL.set(pool);
+    }
+
+    // Seed courses if empty
+    crate::courses::seed_if_empty().await?;
+
+    // Mark as fully initialized
+    let _ = TEST_INIT_DONE.set(());
+
+    Ok(())
 }

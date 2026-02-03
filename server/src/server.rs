@@ -13,7 +13,7 @@ use tower_http::{compression::CompressionLayer, cors::CorsLayer};
 
 use crate::{
     config::config,
-    courses, db,
+    courses,
     multiplayer::{RaceManager, handle_websocket},
     race_results, wind_reports,
 };
@@ -107,7 +107,7 @@ async fn health_handler() -> Result<String, AppError> {
     s3.put(&health_path, Bytes::new().into()).await?;
 
     // Check database is readable
-    let report_count = wind_reports::get_report_count()?;
+    let report_count = wind_reports::get_report_count().await?;
 
     Ok(format!("OK ({} wind reports)", report_count))
 }
@@ -120,7 +120,7 @@ async fn verify_editor_password_handler(
 }
 
 async fn courses_handler() -> Result<impl IntoResponse, AppError> {
-    let courses = db::with_connection(|conn| courses::get_all(conn))?;
+    let courses = courses::get_all().await?;
     Ok(Json(courses))
 }
 
@@ -130,7 +130,7 @@ async fn create_course_handler(
 ) -> Result<impl IntoResponse, AppError> {
     check_editor_password(&headers)?;
     log::info!("Course created: {} ({})", course.name, course.key);
-    db::with_connection(|conn| courses::insert(conn, &course))?;
+    courses::insert(&course).await?;
     Ok(StatusCode::CREATED)
 }
 
@@ -141,7 +141,7 @@ async fn update_course_handler(
 ) -> Result<impl IntoResponse, AppError> {
     check_editor_password(&headers)?;
     log::info!("Course updated: {} ({})", course.name, key);
-    db::with_connection(|conn| courses::update(conn, &key, &course))?;
+    courses::update(&key, &course).await?;
     Ok(StatusCode::OK)
 }
 
@@ -150,7 +150,7 @@ async fn delete_course_handler(
     Path(key): Path<String>,
 ) -> Result<impl IntoResponse, AppError> {
     check_editor_password(&headers)?;
-    db::with_connection(|conn| courses::delete(conn, &key))?;
+    courses::delete(&key).await?;
     Ok(StatusCode::OK)
 }
 
@@ -173,8 +173,7 @@ async fn leaderboard_handler(
     Path(course_key): Path<String>,
     Query(query): Query<LeaderboardQuery>,
 ) -> Result<impl IntoResponse, AppError> {
-    let entries =
-        db::with_connection(|conn| race_results::get_leaderboard(conn, &course_key, query.limit))?;
+    let entries = race_results::get_leaderboard(&course_key, query.limit).await?;
     Ok(Json(entries))
 }
 
@@ -185,7 +184,7 @@ struct ReplayResponse {
 }
 
 async fn replay_handler(Path(result_id): Path<i64>) -> Result<impl IntoResponse, AppError> {
-    let path_key = db::with_connection(|conn| race_results::get_path_key(conn, result_id))?;
+    let path_key = race_results::get_path_key(result_id).await?;
 
     match path_key {
         Some(key) => {
@@ -203,7 +202,7 @@ struct RandomWindResponse {
 }
 
 async fn random_wind_handler() -> Result<impl IntoResponse, AppError> {
-    let report = wind_reports::get_random_report()?;
+    let report = wind_reports::get_random_report().await?;
 
     match report {
         Some(r) => Ok(Json(RandomWindResponse { png_url: r.png_url() })),

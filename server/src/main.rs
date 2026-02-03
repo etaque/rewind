@@ -26,6 +26,9 @@ async fn main() {
     // Validate config early to get clear error messages on missing env vars
     config::validate();
 
+    // Initialize database pool and run migrations
+    db::init().await.expect("Failed to initialize database");
+
     let args = Cli::parse();
 
     match args.cmd {
@@ -42,7 +45,7 @@ async fn main() {
                 .await
                 .unwrap()
         }
-        Command::DumpCourses { file } => courses::dump(file).unwrap(),
-        Command::RestoreCourses { file } => courses::restore(file).unwrap(),
+        Command::DumpCourses { file } => courses::dump(file).await.unwrap(),
+        Command::RestoreCourses { file } => courses::restore(file).await.unwrap(),
     }
 }

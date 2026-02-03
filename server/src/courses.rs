@@ -1,7 +1,6 @@
 use std::path::PathBuf;
 
 use anyhow::Result;
-use rusqlite::{Connection, OptionalExtension};
 use serde::{Deserialize, Serialize};
 
 use crate::db;
@@ -215,77 +214,67 @@ fn seed_courses() -> Vec<Course> {
 // Database CRUD
 // ============================================================================
 
-pub fn init_table(conn: &Connection) -> Result<()> {
-    conn.execute_batch(
-        "
-        CREATE TABLE IF NOT EXISTS courses (
-            key TEXT PRIMARY KEY,
-            data TEXT NOT NULL,
-            created_at INTEGER NOT NULL DEFAULT (strftime('%s', 'now') * 1000),
-            updated_at INTEGER NOT NULL DEFAULT (strftime('%s', 'now') * 1000)
-        );
-        ",
-    )?;
-    Ok(())
-}
-
-pub fn seed_if_empty(conn: &Connection) -> Result<()> {
-    let count: i64 = conn.query_row("SELECT COUNT(*) FROM courses", [], |row| row.get(0))?;
-    if count == 0 {
+pub async fn seed_if_empty() -> Result<()> {
+    let row: (i64,) = sqlx::query_as("SELECT COUNT(*) FROM courses")
+        .fetch_one(db::pool())
+        .await?;
+    if row.0 == 0 {
         for course in seed_courses() {
-            insert(conn, &course)?;
+            insert(&course).await?;
         }
         log::info!("Seeded {} courses into database", seed_courses().len());
     }
     Ok(())
 }
 
-pub fn get_all(conn: &Connection) -> Result<Vec<Course>> {
-    let mut stmt = conn.prepare("SELECT data FROM courses ORDER BY created_at")?;
-    let courses = stmt
-        .query_map([], |row| {
-            let data: String = row.get(0)?;
-            Ok(data)
-        })?
-        .filter_map(|r| r.ok())
-        .filter_map(|data| serde_json::from_str::<Course>(&data).ok())
+pub async fn get_all() -> Result<Vec<Course>> {
+    let rows: Vec<(String,)> = sqlx::query_as("SELECT data FROM courses ORDER BY created_at")
+        .fetch_all(db::pool())
+        .await?;
+    let courses = rows
+        .into_iter()
+        .filter_map(|(data,)| serde_json::from_str::<Course>(&data).ok())
         .collect();
     Ok(courses)
 }
 
-pub fn get_by_key(conn: &Connection, key: &str) -> Result<Option<Course>> {
-    let result: Option<String> = conn
-        .query_row("SELECT data FROM courses WHERE key = ?1", [key], |row| {
-            row.get(0)
-        })
-        .optional()?;
+pub async fn get_by_key(key: &str) -> Result<Option<Course>> {
+    let row: Option<(String,)> = sqlx::query_as("SELECT data FROM courses WHERE key = ?")
+        .bind(key)
+        .fetch_optional(db::pool())
+        .await?;
 
-    match result {
-        Some(data) => Ok(Some(serde_json::from_str::<Course>(&data)?)),
+    match row {
+        Some((data,)) => Ok(Some(serde_json::from_str::<Course>(&data)?)),
         None => Ok(None),
     }
 }
 
-pub fn insert(conn: &Connection, course: &Course) -> Result<()> {
+pub async fn insert(course: &Course) -> Result<()> {
     let data = serde_json::to_string(course)?;
-    conn.execute(
-        "INSERT INTO courses (key, data) VALUES (?1, ?2)",
-        rusqlite::params![course.key, data],
-    )?;
+    sqlx::query("INSERT INTO courses (key, data) VALUES (?, ?)")
+        .bind(&course.key)
+        .bind(&data)
+        .execute(db::pool())
+        .await?;
     Ok(())
 }
 
-pub fn update(conn: &Connection, key: &str, course: &Course) -> Result<()> {
+pub async fn update(key: &str, course: &Course) -> Result<()> {
     let data = serde_json::to_string(course)?;
-    conn.execute(
-        "UPDATE courses SET data = ?1, updated_at = strftime('%s', 'now') * 1000 WHERE key = ?2",
-        rusqlite::params![data, key],
-    )?;
+    sqlx::query("UPDATE courses SET data = ?, updated_at = strftime('%s', 'now') * 1000 WHERE key = ?")
+        .bind(&data)
+        .bind(key)
+        .execute(db::pool())
+        .await?;
     Ok(())
 }
 
-pub fn delete(conn: &Connection, key: &str) -> Result<()> {
-    conn.execute("DELETE FROM courses WHERE key = ?1", [key])?;
+pub async fn delete(key: &str) -> Result<()> {
+    sqlx::query("DELETE FROM courses WHERE key = ?")
+        .bind(key)
+        .execute(db::pool())
+        .await?;
     Ok(())
 }
 
@@ -293,8 +282,8 @@ pub fn delete(conn: &Connection, key: &str) -> Result<()> {
 // CLI commands
 // ============================================================================
 
-pub fn dump(path: Option<PathBuf>) -> Result<()> {
-    let courses = db::with_connection(|conn| get_all(conn))?;
+pub async fn dump(path: Option<PathBuf>) -> Result<()> {
+    let courses = get_all().await?;
     let json = serde_json::to_string_pretty(&courses)?;
 
     match path {
@@ -307,22 +296,19 @@ pub fn dump(path: Option<PathBuf>) -> Result<()> {
     Ok(())
 }
 
-pub fn restore(path: PathBuf) -> Result<()> {
+pub async fn restore(path: PathBuf) -> Result<()> {
     let contents = std::fs::read_to_string(&path)?;
     let courses: Vec<Course> = serde_json::from_str(&contents)?;
 
-    db::with_connection(|conn| {
-        for course in &courses {
-            match insert(conn, course) {
-                Ok(_) => log::info!("Inserted course '{}'", course.key),
-                Err(_) => {
-                    update(conn, &course.key, course)?;
-                    log::info!("Updated course '{}'", course.key);
-                }
+    for course in &courses {
+        match insert(course).await {
+            Ok(_) => log::info!("Inserted course '{}'", course.key),
+            Err(_) => {
+                update(&course.key, course).await?;
+                log::info!("Updated course '{}'", course.key);
             }
         }
-        Ok(())
-    })?;
+    }
 
     log::info!("Restored {} courses from {}", courses.len(), path.display());
     Ok(())
