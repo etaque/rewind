@@ -1,4 +1,5 @@
 import { ClientMessage, ServerMessage, MultiplayerCallbacks } from "./types";
+import { getAuthToken } from "../app/auth";
 
 const serverUrl = import.meta.env.REWIND_SERVER_URL;
 
@@ -105,21 +106,21 @@ export class SignalingClient {
     }
   }
 
-  createRace(courseKey: string, playerName: string, persistentId: string) {
+  createRace(courseKey: string, playerName: string) {
     this.send({
       type: "CreateRace",
       courseKey: courseKey,
       playerName: playerName,
-      persistentId: persistentId,
+      authToken: getAuthToken() ?? undefined,
     });
   }
 
-  joinRace(raceId: string, playerName: string, persistentId: string) {
+  joinRace(raceId: string, playerName: string) {
     this.send({
       type: "JoinRace",
       raceId: raceId,
       playerName: playerName,
-      persistentId: persistentId,
+      authToken: getAuthToken() ?? undefined,
     });
   }
 

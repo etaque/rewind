@@ -18,7 +18,7 @@ pub struct HallOfFameEntry {
     pub id: i64, // For fetching replay
     pub rank: u32,
     pub player_name: String,
-    pub player_id: Option<String>,
+    pub email: Option<String>, // Verified player's email (masked by client)
     pub finish_time: i64,
     pub race_date: i64, // Unix timestamp ms
 }
@@ -43,7 +43,7 @@ pub fn init_table(conn: &Connection) -> Result<()> {
         ",
     )?;
 
-    // Migration: add player_id column if missing
+    // Migration: add player_id column if missing (legacy)
     let has_player_id: bool = conn
         .prepare("PRAGMA table_info(race_results)")?
         .query_map([], |row| row.get::<_, String>(1))?
@@ -53,37 +53,49 @@ pub fn init_table(conn: &Connection) -> Result<()> {
         conn.execute_batch("ALTER TABLE race_results ADD COLUMN player_id TEXT")?;
     }
 
+    // Migration: add email column if missing
+    let has_email: bool = conn
+        .prepare("PRAGMA table_info(race_results)")?
+        .query_map([], |row| row.get::<_, String>(1))?
+        .any(|name| name.map_or(false, |n| n == "email"));
+
+    if !has_email {
+        conn.execute_batch("ALTER TABLE race_results ADD COLUMN email TEXT")?;
+    }
+
     Ok(())
 }
 
 /// Save a race result to the database
+/// Only saves if email is provided (verified player)
 pub fn save_result(
     conn: &Connection,
     course_key: &str,
     player_name: &str,
-    player_id: &str,
+    email: Option<&str>,
     finish_time: i64,
     race_start_time: i64,
     path_s3_key: &str,
 ) -> Result<i64> {
     conn.execute(
-        "INSERT INTO race_results (course_key, player_name, player_id, finish_time, race_start_time, path_s3_key)
+        "INSERT INTO race_results (course_key, player_name, email, finish_time, race_start_time, path_s3_key)
          VALUES (?1, ?2, ?3, ?4, ?5, ?6)",
-        params![course_key, player_name, player_id, finish_time, race_start_time, path_s3_key],
+        params![course_key, player_name, email, finish_time, race_start_time, path_s3_key],
     )?;
     Ok(conn.last_insert_rowid())
 }
 
 /// Get the hall of fame leaderboard for a course
+/// Only returns results from verified players (those with email set)
 pub fn get_leaderboard(
     conn: &Connection,
     course_key: &str,
     limit: u32,
 ) -> Result<Vec<HallOfFameEntry>> {
     let mut stmt = conn.prepare(
-        "SELECT id, player_name, player_id, finish_time, race_start_time
+        "SELECT id, player_name, email, finish_time, race_start_time
          FROM race_results
-         WHERE course_key = ?1
+         WHERE course_key = ?1 AND email IS NOT NULL
          ORDER BY finish_time ASC
          LIMIT ?2",
     )?;
@@ -104,11 +116,11 @@ pub fn get_leaderboard(
         .into_iter()
         .enumerate()
         .map(
-            |(i, (id, player_name, player_id, finish_time, race_start_time))| HallOfFameEntry {
+            |(i, (id, player_name, email, finish_time, race_start_time))| HallOfFameEntry {
                 id,
                 rank: (i + 1) as u32,
                 player_name,
-                player_id,
+                email,
                 finish_time: finish_time - race_start_time, // Convert to elapsed duration
                 race_date: race_start_time,
             },

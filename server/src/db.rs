@@ -1,5 +1,5 @@
 use crate::config::config;
-use crate::{courses, race_results};
+use crate::{courses, players, race_results};
 use anyhow::Result;
 use rusqlite::Connection;
 use std::sync::Mutex;
@@ -30,6 +30,9 @@ static DB: Lazy<Mutex<Connection>> = Lazy::new(|| {
 
     // Initialize race_results table
     race_results::init_table(&conn).expect("Failed to initialize race_results table");
+
+    // Initialize players tables
+    players::init_tables(&conn).expect("Failed to initialize players tables");
 
     // Initialize courses table and seed with defaults
     courses::init_table(&conn).expect("Failed to initialize courses table");

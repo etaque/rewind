@@ -1,8 +1,9 @@
-import { useState, useEffect, useMemo } from "react";
+import { useState, useEffect } from "react";
 import { RaceInfo } from "./race";
 import { useRaceContext } from "./race-context";
 import { generateNickname } from "./nickname";
-import { getOrCreatePlayerId } from "./player-id";
+import { isVerified, getVerifiedEmail } from "./auth";
+import EmailVerification from "./EmailVerification";
 
 const PLAYER_NAME_KEY = "rewind:player_name";
 const serverUrl = import.meta.env.REWIND_SERVER_URL;
@@ -11,7 +12,7 @@ type HallOfFameEntry = {
   id: number;
   rank: number;
   playerName: string;
-  playerId: string | null;
+  email: string | null;
   finishTime: number;
   raceDate: number;
 };
@@ -37,7 +38,8 @@ export default function RaceChoiceScreen() {
   const [playerName, setPlayerName] = useState("");
   const [availableRaces, setAvailableRaces] = useState<RaceInfo[]>([]);
   const [hallOfFame, setHallOfFame] = useState<HallOfFameEntry[]>([]);
-  const myPersistentId = useMemo(() => getOrCreatePlayerId(), []);
+  const verified = isVerified();
+  const myEmail = getVerifiedEmail();
 
   const playerList = Array.from(players.values());
   const ghostList = Array.from(recordedGhosts.values());
@@ -167,6 +169,9 @@ export default function RaceChoiceScreen() {
             />
           </div>
 
+          {/* Email verification */}
+          <EmailVerification playerName={playerName} />
+
           {/* Courses */}
           <div>
             <div className="flex items-center justify-between mb-2">
@@ -285,7 +290,7 @@ export default function RaceChoiceScreen() {
                 ) : (
                   <div className="space-y-1 max-h-48 overflow-y-auto">
                     {hallOfFame.map((entry) => {
-                      const isMe = entry.playerId === myPersistentId;
+                      const isMe = verified && myEmail && entry.email === myEmail;
                       return (
                         <div
                           key={entry.id}
@@ -398,7 +403,7 @@ export default function RaceChoiceScreen() {
                   <div className="space-y-1 max-h-32 overflow-y-auto">
                     {hallOfFame.map((entry) => {
                       const isAdded = recordedGhosts.has(entry.id);
-                      const isMe = entry.playerId === myPersistentId;
+                      const isMe = verified && myEmail && entry.email === myEmail;
                       return (
                         <div
                           key={entry.id}

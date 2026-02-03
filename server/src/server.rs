@@ -1,9 +1,9 @@
 use axum::{
     Json, Router,
     extract::{Path, Query, State, ws::WebSocketUpgrade},
-    http::{HeaderMap, Method, StatusCode},
-    response::{IntoResponse, Response},
-    routing::{any, get, put},
+    http::{HeaderMap, Method, StatusCode, header},
+    response::{IntoResponse, Response, Html},
+    routing::{any, get, post, put},
 };
 use bytes::Bytes;
 use object_store::ObjectStoreExt;
@@ -13,9 +13,9 @@ use tower_http::{compression::CompressionLayer, cors::CorsLayer};
 
 use crate::{
     config::config,
-    courses, db,
+    courses, db, email,
     multiplayer::{RaceManager, handle_websocket},
-    race_results, wind_reports,
+    players, race_results, wind_reports,
 };
 
 use super::s3;
@@ -74,8 +74,9 @@ pub async fn run(address: std::net::SocketAddr) {
         .allow_origin(tower_http::cors::Any)
         .allow_methods([Method::GET, Method::POST, Method::PUT, Method::DELETE])
         .allow_headers([
-            axum::http::header::CONTENT_TYPE,
-            axum::http::header::HeaderName::from_static("x-editor-password"),
+            header::CONTENT_TYPE,
+            header::AUTHORIZATION,
+            header::HeaderName::from_static("x-editor-password"),
         ]);
 
     let app = Router::new()
@@ -91,6 +92,10 @@ pub async fn run(address: std::net::SocketAddr) {
         .route("/multiplayer/race", any(websocket_handler))
         .route("/leaderboard/{course_key}", get(leaderboard_handler))
         .route("/replay/{result_id}", get(replay_handler))
+        // Auth endpoints
+        .route("/auth/request-verification", post(request_verification_handler))
+        .route("/auth/verify", get(verify_email_handler))
+        .route("/auth/me", get(auth_me_handler))
         .layer(CompressionLayer::new())
         .layer(cors)
         .with_state(race_manager);
@@ -209,4 +214,178 @@ async fn random_wind_handler() -> Result<impl IntoResponse, AppError> {
         Some(r) => Ok(Json(RandomWindResponse { png_url: r.png_url() })),
         None => Err(AppError::Internal(anyhow::anyhow!("No wind reports available"))),
     }
+}
+
+// ============================================================================
+// Auth Endpoints
+// ============================================================================
+
+#[derive(serde::Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct RequestVerificationBody {
+    email: String,
+    name: Option<String>,
+}
+
+#[derive(serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+struct RequestVerificationResponse {
+    message: String,
+}
+
+async fn request_verification_handler(
+    Json(body): Json<RequestVerificationBody>,
+) -> Result<impl IntoResponse, AppError> {
+    // Validate email format (basic check)
+    if !body.email.contains('@') || body.email.len() < 3 {
+        return Err(AppError::Internal(anyhow::anyhow!("Invalid email address")));
+    }
+
+    // Create verification token
+    let token = db::with_connection(|conn| {
+        players::create_verification_token(conn, &body.email, body.name.as_deref())
+    })?;
+
+    // Send verification email
+    email::send_verification_email(&body.email, &token).await?;
+
+    Ok(Json(RequestVerificationResponse {
+        message: "Verification email sent".to_string(),
+    }))
+}
+
+#[derive(Deserialize)]
+struct VerifyEmailQuery {
+    token: String,
+}
+
+async fn verify_email_handler(
+    Query(query): Query<VerifyEmailQuery>,
+) -> Result<impl IntoResponse, AppError> {
+    let result = db::with_connection(|conn| players::verify_email(conn, &query.token))?;
+
+    match result {
+        Some((auth_token, email)) => {
+            // Return HTML page that stores the auth token and redirects
+            let app_url = &config().app_url;
+            let html = format!(
+                r#"<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <title>Email Verified - Rewind</title>
+  <style>
+    body {{
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      background: #0f172a;
+      color: #e2e8f0;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      min-height: 100vh;
+      margin: 0;
+    }}
+    .container {{
+      text-align: center;
+      padding: 40px;
+    }}
+    h1 {{
+      color: #f59e0b;
+      margin-bottom: 16px;
+    }}
+    p {{
+      color: #94a3b8;
+      margin-bottom: 24px;
+    }}
+    .success {{
+      color: #22c55e;
+      font-size: 48px;
+      margin-bottom: 16px;
+    }}
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="success">&#10003;</div>
+    <h1>Email Verified!</h1>
+    <p>Your email has been verified. Redirecting to Rewind...</p>
+  </div>
+  <script>
+    // Store auth token in localStorage
+    localStorage.setItem('rewind:auth_token', '{auth_token}');
+    localStorage.setItem('rewind:email', '{email}');
+
+    // Redirect to app after a short delay
+    setTimeout(function() {{
+      window.location.href = '{app_url}';
+    }}, 1500);
+  </script>
+</body>
+</html>"#,
+                auth_token = auth_token,
+                email = email,
+                app_url = app_url
+            );
+            Ok(Html(html))
+        }
+        None => {
+            // Return error page
+            let html = r#"<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <title>Verification Failed - Rewind</title>
+  <style>
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      background: #0f172a;
+      color: #e2e8f0;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      min-height: 100vh;
+      margin: 0;
+    }
+    .container {
+      text-align: center;
+      padding: 40px;
+    }
+    h1 {
+      color: #ef4444;
+      margin-bottom: 16px;
+    }
+    p {
+      color: #94a3b8;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h1>Verification Failed</h1>
+    <p>This verification link is invalid or has expired.</p>
+    <p>Please request a new verification email.</p>
+  </div>
+</body>
+</html>"#;
+            Ok(Html(html.to_string()))
+        }
+    }
+}
+
+fn extract_bearer_token(headers: &HeaderMap) -> Option<String> {
+    headers
+        .get(header::AUTHORIZATION)
+        .and_then(|v| v.to_str().ok())
+        .and_then(|v| v.strip_prefix("Bearer "))
+        .map(|s| s.to_string())
+}
+
+async fn auth_me_handler(headers: HeaderMap) -> Result<impl IntoResponse, AppError> {
+    let auth_token = extract_bearer_token(&headers).ok_or(AppError::Unauthorized)?;
+
+    let player = db::with_connection(|conn| players::get_player_by_auth_token(conn, &auth_token))?
+        .ok_or(AppError::Unauthorized)?;
+
+    let info: players::PlayerInfo = player.into();
+    Ok(Json(info))
 }

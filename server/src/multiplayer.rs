@@ -14,6 +14,7 @@ use tokio::sync::{RwLock, mpsc};
 use crate::{
     courses::Course,
     db,
+    players,
     race_results::{self, PathPoint},
     s3,
     wind_reports::{self, WindReport},
@@ -30,12 +31,12 @@ pub enum ClientMessage {
     CreateRace {
         course_key: String,
         player_name: String,
-        persistent_id: String,
+        auth_token: Option<String>, // Present if player is verified
     },
     JoinRace {
         race_id: String,
         player_name: String,
-        persistent_id: String,
+        auth_token: Option<String>, // Present if player is verified
     },
     LeaveRace,
     StartRace,
@@ -138,7 +139,7 @@ pub struct PlayerInfo {
 pub struct Player {
     pub id: String,
     pub name: String,
-    pub persistent_id: String,
+    pub verified_email: Option<String>, // Set if player has valid auth_token
     pub tx: mpsc::UnboundedSender<ServerMessage>,
     pub position: Option<(f64, f64)>, // (lng, lat)
     pub heading: f32,
@@ -309,7 +310,7 @@ impl Race {
             return Some(FinishedPlayer {
                 player_id: player.id.clone(),
                 player_name: player.name.clone(),
-                persistent_id: player.persistent_id.clone(),
+                verified_email: player.verified_email.clone(),
                 finish_time: course_time,
                 path_history: std::mem::take(&mut player.path_history),
             });
@@ -324,7 +325,7 @@ impl Race {
 struct FinishedPlayer {
     player_id: String,
     player_name: String,
-    persistent_id: String,
+    verified_email: Option<String>, // Only save to hall of fame if present
     finish_time: i64,
     path_history: Vec<PathPoint>,
 }
@@ -447,7 +448,7 @@ impl RaceManager {
         course_key: String,
         player_id: String,
         player_name: String,
-        persistent_id: String,
+        auth_token: Option<String>,
         tx: mpsc::UnboundedSender<ServerMessage>,
     ) -> anyhow::Result<(String, Vec<WindRasterSource>)> {
         let course = db::with_connection(|conn| crate::courses::get_by_key(conn, &course_key))?
@@ -456,13 +457,16 @@ impl RaceManager {
         let reports = wind_reports::get_reports_for_course(&course)?;
         let rasters: Vec<WindRasterSource> = reports.iter().map(|r| r.into()).collect();
 
+        // Resolve verified email from auth_token
+        let verified_email = resolve_verified_email(auth_token.as_deref());
+
         let race_id = generate_race_id();
         let mut race = Race::new(course, rasters.clone(), player_id.clone());
 
         let player = Player {
             id: player_id.clone(),
             name: player_name,
-            persistent_id,
+            verified_email,
             tx,
             position: None,
             heading: 0.0,
@@ -487,16 +491,19 @@ impl RaceManager {
         race_id: &str,
         player_id: String,
         player_name: String,
-        persistent_id: String,
+        auth_token: Option<String>,
         tx: mpsc::UnboundedSender<ServerMessage>,
     ) -> anyhow::Result<(Vec<PlayerInfo>, Vec<WindRasterSource>, String, bool)> {
+        // Resolve verified email from auth_token
+        let verified_email = resolve_verified_email(auth_token.as_deref());
+
         let mut races = self.races.write().await;
         let race = races.get_mut(race_id).ok_or(anyhow!("Race not found"))?;
 
         let player = Player {
             id: player_id.clone(),
             name: player_name.clone(),
-            persistent_id,
+            verified_email,
             tx,
             position: None,
             heading: 0.0,
@@ -734,8 +741,30 @@ fn generate_race_id() -> String {
     generate_id()[..6].to_string()
 }
 
+/// Resolve verified email from auth_token
+/// Returns None if token is invalid or not provided
+fn resolve_verified_email(auth_token: Option<&str>) -> Option<String> {
+    let token = auth_token?;
+    db::with_connection(|conn| {
+        Ok(players::get_player_by_auth_token(conn, token)?
+            .map(|p| p.email))
+    })
+    .ok()
+    .flatten()
+}
+
 /// Save a finished player's race result to database and S3
+/// Only saves if the player has a verified email
 async fn save_race_result(course_key: String, race_start_time: i64, finished: FinishedPlayer) {
+    // Only save results for verified players
+    if finished.verified_email.is_none() {
+        log::info!(
+            "Skipping hall of fame save for unverified player: {}",
+            finished.player_name
+        );
+        return;
+    }
+
     let s3_key = format!(
         "paths/{}/{}_{}.bin",
         course_key, race_start_time, finished.player_id
@@ -763,7 +792,7 @@ async fn save_race_result(course_key: String, race_start_time: i64, finished: Fi
             conn,
             &course_key,
             &finished.player_name,
-            &finished.persistent_id,
+            finished.verified_email.as_deref(),
             finished.finish_time,
             race_start_time,
             &s3_key,
@@ -775,8 +804,9 @@ async fn save_race_result(course_key: String, race_start_time: i64, finished: Fi
     }
 
     log::info!(
-        "Saved race result: {} finished {} in {}ms",
+        "Saved race result: {} ({}) finished {} in {}ms",
         finished.player_name,
+        finished.verified_email.as_deref().unwrap_or("anonymous"),
         course_key,
         finished.finish_time
     );
@@ -827,7 +857,7 @@ mod tests {
         Player {
             id: id.to_string(),
             name: name.to_string(),
-            persistent_id: format!("persistent-{id}"),
+            verified_email: None,
             tx,
             position: None,
             heading: 0.0,
@@ -1022,7 +1052,7 @@ mod tests {
                 "vg20".to_string(),
                 "player-1".to_string(),
                 "Alice".to_string(),
-                "persistent-1".to_string(),
+                None, // No auth token
                 tx,
             )
             .await;
@@ -1048,7 +1078,7 @@ mod tests {
                 "vg20".to_string(),
                 "player-1".to_string(),
                 "Alice".to_string(),
-                "persistent-1".to_string(),
+                None,
                 tx1,
             )
             .await
@@ -1056,7 +1086,7 @@ mod tests {
 
         // Join race
         let result = manager
-            .join_race(&race_id, "player-2".to_string(), "Bob".to_string(), "persistent-2".to_string(), tx2)
+            .join_race(&race_id, "player-2".to_string(), "Bob".to_string(), None, tx2)
             .await;
 
         assert!(result.is_ok());
@@ -1073,7 +1103,7 @@ mod tests {
         let (tx, _rx) = mpsc::unbounded_channel();
 
         let result = manager
-            .join_race("AAAAAA", "player-1".to_string(), "Alice".to_string(), "persistent-1".to_string(), tx)
+            .join_race("AAAAAA", "player-1".to_string(), "Alice".to_string(), None, tx)
             .await;
 
         assert!(result.is_err());
@@ -1093,7 +1123,7 @@ mod tests {
                 "vg20".to_string(),
                 "player-1".to_string(),
                 "Alice".to_string(),
-                "persistent-1".to_string(),
+                None,
                 tx,
             )
             .await
@@ -1118,7 +1148,7 @@ mod tests {
                 "vg20".to_string(),
                 "player-1".to_string(),
                 "Alice".to_string(),
-                "persistent-1".to_string(),
+                None,
                 tx1,
             )
             .await
@@ -1129,7 +1159,7 @@ mod tests {
                 "vg20".to_string(),
                 "player-2".to_string(),
                 "Bob".to_string(),
-                "persistent-2".to_string(),
+                None,
                 tx2,
             )
             .await
@@ -1150,7 +1180,7 @@ mod tests {
                 "vg20".to_string(),
                 "player-1".to_string(),
                 "Alice".to_string(),
-                "persistent-1".to_string(),
+                None,
                 tx,
             )
             .await
@@ -1223,10 +1253,10 @@ async fn handle_client_message(
         ClientMessage::CreateRace {
             course_key,
             player_name,
-            persistent_id,
+            auth_token,
         } => {
             match manager
-                .create_race(course_key, player_id.to_string(), player_name, persistent_id, tx.clone())
+                .create_race(course_key, player_id.to_string(), player_name, auth_token, tx.clone())
                 .await
             {
                 Ok((race_id, rasters)) => {
@@ -1244,10 +1274,10 @@ async fn handle_client_message(
         ClientMessage::JoinRace {
             race_id,
             player_name,
-            persistent_id,
+            auth_token,
         } => {
             match manager
-                .join_race(&race_id, player_id.to_string(), player_name, persistent_id, tx.clone())
+                .join_race(&race_id, player_id.to_string(), player_name, auth_token, tx.clone())
                 .await
             {
                 Ok((players, rasters, course_key, is_creator)) => {

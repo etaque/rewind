@@ -44,6 +44,10 @@ pub struct Config {
     pub s3: S3Config,
     pub db_path: String,
     pub editor_password: String,
+    // Email verification settings
+    pub resend_api_key: String,
+    pub email_from: String,
+    pub app_url: String,
 }
 
 pub static CONFIG: Lazy<Config> = Lazy::new(|| {
@@ -67,7 +71,16 @@ pub static CONFIG: Lazy<Config> = Lazy::new(|| {
     let editor_password =
         env::var("REWIND_EDITOR_PASSWORD").unwrap_or_default();
 
-    Config { s3, db_path, editor_password }
+    let resend_api_key =
+        env::var("REWIND_RESEND_API_KEY").unwrap_or_default();
+
+    let email_from =
+        env::var("REWIND_EMAIL_FROM").unwrap_or_else(|_| "noreply@rewind.game".to_string());
+
+    let app_url =
+        env::var("REWIND_APP_URL").unwrap_or_else(|_| "http://localhost:3000".to_string());
+
+    Config { s3, db_path, editor_password, resend_api_key, email_from, app_url }
 });
 
 pub fn config() -> &'static Config {

@@ -80,12 +80,12 @@ export class MultiplayerClient {
     await this.signaling.connect();
   }
 
-  createRace(courseKey: string, playerName: string, persistentId: string) {
-    this.signaling.createRace(courseKey, playerName, persistentId);
+  createRace(courseKey: string, playerName: string) {
+    this.signaling.createRace(courseKey, playerName);
   }
 
-  joinRace(raceId: string, playerName: string, persistentId: string) {
-    this.signaling.joinRace(raceId, playerName, persistentId);
+  joinRace(raceId: string, playerName: string) {
+    this.signaling.joinRace(raceId, playerName);
   }
 
   leaveRace() {

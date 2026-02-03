@@ -1,4 +1,6 @@
 import { useState, useEffect } from "react";
+import EmailVerification from "./EmailVerification";
+import { isVerified } from "./auth";
 
 const serverUrl = import.meta.env.REWIND_SERVER_URL;
 
@@ -6,6 +8,7 @@ export type HallOfFameEntry = {
   id: number;
   rank: number;
   playerName: string;
+  email: string | null;
   finishTime: number;
   raceDate: number;
 };
@@ -14,15 +17,18 @@ type Props = {
   courseKey: string;
   activeGhostIds: Set<number>;
   onAddGhost: (entryId: number, playerName: string) => void;
+  playerName?: string;
 };
 
 export default function HallOfFameList({
   courseKey,
   activeGhostIds,
   onAddGhost,
+  playerName,
 }: Props) {
   const [entries, setEntries] = useState<HallOfFameEntry[]>([]);
   const [loading, setLoading] = useState(false);
+  const verified = isVerified();
 
   useEffect(() => {
     const fetchLeaderboard = async () => {
@@ -64,6 +70,15 @@ export default function HallOfFameList({
   return (
     <div className="space-y-4">
       <h2 className="text-amber-400 font-semibold">Hall of Fame</h2>
+
+      {/* Email verification section */}
+      <EmailVerification playerName={playerName} />
+
+      {!verified && (
+        <p className="text-slate-500 text-xs italic">
+          Verify your email above to have your results saved.
+        </p>
+      )}
 
       {loading ? (
         <div className="text-slate-400 text-sm py-4">Loading...</div>
