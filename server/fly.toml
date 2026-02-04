@@ -9,7 +9,14 @@ primary_region = 'cdg'
 [build]
 
 [env]
-  REWIND_DB_PATH = "/data/rewind.db"
+  REWIND_DATABASE_URL = "sqlite:/data/rewind.db?mode=rwc"
+  REWIND_SERVER_ADDRESS = "0.0.0.0:8080"
+  REWIND_S3_GRIB_BUCKET = "rewind-gribs"
+  REWIND_S3_RASTER_BUCKET = "rewind-wind-rasters"
+  REWIND_S3_PATHS_BUCKET = "rewind-race-paths"
+  REWIND_S3_ENDPOINT = "https://s3.eu-west-3.amazonaws.com"
+  REWIND_S3_REGION = "eu-west-3"
+  REWIND_EMAIL_FROM = "rewind@milox.dev"
 
 [mounts]
   source = "rewind_data"
