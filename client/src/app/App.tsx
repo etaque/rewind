@@ -263,91 +263,93 @@ export default function App() {
     ],
   );
 
-  if (view === "editor") {
-    if (!editorAccount) {
-      return (
-        <div className="fixed inset-0 flex items-center justify-center bg-slate-950">
-          <div className="bg-slate-900 border border-slate-800 rounded-lg p-6 w-80 text-center">
-            <p className="text-slate-300 mb-4">Please sign in to access the editor.</p>
-            <button
-              onClick={handleCloseEditor}
-              className="text-sm text-slate-400 hover:text-white py-2 px-4 border border-slate-700 rounded transition-all"
-            >
-              Back
-            </button>
-          </div>
-        </div>
-      );
-    }
-    return (
-      <CourseEditor
-        account={editorAccount}
-        onBack={handleCloseEditor}
-        onUnauthorized={handleCloseEditor}
-      />
-    );
-  }
+  const inEditor = view === "editor";
 
   return (
     <>
-      <div ref={sphereNodeRef} id="sphere" className="fixed inset-0" />
-      <div id="app" className="fixed inset-0 z-10 pointer-events-none">
-        {(state.tag === "Idle" || state.tag === "Lobby") &&
-          courses.length > 0 && (
-            <div className="pointer-events-auto">
-              <RaceContext.Provider value={raceContextValue}>
-                <RaceChoiceScreen />
-              </RaceContext.Provider>
+      <div ref={sphereNodeRef} id="sphere" className={`fixed inset-0 ${inEditor ? "invisible" : ""}`} />
+      {inEditor && (
+        editorAccount ? (
+          <CourseEditor
+            account={editorAccount}
+            onBack={handleCloseEditor}
+            onUnauthorized={handleCloseEditor}
+          />
+        ) : (
+          <div className="fixed inset-0 flex items-center justify-center bg-slate-950">
+            <div className="bg-slate-900 border border-slate-800 rounded-lg p-6 w-80 text-center">
+              <p className="text-slate-300 mb-4">Please sign in to access the editor.</p>
+              <button
+                onClick={handleCloseEditor}
+                className="text-sm text-slate-400 hover:text-white py-2 px-4 border border-slate-700 rounded transition-all"
+              >
+                Back
+              </button>
             </div>
-          )}
-        {state.tag === "Countdown" && (
-          <>
-            <div className="fixed bottom-16 inset-x-0 flex justify-center pointer-events-none">
-              <CountdownDisplay countdown={state.countdown} />
-            </div>
-            <button
-              onClick={handleQuitClick}
-              className="fixed bottom-4 left-4 px-4 py-2 text-slate-400 hover:text-white text-sm transition-all pointer-events-auto"
-            >
-              Cancel
-            </button>
-          </>
-        )}
-        {state.tag === "Playing" && (
-          <>
-            <Hud session={state.session} />
-            <KeyBindings />
-            <Leaderboard
-              entries={state.leaderboard}
-              myPlayerId={state.race.myPlayerId}
-              courseStartTime={state.session.course.startTime}
-              onQuit={handleQuitClick}
-            />
-            <PolarDiagram
-              polar={state.session.polar}
-              tws={getWindSpeedKnots(state.session.windSpeed)}
-              twa={calculateTWA(
-                state.session.heading,
-                getWindDirection(state.session.windSpeed),
+          </div>
+        )
+      )}
+      {!inEditor && (
+        <>
+          <div id="app" className="fixed inset-0 z-10 pointer-events-none">
+            {(state.tag === "Idle" || state.tag === "Lobby") &&
+              courses.length > 0 && (
+                <div className="pointer-events-auto">
+                  <RaceContext.Provider value={raceContextValue}>
+                    <RaceChoiceScreen />
+                  </RaceContext.Provider>
+                </div>
               )}
-              bsp={state.session.boatSpeed}
-              vmgBad={vmgBad}
-              twaLocked={state.session.lockedTWA !== null}
-            />
-            {state.session.finishTime !== null && (
-              <FinishOverlay
-                finishTime={state.session.finishTime}
-                courseStartTime={state.session.course.startTime}
-                onBack={handleQuitRace}
-              />
+            {state.tag === "Countdown" && (
+              <>
+                <div className="fixed bottom-16 inset-x-0 flex justify-center pointer-events-none">
+                  <CountdownDisplay countdown={state.countdown} />
+                </div>
+                <button
+                  onClick={handleQuitClick}
+                  className="fixed bottom-4 left-4 px-4 py-2 text-slate-400 hover:text-white text-sm transition-all pointer-events-auto"
+                >
+                  Cancel
+                </button>
+              </>
             )}
-          </>
-        )}
-      </div>
-      <CursorWind
-        sphereView={sphereViewRef.current}
-        courseTime={session?.courseTime ?? 0}
-      />
+            {state.tag === "Playing" && (
+              <>
+                <Hud session={state.session} />
+                <KeyBindings />
+                <Leaderboard
+                  entries={state.leaderboard}
+                  myPlayerId={state.race.myPlayerId}
+                  courseStartTime={state.session.course.startTime}
+                  onQuit={handleQuitClick}
+                />
+                <PolarDiagram
+                  polar={state.session.polar}
+                  tws={getWindSpeedKnots(state.session.windSpeed)}
+                  twa={calculateTWA(
+                    state.session.heading,
+                    getWindDirection(state.session.windSpeed),
+                  )}
+                  bsp={state.session.boatSpeed}
+                  vmgBad={vmgBad}
+                  twaLocked={state.session.lockedTWA !== null}
+                />
+                {state.session.finishTime !== null && (
+                  <FinishOverlay
+                    finishTime={state.session.finishTime}
+                    courseStartTime={state.session.course.startTime}
+                    onBack={handleQuitRace}
+                  />
+                )}
+              </>
+            )}
+          </div>
+          <CursorWind
+            sphereView={sphereViewRef.current}
+            courseTime={session?.courseTime ?? 0}
+          />
+        </>
+      )}
       {showQuitConfirm && (
         <div className="fixed inset-0 flex items-center justify-center bg-black bg-opacity-50 z-50 pointer-events-auto">
           <div className="bg-slate-900 rounded-lg p-6 max-w-sm w-full mx-4">
