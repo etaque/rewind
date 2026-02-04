@@ -623,7 +623,7 @@ impl RaceManager {
         };
         drop(player_races);
 
-        let finished_to_save: Option<(String, i64, FinishedPlayer)> = {
+        let finished_to_save: Option<(String, i64, i64, FinishedPlayer)> = {
             let mut races = self.races.write().await;
             let Some(race) = races.get_mut(&race_id) else {
                 return;
@@ -632,6 +632,7 @@ impl RaceManager {
             if let Some(finished) = race.record_gate_crossing(player_id, gate_index, course_time) {
                 Some((
                     race.course.key.clone(),
+                    race.race_start_time.expect("race must be started"),
                     race.course.start_time,
                     finished,
                 ))
@@ -641,8 +642,13 @@ impl RaceManager {
         };
 
         // Save finished player outside the lock
-        if let Some((course_key, race_start_time, finished)) = finished_to_save {
-            tokio::spawn(save_race_result(course_key, race_start_time, finished));
+        if let Some((course_key, race_start_time, course_start_time, finished)) = finished_to_save {
+            tokio::spawn(save_race_result(
+                course_key,
+                race_start_time,
+                course_start_time,
+                finished,
+            ));
         }
     }
 
@@ -735,7 +741,12 @@ fn generate_race_id() -> String {
 }
 
 /// Save a finished player's race result to database and S3
-async fn save_race_result(course_key: String, race_start_time: i64, finished: FinishedPlayer) {
+async fn save_race_result(
+    course_key: String,
+    race_start_time: i64,
+    course_start_time: i64,
+    finished: FinishedPlayer,
+) {
     let s3_key = format!(
         "paths/{}/{}_{}.bin",
         course_key, race_start_time, finished.player_id
@@ -757,12 +768,15 @@ async fn save_race_result(course_key: String, race_start_time: i64, finished: Fi
         return;
     }
 
+    // Calculate race duration (simulated elapsed time)
+    let race_duration = finished.finish_time - course_start_time;
+
     // Save to database
     if let Err(e) = race_results::save_result(
         &course_key,
         &finished.player_name,
         &finished.persistent_id,
-        finished.finish_time,
+        race_duration,
         race_start_time,
         &s3_key,
     )
@@ -776,7 +790,7 @@ async fn save_race_result(course_key: String, race_start_time: i64, finished: Fi
         "Saved race result: {} finished {} in {}ms",
         finished.player_name,
         course_key,
-        finished.finish_time
+        race_duration
     );
 }
 

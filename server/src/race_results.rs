@@ -71,7 +71,7 @@ pub async fn get_leaderboard(course_key: &str, limit: u32) -> Result<Vec<HallOfF
                 rank: (i + 1) as u32,
                 player_name,
                 player_id,
-                finish_time: finish_time - race_start_time, // Convert to elapsed duration
+                finish_time, // Already stored as duration
                 race_date: race_start_time,
             },
         )
