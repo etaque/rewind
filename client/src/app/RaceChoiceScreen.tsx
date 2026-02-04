@@ -1,8 +1,17 @@
-import { useState, useEffect, useMemo } from "react";
+import { useState, useEffect, useMemo, useCallback } from "react";
 import { RaceInfo } from "./race";
 import { useRaceContext } from "./race-context";
 import { generateNickname } from "./nickname";
 import { getOrCreatePlayerId } from "./player-id";
+import {
+  Account,
+  loadAccount,
+  saveAccount,
+  getActiveProfile,
+} from "./account";
+import AuthModal from "./AuthModal";
+import ProfileSwitcher from "./ProfileSwitcher";
+import ProfileManager from "./ProfileManager";
 
 const PLAYER_NAME_KEY = "rewind:player_name";
 const serverUrl = import.meta.env.REWIND_SERVER_URL;
@@ -34,10 +43,29 @@ export default function RaceChoiceScreen() {
     addGhost,
     removeGhost,
   } = useRaceContext();
-  const [playerName, setPlayerName] = useState("");
+
+  // Account state
+  const [account, setAccount] = useState<Account | null>(() => loadAccount());
+  const [showAuthModal, setShowAuthModal] = useState(false);
+  const [showProfileManager, setShowProfileManager] = useState(false);
+
+  // Player name for guests (accounts use profile name)
+  const [guestPlayerName, setGuestPlayerName] = useState("");
+
   const [availableRaces, setAvailableRaces] = useState<RaceInfo[]>([]);
   const [hallOfFame, setHallOfFame] = useState<HallOfFameEntry[]>([]);
-  const myPersistentId = useMemo(() => getOrCreatePlayerId(), []);
+
+  // Get current player ID (from account or guest mode)
+  const myPersistentId = useMemo(() => getOrCreatePlayerId(), [account]);
+
+  // Get current player name (from active profile or guest name)
+  const playerName = useMemo(() => {
+    if (account) {
+      const profile = getActiveProfile(account);
+      return profile?.name ?? "";
+    }
+    return guestPlayerName;
+  }, [account, guestPlayerName]);
 
   const playerList = Array.from(players.values());
   const ghostList = Array.from(recordedGhosts.values());
@@ -46,17 +74,19 @@ export default function RaceChoiceScreen() {
 
   const selectedCourse = courses.find((c) => c.key === selectedCourseKey);
 
-  // Load player name from localStorage on mount, or generate a random nickname
+  // Load guest player name from localStorage on mount
   useEffect(() => {
-    const savedName = localStorage.getItem(PLAYER_NAME_KEY);
-    if (savedName) {
-      setPlayerName(savedName);
-    } else {
-      const nickname = generateNickname();
-      setPlayerName(nickname);
-      localStorage.setItem(PLAYER_NAME_KEY, nickname);
+    if (!account) {
+      const savedName = localStorage.getItem(PLAYER_NAME_KEY);
+      if (savedName) {
+        setGuestPlayerName(savedName);
+      } else {
+        const nickname = generateNickname();
+        setGuestPlayerName(nickname);
+        localStorage.setItem(PLAYER_NAME_KEY, nickname);
+      }
     }
-  }, []);
+  }, [account]);
 
   // Fetch available races periodically
   useEffect(() => {
@@ -100,35 +130,51 @@ export default function RaceChoiceScreen() {
     fetchHallOfFame();
   }, [selectedCourseKey]);
 
-  const handlePlayerNameChange = (newName: string) => {
-    setPlayerName(newName);
+  const handleGuestPlayerNameChange = (newName: string) => {
+    setGuestPlayerName(newName);
     localStorage.setItem(PLAYER_NAME_KEY, newName);
   };
 
-  const handlePlayerNameBlur = () => {
-    if (!playerName.trim()) {
+  const handleGuestPlayerNameBlur = () => {
+    if (!guestPlayerName.trim()) {
       const name = generateNickname();
-      setPlayerName(name);
+      setGuestPlayerName(name);
       localStorage.setItem(PLAYER_NAME_KEY, name);
     }
   };
 
-  const getPlayerName = () => {
-    let name = playerName.trim();
+  const getPlayerNameForRace = useCallback(() => {
+    if (account) {
+      const profile = getActiveProfile(account);
+      return profile?.name ?? "Player";
+    }
+    let name = guestPlayerName.trim();
     if (!name) {
       name = generateNickname();
-      setPlayerName(name);
+      setGuestPlayerName(name);
     }
     localStorage.setItem(PLAYER_NAME_KEY, name);
     return name;
-  };
+  }, [account, guestPlayerName]);
 
   const handleJoinRace = (targetRaceId: string) => {
-    joinRace(targetRaceId, getPlayerName());
+    joinRace(targetRaceId, getPlayerNameForRace());
   };
 
   const handleCreateRace = () => {
-    createRace(getPlayerName());
+    createRace(getPlayerNameForRace());
+  };
+
+  const handleAuthSuccess = (newAccount: Account) => {
+    setAccount(newAccount);
+    setShowAuthModal(false);
+  };
+
+  const handleAccountChange = (newAccount: Account | null) => {
+    setAccount(newAccount);
+    if (newAccount) {
+      saveAccount(newAccount);
+    }
   };
 
   const formatTime = (ms: number) => {
@@ -149,22 +195,53 @@ export default function RaceChoiceScreen() {
       <h1 className="logo mb-6">Re:wind</h1>
 
       <div className="bg-slate-900 bg-opacity-80 rounded-xl p-8 w-full max-w-3xl mx-4 flex gap-8">
-        {/* Left column - Player name, Courses, Open Races */}
+        {/* Left column - Player/Profile, Courses, Open Races */}
         <div className="flex-1 space-y-5">
-          {/* Player name */}
+          {/* Player identity section */}
           <div>
-            <h2 className="text-slate-400 text-xs uppercase tracking-wide mb-2">
-              Player Name
-            </h2>
-            <input
-              type="text"
-              value={playerName}
-              onChange={(e) => handlePlayerNameChange(e.target.value)}
-              onBlur={handlePlayerNameBlur}
-              placeholder="Your name"
-              maxLength={20}
-              className="w-full bg-slate-800 text-white px-3 py-2 rounded-lg border border-slate-700 focus:border-blue-500 focus:outline-none"
-            />
+            <div className="flex items-center justify-between mb-2">
+              <h2 className="text-slate-400 text-xs uppercase tracking-wide">
+                {account ? "Profile" : "Player Name"}
+              </h2>
+              {!account && (
+                <button
+                  onClick={() => setShowAuthModal(true)}
+                  className="text-xs text-blue-400 hover:text-blue-300 transition-all"
+                >
+                  Sign In
+                </button>
+              )}
+            </div>
+
+            {account ? (
+              <ProfileSwitcher
+                account={account}
+                onAccountChange={handleAccountChange}
+                onManageProfiles={() => setShowProfileManager(true)}
+              />
+            ) : (
+              <input
+                type="text"
+                value={guestPlayerName}
+                onChange={(e) => handleGuestPlayerNameChange(e.target.value)}
+                onBlur={handleGuestPlayerNameBlur}
+                placeholder="Your name"
+                maxLength={20}
+                className="w-full bg-slate-800 text-white px-3 py-2 rounded-lg border border-slate-700 focus:border-blue-500 focus:outline-none"
+              />
+            )}
+
+            {!account && (
+              <p className="text-slate-500 text-xs mt-2">
+                <button
+                  onClick={() => setShowAuthModal(true)}
+                  className="text-blue-400 hover:text-blue-300"
+                >
+                  Sign in
+                </button>{" "}
+                to save profiles across devices
+              </p>
+            )}
           </div>
 
           {/* Courses */}
@@ -343,7 +420,7 @@ export default function RaceChoiceScreen() {
                   <div className="px-4 py-2 flex items-center justify-between">
                     <div className="flex items-center gap-2">
                       <span className="w-2 h-2 rounded-full bg-cyan-400" />
-                      <span className="text-white">You</span>
+                      <span className="text-white">{playerName || "You"}</span>
                     </div>
                     {isCreator && (
                       <span className="text-xs bg-blue-500/20 text-blue-400 px-2 py-0.5 rounded">
@@ -488,6 +565,23 @@ export default function RaceChoiceScreen() {
           )}
         </div>
       </div>
+
+      {/* Auth Modal */}
+      {showAuthModal && (
+        <AuthModal
+          onClose={() => setShowAuthModal(false)}
+          onSuccess={handleAuthSuccess}
+        />
+      )}
+
+      {/* Profile Manager Modal */}
+      {showProfileManager && account && (
+        <ProfileManager
+          account={account}
+          onAccountChange={handleAccountChange}
+          onClose={() => setShowProfileManager(false)}
+        />
+      )}
     </div>
   );
 }

@@ -1,9 +1,9 @@
 use axum::{
     Json, Router,
     extract::{Path, Query, State, ws::WebSocketUpgrade},
-    http::{HeaderMap, Method, StatusCode},
+    http::{header, HeaderMap, Method, StatusCode},
     response::{IntoResponse, Response},
-    routing::{any, get, put},
+    routing::{any, get, post, put},
 };
 use bytes::Bytes;
 use object_store::ObjectStoreExt;
@@ -12,10 +12,9 @@ use serde::Deserialize;
 use tower_http::{compression::CompressionLayer, cors::CorsLayer};
 
 use crate::{
-    config::config,
-    courses,
+    auth, config::config, courses,
     multiplayer::{RaceManager, handle_websocket},
-    race_results, wind_reports,
+    profiles, race_results, wind_reports,
 };
 
 use super::s3;
@@ -68,6 +67,11 @@ async fn websocket_handler(
 }
 
 pub async fn run(address: std::net::SocketAddr) {
+    // Clean up expired sessions and verification codes on startup
+    if let Err(e) = auth::cleanup_expired().await {
+        log::warn!("Failed to clean up expired auth data: {}", e);
+    }
+
     let race_manager = RaceManager::new();
 
     let cors = CorsLayer::new()
@@ -75,6 +79,7 @@ pub async fn run(address: std::net::SocketAddr) {
         .allow_methods([Method::GET, Method::POST, Method::PUT, Method::DELETE])
         .allow_headers([
             axum::http::header::CONTENT_TYPE,
+            axum::http::header::AUTHORIZATION,
             axum::http::header::HeaderName::from_static("x-editor-password"),
         ]);
 
@@ -91,6 +96,13 @@ pub async fn run(address: std::net::SocketAddr) {
         .route("/multiplayer/race", any(websocket_handler))
         .route("/leaderboard/{course_key}", get(leaderboard_handler))
         .route("/replay/{result_id}", get(replay_handler))
+        // Auth routes
+        .route("/auth/start", post(start_auth_handler))
+        .route("/auth/verify", post(verify_auth_handler))
+        .route("/auth/logout", post(logout_handler))
+        // Profile routes (requires auth)
+        .route("/account/profiles", get(list_profiles_handler).post(create_profile_handler))
+        .route("/account/profiles/{id}", put(update_profile_handler).delete(delete_profile_handler))
         .layer(CompressionLayer::new())
         .layer(cors)
         .with_state(race_manager);
@@ -208,4 +220,81 @@ async fn random_wind_handler() -> Result<impl IntoResponse, AppError> {
         Some(r) => Ok(Json(RandomWindResponse { png_url: r.png_url() })),
         None => Err(AppError::Internal(anyhow::anyhow!("No wind reports available"))),
     }
+}
+
+// ===== Auth handlers =====
+
+async fn start_auth_handler(
+    Json(request): Json<auth::StartAuthRequest>,
+) -> Result<impl IntoResponse, AppError> {
+    auth::start_auth(&request.email).await?;
+    Ok(StatusCode::OK)
+}
+
+async fn verify_auth_handler(
+    Json(request): Json<auth::VerifyAuthRequest>,
+) -> Result<impl IntoResponse, AppError> {
+    let result = auth::verify_auth(&request.email, &request.code).await?;
+    Ok(Json(result))
+}
+
+async fn logout_handler(headers: HeaderMap) -> Result<impl IntoResponse, AppError> {
+    if let Some(token) = extract_session_token(&headers) {
+        auth::logout(&token).await?;
+    }
+    Ok(StatusCode::OK)
+}
+
+/// Extract session token from Authorization header (Bearer token).
+fn extract_session_token(headers: &HeaderMap) -> Option<String> {
+    headers
+        .get(header::AUTHORIZATION)
+        .and_then(|v| v.to_str().ok())
+        .and_then(|v| v.strip_prefix("Bearer "))
+        .map(|s| s.to_string())
+}
+
+/// Validate session and return account ID, or return 401 Unauthorized.
+async fn require_auth(headers: &HeaderMap) -> Result<String, AppError> {
+    let token = extract_session_token(headers).ok_or(AppError::Unauthorized)?;
+    let account_id = auth::validate_session(&token)
+        .await?
+        .ok_or(AppError::Unauthorized)?;
+    Ok(account_id)
+}
+
+// ===== Profile handlers =====
+
+async fn list_profiles_handler(headers: HeaderMap) -> Result<impl IntoResponse, AppError> {
+    let account_id = require_auth(&headers).await?;
+    let profiles = profiles::list_profiles(&account_id).await?;
+    Ok(Json(profiles))
+}
+
+async fn create_profile_handler(
+    headers: HeaderMap,
+    Json(request): Json<profiles::CreateProfileRequest>,
+) -> Result<impl IntoResponse, AppError> {
+    let account_id = require_auth(&headers).await?;
+    let profile = profiles::create_profile(&account_id, &request.name).await?;
+    Ok((StatusCode::CREATED, Json(profile)))
+}
+
+async fn update_profile_handler(
+    headers: HeaderMap,
+    Path(profile_id): Path<String>,
+    Json(request): Json<profiles::UpdateProfileRequest>,
+) -> Result<impl IntoResponse, AppError> {
+    let account_id = require_auth(&headers).await?;
+    let profile = profiles::update_profile(&account_id, &profile_id, &request.name).await?;
+    Ok(Json(profile))
+}
+
+async fn delete_profile_handler(
+    headers: HeaderMap,
+    Path(profile_id): Path<String>,
+) -> Result<impl IntoResponse, AppError> {
+    let account_id = require_auth(&headers).await?;
+    profiles::delete_profile(&account_id, &profile_id).await?;
+    Ok(StatusCode::OK)
 }

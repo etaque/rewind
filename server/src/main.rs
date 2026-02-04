@@ -2,15 +2,18 @@ use chrono::Utc;
 use clap::Parser;
 use cli::{Cli, Command};
 
+mod auth;
 mod cli;
 mod config;
 mod courses;
 mod db;
+mod email;
 mod grib_png;
 mod grib_store;
 mod grib_stream;
 mod multiplayer;
 mod ncar_source;
+mod profiles;
 mod race_results;
 mod retry;
 mod s3;

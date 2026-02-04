@@ -44,6 +44,8 @@ pub struct Config {
     pub s3: S3Config,
     pub database_url: String,
     pub editor_password: String,
+    pub resend_api_key: String,
+    pub email_from: String,
 }
 
 pub static CONFIG: Lazy<Config> = Lazy::new(|| {
@@ -67,7 +69,13 @@ pub static CONFIG: Lazy<Config> = Lazy::new(|| {
     let editor_password =
         env::var("REWIND_EDITOR_PASSWORD").unwrap_or_default();
 
-    Config { s3, database_url, editor_password }
+    let resend_api_key =
+        env::var("REWIND_RESEND_API_KEY").unwrap_or_default();
+
+    let email_from =
+        env::var("REWIND_EMAIL_FROM").unwrap_or_else(|_| "Re:wind <rewind@milox.dev>".to_string());
+
+    Config { s3, database_url, editor_password, resend_api_key, email_from }
 });
 
 pub fn config() -> &'static Config {
