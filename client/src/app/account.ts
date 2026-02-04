@@ -11,6 +11,7 @@ export type Account = {
   sessionToken: string;
   profiles: Profile[];
   activeProfileId: string;
+  isAdmin: boolean;
 };
 
 // ===== Local Storage =====
@@ -75,6 +76,7 @@ type VerifyAuthResponse = {
   accountId: string;
   sessionToken: string;
   profiles: Profile[];
+  isAdmin: boolean;
 };
 
 export async function verifyAuth(
@@ -98,6 +100,7 @@ export async function verifyAuth(
     sessionToken: data.sessionToken,
     profiles: data.profiles,
     activeProfileId: data.profiles[0]?.id ?? "",
+    isAdmin: data.isAdmin,
   };
 
   saveAccount(account);
@@ -114,6 +117,25 @@ export async function logout(account: Account): Promise<void> {
     // Ignore errors - we're logging out anyway
   }
   clearAccount();
+}
+
+export async function refreshAccount(account: Account): Promise<Account | null> {
+  try {
+    const res = await fetch(`${serverUrl}/account/me`, {
+      headers: { Authorization: `Bearer ${account.sessionToken}` },
+    });
+    if (!res.ok) {
+      clearAccount();
+      return null;
+    }
+    const data: { isAdmin: boolean } = await res.json();
+    const updated = { ...account, isAdmin: data.isAdmin };
+    saveAccount(updated);
+    return updated;
+  } catch {
+    // Network error - keep existing account
+    return account;
+  }
 }
 
 // ===== Profile API =====

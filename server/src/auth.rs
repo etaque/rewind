@@ -2,7 +2,7 @@ use anyhow::Result;
 use rand::Rng;
 use serde::{Deserialize, Serialize};
 
-use crate::{db, email};
+use crate::{config::config, db, email};
 
 const CODE_EXPIRATION_MS: i64 = 10 * 60 * 1000; // 10 minutes
 const SESSION_DURATION_MS: i64 = 30 * 24 * 60 * 60 * 1000; // 30 days
@@ -60,6 +60,7 @@ pub struct AuthResult {
     pub account_id: String,
     pub session_token: String,
     pub profiles: Vec<Profile>,
+    pub is_admin: bool,
 }
 
 /// Verify a code and create a session. Creates the account if it doesn't exist.
@@ -111,10 +112,15 @@ pub async fn verify_auth(email: &str, code: &str) -> Result<AuthResult> {
     // Get profiles
     let profiles = get_profiles_for_account(&account_id).await?;
 
+    // Check if this is an admin account
+    let admin_email = &config().admin_email;
+    let is_admin = !admin_email.is_empty() && email.to_lowercase() == admin_email.to_lowercase();
+
     Ok(AuthResult {
         account_id,
         session_token,
         profiles,
+        is_admin,
     })
 }
 
@@ -167,6 +173,18 @@ async fn get_profiles_for_account(account_id: &str) -> Result<Vec<Profile>> {
         .into_iter()
         .map(|(id, name)| Profile { id, name })
         .collect())
+}
+
+/// Get the email address for an account.
+pub async fn get_account_email(account_id: &str) -> Result<Option<String>> {
+    let row: Option<(String,)> = sqlx::query_as(
+        "SELECT email FROM accounts WHERE id = ?",
+    )
+    .bind(account_id)
+    .fetch_optional(db::pool())
+    .await?;
+
+    Ok(row.map(|(email,)| email))
 }
 
 /// Validate a session token and return the account ID if valid.

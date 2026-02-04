@@ -8,6 +8,7 @@ import {
   loadAccount,
   saveAccount,
   getActiveProfile,
+  refreshAccount,
 } from "./account";
 import AuthModal from "./AuthModal";
 import ProfileSwitcher from "./ProfileSwitcher";
@@ -87,6 +88,17 @@ export default function RaceChoiceScreen() {
       }
     }
   }, [account]);
+
+  // Refresh account on mount to validate session and update admin status
+  useEffect(() => {
+    if (account) {
+      refreshAccount(account).then((updated) => {
+        if (updated !== account) {
+          setAccount(updated);
+        }
+      });
+    }
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Fetch available races periodically
   useEffect(() => {
@@ -250,12 +262,14 @@ export default function RaceChoiceScreen() {
               <h2 className="text-slate-400 text-xs uppercase tracking-wide">
                 Courses
               </h2>
-              <button
-                onClick={openEditor}
-                className="text-xs text-slate-500 hover:text-slate-300 transition-all"
-              >
-                Edit Courses
-              </button>
+              {account?.isAdmin && (
+                <button
+                  onClick={openEditor}
+                  className="text-xs text-slate-500 hover:text-slate-300 transition-all"
+                >
+                  Edit Courses
+                </button>
+              )}
             </div>
             <div className="bg-slate-800 rounded-lg divide-y divide-slate-700 max-h-48 overflow-y-auto">
               {courses.map((course) => (

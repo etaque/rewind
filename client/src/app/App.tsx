@@ -6,6 +6,7 @@ import Leaderboard from "./Leaderboard";
 import PolarDiagram from "./PolarDiagram";
 import RaceChoiceScreen from "./RaceChoiceScreen";
 import CourseEditor from "./CourseEditor";
+import { loadAccount, type Account } from "./account";
 import {
   useKeyboardControls,
   useGameLoop,
@@ -34,6 +35,7 @@ export default function App() {
   const [view, setView] = useState<View>("race");
   const [state, dispatch] = useReducer(appReducer, initialState);
   const [showQuitConfirm, setShowQuitConfirm] = useState(false);
+  const [editorAccount, setEditorAccount] = useState<Account | null>(null);
 
   // Courses management
   const {
@@ -216,6 +218,8 @@ export default function App() {
   }, [state.tag === "Countdown" ? state.countdown : false]);
 
   const handleOpenEditor = useCallback(() => {
+    const account = loadAccount();
+    setEditorAccount(account);
     setView("editor");
   }, []);
 
@@ -260,7 +264,28 @@ export default function App() {
   );
 
   if (view === "editor") {
-    return <CourseEditor onBack={handleCloseEditor} />;
+    if (!editorAccount) {
+      return (
+        <div className="fixed inset-0 flex items-center justify-center bg-slate-950">
+          <div className="bg-slate-900 border border-slate-800 rounded-lg p-6 w-80 text-center">
+            <p className="text-slate-300 mb-4">Please sign in to access the editor.</p>
+            <button
+              onClick={handleCloseEditor}
+              className="text-sm text-slate-400 hover:text-white py-2 px-4 border border-slate-700 rounded transition-all"
+            >
+              Back
+            </button>
+          </div>
+        </div>
+      );
+    }
+    return (
+      <CourseEditor
+        account={editorAccount}
+        onBack={handleCloseEditor}
+        onUnauthorized={handleCloseEditor}
+      />
+    );
   }
 
   return (

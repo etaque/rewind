@@ -19,14 +19,23 @@ use crate::{
 
 use super::s3;
 
-fn check_editor_password(headers: &HeaderMap) -> Result<(), AppError> {
-    let password = &config().editor_password;
-    if password.is_empty() {
+/// Check if the request is from an admin user.
+/// Requires a valid session token for an account with the admin email.
+async fn check_admin(headers: &HeaderMap) -> Result<(), AppError> {
+    let admin_email = &config().admin_email;
+    if admin_email.is_empty() {
         return Err(AppError::Unauthorized);
     }
-    match headers.get("X-Editor-Password").and_then(|v| v.to_str().ok()) {
-        Some(value) if value == password => Ok(()),
-        _ => Err(AppError::Unauthorized),
+
+    let account_id = require_auth(headers).await?;
+    let email = auth::get_account_email(&account_id)
+        .await?
+        .ok_or(AppError::Unauthorized)?;
+
+    if email.to_lowercase() == admin_email.to_lowercase() {
+        Ok(())
+    } else {
+        Err(AppError::Unauthorized)
     }
 }
 
@@ -80,12 +89,11 @@ pub async fn run(address: std::net::SocketAddr) {
         .allow_headers([
             axum::http::header::CONTENT_TYPE,
             axum::http::header::AUTHORIZATION,
-            axum::http::header::HeaderName::from_static("x-editor-password"),
         ]);
 
     let app = Router::new()
         .route("/health", get(health_handler))
-        .route("/editor/verify", get(verify_editor_password_handler))
+        .route("/editor/verify", get(verify_editor_access_handler))
         .route("/courses", get(courses_handler).post(create_course_handler))
         .route(
             "/courses/{key}",
@@ -100,7 +108,8 @@ pub async fn run(address: std::net::SocketAddr) {
         .route("/auth/start", post(start_auth_handler))
         .route("/auth/verify", post(verify_auth_handler))
         .route("/auth/logout", post(logout_handler))
-        // Profile routes (requires auth)
+        // Account routes (requires auth)
+        .route("/account/me", get(account_me_handler))
         .route("/account/profiles", get(list_profiles_handler).post(create_profile_handler))
         .route("/account/profiles/{id}", put(update_profile_handler).delete(delete_profile_handler))
         .layer(CompressionLayer::new())
@@ -124,10 +133,10 @@ async fn health_handler() -> Result<String, AppError> {
     Ok(format!("OK ({} wind reports)", report_count))
 }
 
-async fn verify_editor_password_handler(
+async fn verify_editor_access_handler(
     headers: HeaderMap,
 ) -> Result<impl IntoResponse, AppError> {
-    check_editor_password(&headers)?;
+    check_admin(&headers).await?;
     Ok(StatusCode::OK)
 }
 
@@ -140,7 +149,7 @@ async fn create_course_handler(
     headers: HeaderMap,
     Json(course): Json<courses::Course>,
 ) -> Result<impl IntoResponse, AppError> {
-    check_editor_password(&headers)?;
+    check_admin(&headers).await?;
     log::info!("Course created: {} ({})", course.name, course.key);
     courses::insert(&course).await?;
     Ok(StatusCode::CREATED)
@@ -151,7 +160,7 @@ async fn update_course_handler(
     Path(key): Path<String>,
     Json(course): Json<courses::Course>,
 ) -> Result<impl IntoResponse, AppError> {
-    check_editor_password(&headers)?;
+    check_admin(&headers).await?;
     log::info!("Course updated: {} ({})", course.name, key);
     courses::update(&key, &course).await?;
     Ok(StatusCode::OK)
@@ -161,7 +170,7 @@ async fn delete_course_handler(
     headers: HeaderMap,
     Path(key): Path<String>,
 ) -> Result<impl IntoResponse, AppError> {
-    check_editor_password(&headers)?;
+    check_admin(&headers).await?;
     courses::delete(&key).await?;
     Ok(StatusCode::OK)
 }
@@ -261,6 +270,26 @@ async fn require_auth(headers: &HeaderMap) -> Result<String, AppError> {
         .await?
         .ok_or(AppError::Unauthorized)?;
     Ok(account_id)
+}
+
+// ===== Account handlers =====
+
+#[derive(serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+struct AccountMeResponse {
+    is_admin: bool,
+}
+
+async fn account_me_handler(headers: HeaderMap) -> Result<impl IntoResponse, AppError> {
+    let account_id = require_auth(&headers).await?;
+    let email = auth::get_account_email(&account_id)
+        .await?
+        .ok_or(AppError::Unauthorized)?;
+
+    let admin_email = &config().admin_email;
+    let is_admin = !admin_email.is_empty() && email.to_lowercase() == admin_email.to_lowercase();
+
+    Ok(Json(AccountMeResponse { is_admin }))
 }
 
 // ===== Profile handlers =====
