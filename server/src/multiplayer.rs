@@ -807,9 +807,10 @@ pub async fn handle_websocket(ws: WebSocket, manager: RaceManager) {
     // Task to forward server messages to WebSocket
     let forward_task = tokio::spawn(async move {
         while let Some(msg) = rx.recv().await {
-            if let Ok(json) = serde_json::to_string(&msg)
-                && ws_tx.send(Message::Text(json.into())).await.is_err()
-            {
+            let Ok(json) = serde_json::to_string(&msg) else {
+                continue;
+            };
+            if ws_tx.send(Message::Text(json.into())).await.is_err() {
                 break;
             }
         }
