@@ -1,0 +1,11 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+cd "$(dirname "$0")/.."
+
+echo "=== Deploying server ==="
+./server/bin/deploy
+
+echo ""
+echo "=== Deploying client ==="
+./client/bin/deploy
