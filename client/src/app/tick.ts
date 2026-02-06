@@ -3,7 +3,7 @@ import { getBoatSpeed, calculateTWA } from "./polar";
 import { isPointOnLand } from "./land";
 import { Session } from "./state";
 import { currentWindContext } from "./wind-context";
-import { getWindDirection, getWindSpeed, msToKnots } from "../utils";
+import { getWindDirection, getWindSpeed, msToKnots, reframeLongitude } from "../utils";
 import { checkGateCrossing } from "./gate-crossing";
 
 export type TickResult = {
@@ -123,7 +123,7 @@ export function tick(session: Session, delta: number): TickResult {
 
   let newPosition: LngLat = {
     lat: session.position.lat + latDelta,
-    lng: session.position.lng + lngDelta,
+    lng: reframeLongitude(session.position.lng + lngDelta),
   };
 
   // Check land collision - don't move if new position is on land
