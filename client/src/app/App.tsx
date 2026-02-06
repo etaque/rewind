@@ -24,6 +24,7 @@ import { calculateTWA } from "./polar";
 import { getWindDirection, getWindSpeedKnots } from "../utils";
 import FinishOverlay from "./FinishOverlay";
 import KeyBindings from "./KeyBindings";
+import RaceTimer from "./RaceTimer";
 import { RaceContext, RaceContextValue } from "./race-context";
 
 // Re-export for backward compatibility
@@ -315,6 +316,10 @@ export default function App() {
             )}
             {state.tag === "Playing" && (
               <>
+                <RaceTimer
+                  courseTime={state.session.courseTime}
+                  startTime={state.session.course.startTime}
+                />
                 <Hud session={state.session} />
                 <KeyBindings />
                 <Leaderboard

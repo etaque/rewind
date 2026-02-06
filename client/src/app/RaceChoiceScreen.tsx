@@ -13,6 +13,7 @@ import {
 import AuthModal from "./AuthModal";
 import ProfileSwitcher from "./ProfileSwitcher";
 import ProfileManager from "./ProfileManager";
+import { formatDuration } from "../utils";
 
 const PLAYER_NAME_KEY = "rewind:player_name";
 const serverUrl = import.meta.env.REWIND_SERVER_URL;
@@ -187,16 +188,6 @@ export default function RaceChoiceScreen() {
     if (newAccount) {
       saveAccount(newAccount);
     }
-  };
-
-  const formatTime = (ms: number) => {
-    const totalSeconds = Math.floor(ms / 1000);
-    const days = Math.floor(totalSeconds / 86400);
-    const hours = Math.floor((totalSeconds % 86400) / 3600);
-    const minutes = Math.floor((totalSeconds % 3600) / 60);
-    return days > 0
-      ? `${days}d ${hours}h ${minutes}m`
-      : `${hours}h ${minutes}m`;
   };
 
   const windReady = windStatus === "success";
@@ -402,7 +393,7 @@ export default function RaceChoiceScreen() {
                             </span>
                           </div>
                           <span className="text-green-400 font-mono text-xs">
-                            {formatTime(entry.finishTime)}
+                            {formatDuration(entry.finishTime)}
                           </span>
                         </div>
                       );
@@ -516,7 +507,7 @@ export default function RaceChoiceScreen() {
                           </div>
                           <div className="flex items-center gap-3">
                             <span className="text-green-400 font-mono text-xs">
-                              {formatTime(entry.finishTime)}
+                              {formatDuration(entry.finishTime)}
                             </span>
                             {isAdded ? (
                               <span className="text-amber-400 text-xs w-10 text-right">

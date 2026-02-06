@@ -1,4 +1,5 @@
 import { useState, useEffect } from "react";
+import { formatDuration } from "../utils";
 
 const serverUrl = import.meta.env.REWIND_SERVER_URL;
 
@@ -45,18 +46,6 @@ export default function HallOfFameList({
     fetchLeaderboard();
   }, [courseKey]);
 
-  const formatTime = (ms: number) => {
-    const totalSeconds = Math.floor(ms / 1000);
-    const days = Math.floor(totalSeconds / 86400);
-    const hours = Math.floor((totalSeconds % 86400) / 3600);
-    const minutes = Math.floor((totalSeconds % 3600) / 60);
-
-    if (days > 0) {
-      return `${days}d ${hours}h ${minutes}m`;
-    }
-    return `${hours}h ${minutes}m`;
-  };
-
   const formatDate = (timestamp: number) => {
     return new Date(timestamp).toLocaleDateString();
   };
@@ -101,7 +90,7 @@ export default function HallOfFameList({
               </div>
               <div className="flex items-center gap-3">
                 <span className="text-green-400 font-mono text-sm">
-                  {formatTime(entry.finishTime)}
+                  {formatDuration(entry.finishTime)}
                 </span>
                 {activeGhostIds.has(entry.id) ? (
                   <span className="text-amber-400 text-xs">Added</span>
