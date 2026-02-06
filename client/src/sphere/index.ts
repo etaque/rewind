@@ -314,10 +314,50 @@ export class SphereView {
     this.animateToView(this.position.lng, this.position.lat, targetScale, 1000);
   }
 
-  /** Center the map on the boat without changing zoom level */
+  /**
+   * Center the map ahead of the boat based on heading.
+   * Places the boat at approximately 1/10 from the viewport edge,
+   * with the view focused on "where the boat is going".
+   */
   centerOnBoat() {
     const currentScale = this.projection.scale();
-    this.animateToView(this.position.lng, this.position.lat, currentScale, 300);
+
+    // Project boat position to screen coordinates
+    const boatScreen = this.projection([this.position.lng, this.position.lat]);
+    if (!boatScreen) {
+      // Boat not on visible hemisphere - just center on it directly
+      this.animateToView(this.position.lng, this.position.lat, currentScale, 300);
+      return;
+    }
+
+    const [boatX, boatY] = boatScreen;
+
+    // Calculate offset in screen pixels
+    // Boat at 1/10 from edge means center is 0.4 of viewport dimension ahead
+    const edgeFraction = 0.1; // 1/10 from edge
+    const offsetFraction = 0.5 - edgeFraction; // 0.4
+
+    // Convert heading to screen-space offset
+    // Heading: 0 = North (up/-Y), 90 = East (right/+X)
+    // Use width for horizontal component, height for vertical
+    const headingRad = (this.heading * Math.PI) / 180;
+    const screenOffsetX = Math.sin(headingRad) * this.width * offsetFraction;
+    const screenOffsetY = -Math.cos(headingRad) * this.height * offsetFraction; // Screen Y is inverted
+
+    // Target screen position (ahead of boat)
+    const targetScreenX = boatX + screenOffsetX;
+    const targetScreenY = boatY + screenOffsetY;
+
+    // Inverse project to geographic coordinates
+    const targetCoords = this.projection.invert?.([targetScreenX, targetScreenY]);
+
+    if (targetCoords) {
+      const [targetLng, targetLat] = targetCoords;
+      this.animateToView(targetLng, targetLat, currentScale, 300);
+    } else {
+      // Target is outside the globe - fall back to centering on boat
+      this.animateToView(this.position.lng, this.position.lat, currentScale, 300);
+    }
   }
 
   /**
