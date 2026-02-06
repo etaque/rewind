@@ -5,6 +5,7 @@ export default function KeyBindings() {
     { key: "Enter", action: "Lock TWA" },
     { key: "\u2191", action: "Upwind VMG" },
     { key: "\u2193", action: "Downwind VMG" },
+    { key: "X", action: "Look ahead" },
   ];
 
   return (
