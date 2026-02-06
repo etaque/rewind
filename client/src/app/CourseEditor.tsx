@@ -31,10 +31,14 @@ type Props = {
   account: Account;
   onBack: () => void;
   onUnauthorized: () => void;
+  /** When true, skip access check and header — rendered inside AdminPanel. */
+  embedded?: boolean;
 };
 
-export default function CourseEditor({ account, onBack, onUnauthorized }: Props) {
-  const [accessState, setAccessState] = useState<AsyncState<void>>(asyncState.loading());
+export default function CourseEditor({ account, onBack, onUnauthorized, embedded }: Props) {
+  const [accessState, setAccessState] = useState<AsyncState<void>>(
+    embedded ? asyncState.success(undefined) : asyncState.loading(),
+  );
   const [courses, setCourses] = useState<Course[]>([]);
   const [selectedKey, setSelectedKey] = useState<string | null>(null);
   const [editCourse, setEditCourse] = useState<Course | null>(null);
@@ -45,8 +49,9 @@ export default function CourseEditor({ account, onBack, onUnauthorized }: Props)
 
   const sessionToken = account.sessionToken;
 
-  // Verify admin access on mount
+  // Verify admin access on mount (skip when embedded — AdminPanel already verified)
   useEffect(() => {
+    if (embedded) return;
     verifyEditorAccess(sessionToken).then((ok) => {
       if (ok) {
         setAccessState(asyncState.success(undefined));
@@ -55,7 +60,7 @@ export default function CourseEditor({ account, onBack, onUnauthorized }: Props)
         onUnauthorized();
       }
     });
-  }, [sessionToken, onUnauthorized]);
+  }, [sessionToken, onUnauthorized, embedded]);
 
   const loadCourses = useCallback(async () => {
     try {
@@ -180,19 +185,20 @@ export default function CourseEditor({ account, onBack, onUnauthorized }: Props)
   }
 
   return (
-    <div className="fixed inset-0 flex bg-slate-950">
+    <div className={`${embedded ? "h-full" : "fixed inset-0"} flex bg-slate-950`}>
       {/* Left panel */}
       <div className="w-[350px] flex flex-col border-r border-slate-800 bg-slate-900">
-        {/* Header */}
-        <div className="p-4 border-b border-slate-800 flex items-center justify-between">
-          <h1 className="text-white font-semibold">Course Editor</h1>
-          <button
-            onClick={onBack}
-            className="text-sm text-slate-400 hover:text-white transition-all"
-          >
-            Back to Race
-          </button>
-        </div>
+        {!embedded && (
+          <div className="p-4 border-b border-slate-800 flex items-center justify-between">
+            <h1 className="text-white font-semibold">Course Editor</h1>
+            <button
+              onClick={onBack}
+              className="text-sm text-slate-400 hover:text-white transition-all"
+            >
+              Back to Race
+            </button>
+          </div>
+        )}
 
         {/* Course list */}
         <div className="p-4 border-b border-slate-800">

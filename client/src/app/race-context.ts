@@ -28,7 +28,7 @@ export type RaceContextValue = {
 
   // Course actions
   selectCourse: (courseKey: string) => void;
-  openEditor: () => void;
+  openAdmin: () => void;
 
   // Ghost actions
   addGhost: (entryId: number, playerName: string) => void;

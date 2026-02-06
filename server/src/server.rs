@@ -3,7 +3,7 @@ use axum::{
     extract::{Path, Query, State, ws::WebSocketUpgrade},
     http::{header, HeaderMap, Method, StatusCode},
     response::{IntoResponse, Response},
-    routing::{any, get, post, put},
+    routing::{any, delete, get, post, put},
 };
 use bytes::Bytes;
 use object_store::ObjectStoreExt;
@@ -112,6 +112,11 @@ pub async fn run(address: std::net::SocketAddr) {
         .route("/account/me", get(account_me_handler))
         .route("/account/profiles", get(list_profiles_handler).post(create_profile_handler))
         .route("/account/profiles/{id}", put(update_profile_handler).delete(delete_profile_handler))
+        // Admin routes (requires admin)
+        .route("/admin/accounts", get(admin_list_accounts_handler))
+        .route("/admin/accounts/{id}", delete(admin_delete_account_handler))
+        .route("/admin/results", get(admin_list_results_handler))
+        .route("/admin/results/{id}", delete(admin_delete_result_handler))
         .layer(CompressionLayer::new())
         .layer(cors)
         .with_state(race_manager);
@@ -325,5 +330,94 @@ async fn delete_profile_handler(
 ) -> Result<impl IntoResponse, AppError> {
     let account_id = require_auth(&headers).await?;
     profiles::delete_profile(&account_id, &profile_id).await?;
+    Ok(StatusCode::OK)
+}
+
+// ===== Admin handlers =====
+
+#[derive(Deserialize)]
+struct AdminPaginationQuery {
+    #[serde(default = "default_admin_limit")]
+    limit: i64,
+    #[serde(default)]
+    offset: i64,
+}
+
+fn default_admin_limit() -> i64 {
+    50
+}
+
+#[derive(serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+struct AdminAccountsResponse {
+    accounts: Vec<auth::AdminAccount>,
+    total: i64,
+}
+
+async fn admin_list_accounts_handler(
+    headers: HeaderMap,
+    Query(query): Query<AdminPaginationQuery>,
+) -> Result<impl IntoResponse, AppError> {
+    check_admin(&headers).await?;
+    let accounts = auth::list_accounts(query.limit, query.offset).await?;
+    let total = auth::count_accounts().await?;
+    Ok(Json(AdminAccountsResponse { accounts, total }))
+}
+
+async fn admin_delete_account_handler(
+    headers: HeaderMap,
+    Path(account_id): Path<String>,
+) -> Result<impl IntoResponse, AppError> {
+    check_admin(&headers).await?;
+    auth::delete_account(&account_id).await?;
+    log::info!("Admin deleted account: {}", account_id);
+    Ok(StatusCode::OK)
+}
+
+#[derive(Deserialize)]
+struct AdminResultsQuery {
+    #[serde(default = "default_admin_limit")]
+    limit: i64,
+    #[serde(default)]
+    offset: i64,
+    course_key: Option<String>,
+}
+
+#[derive(serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+struct AdminResultsResponse {
+    results: Vec<race_results::AdminRaceResult>,
+    total: i64,
+}
+
+async fn admin_list_results_handler(
+    headers: HeaderMap,
+    Query(query): Query<AdminResultsQuery>,
+) -> Result<impl IntoResponse, AppError> {
+    check_admin(&headers).await?;
+    let results =
+        race_results::list_all(query.limit, query.offset, query.course_key.as_deref()).await?;
+    let total = race_results::count_all(query.course_key.as_deref()).await?;
+    Ok(Json(AdminResultsResponse { results, total }))
+}
+
+async fn admin_delete_result_handler(
+    headers: HeaderMap,
+    Path(result_id): Path<i64>,
+) -> Result<impl IntoResponse, AppError> {
+    check_admin(&headers).await?;
+    let path_key = race_results::delete_result(result_id).await?;
+
+    // Delete the S3 path file if it existed
+    if let Some(key) = &path_key {
+        if let Err(e) = s3::paths_client()
+            .delete(&S3Path::from(key.as_str()))
+            .await
+        {
+            log::warn!("Failed to delete S3 path file {}: {}", key, e);
+        }
+    }
+
+    log::info!("Admin deleted race result: {}", result_id);
     Ok(StatusCode::OK)
 }

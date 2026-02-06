@@ -253,6 +253,71 @@ pub async fn cleanup_expired() -> Result<()> {
     Ok(())
 }
 
+// ===== Admin functions =====
+
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct AdminAccount {
+    pub id: String,
+    pub email: String,
+    pub created_at: i64,
+    pub profile_count: i64,
+    pub session_count: i64,
+}
+
+/// List accounts with pagination, ordered by creation date descending.
+pub async fn list_accounts(limit: i64, offset: i64) -> Result<Vec<AdminAccount>> {
+    let rows: Vec<(String, String, i64, i64, i64)> = sqlx::query_as(
+        "SELECT a.id, a.email, a.created_at,
+                (SELECT COUNT(*) FROM profiles WHERE account_id = a.id) as profile_count,
+                (SELECT COUNT(*) FROM sessions WHERE account_id = a.id) as session_count
+         FROM accounts a
+         ORDER BY a.created_at DESC
+         LIMIT ? OFFSET ?",
+    )
+    .bind(limit)
+    .bind(offset)
+    .fetch_all(db::pool())
+    .await?;
+
+    Ok(rows
+        .into_iter()
+        .map(|(id, email, created_at, profile_count, session_count)| AdminAccount {
+            id,
+            email,
+            created_at,
+            profile_count,
+            session_count,
+        })
+        .collect())
+}
+
+/// Count total accounts.
+pub async fn count_accounts() -> Result<i64> {
+    let (count,): (i64,) = sqlx::query_as("SELECT COUNT(*) FROM accounts")
+        .fetch_one(db::pool())
+        .await?;
+    Ok(count)
+}
+
+/// Delete an account (CASCADE handles profiles + sessions).
+pub async fn delete_account(account_id: &str) -> Result<()> {
+    // Delete sessions and profiles first (SQLite doesn't always cascade)
+    sqlx::query("DELETE FROM sessions WHERE account_id = ?")
+        .bind(account_id)
+        .execute(db::pool())
+        .await?;
+    sqlx::query("DELETE FROM profiles WHERE account_id = ?")
+        .bind(account_id)
+        .execute(db::pool())
+        .await?;
+    sqlx::query("DELETE FROM accounts WHERE id = ?")
+        .bind(account_id)
+        .execute(db::pool())
+        .await?;
+    Ok(())
+}
+
 #[derive(Debug, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct StartAuthRequest {

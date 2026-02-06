@@ -5,7 +5,7 @@ import CursorWind from "./CursorWind";
 import Leaderboard from "./Leaderboard";
 import PolarDiagram from "./PolarDiagram";
 import RaceChoiceScreen from "./RaceChoiceScreen";
-import CourseEditor from "./CourseEditor";
+import AdminPanel from "./admin/AdminPanel";
 import { loadAccount, type Account } from "./account";
 import {
   useKeyboardControls,
@@ -35,13 +35,13 @@ import {
 // Re-export for backward compatibility
 export type { RecordedGhost } from "./hooks/useGhosts";
 
-type View = "race" | "editor";
+type View = "race" | "admin";
 
 export default function App() {
   const [view, setView] = useState<View>("race");
   const [state, dispatch] = useReducer(appReducer, initialState);
   const [showQuitConfirm, setShowQuitConfirm] = useState(false);
-  const [editorAccount, setEditorAccount] = useState<Account | null>(null);
+  const [adminAccount, setAdminAccount] = useState<Account | null>(null);
 
   // Courses management
   const {
@@ -245,13 +245,13 @@ export default function App() {
     }
   }, [state.tag === "Countdown" ? state.countdown : false]);
 
-  const handleOpenEditor = useCallback(() => {
+  const handleOpenAdmin = useCallback(() => {
     const account = loadAccount();
-    setEditorAccount(account);
-    setView("editor");
+    setAdminAccount(account);
+    setView("admin");
   }, []);
 
-  const handleCloseEditor = useCallback(() => {
+  const handleCloseAdmin = useCallback(() => {
     refreshCourses();
     setView("race");
   }, [refreshCourses]);
@@ -274,7 +274,7 @@ export default function App() {
       startRace: multiplayerCallbacks.onStartRace,
       leaveRace: multiplayerCallbacks.onLeaveRace,
       selectCourse: handleSelectCourse,
-      openEditor: handleOpenEditor,
+      openAdmin: handleOpenAdmin,
       addGhost,
       removeGhost,
     }),
@@ -285,30 +285,30 @@ export default function App() {
       recordedGhosts,
       multiplayerCallbacks,
       handleSelectCourse,
-      handleOpenEditor,
+      handleOpenAdmin,
       addGhost,
       removeGhost,
     ],
   );
 
-  const inEditor = view === "editor";
+  const inAdmin = view === "admin";
 
   return (
     <>
-      <div ref={sphereNodeRef} id="sphere" className={`fixed inset-0 ${inEditor ? "invisible" : ""}`} />
-      {inEditor && (
-        editorAccount ? (
-          <CourseEditor
-            account={editorAccount}
-            onBack={handleCloseEditor}
-            onUnauthorized={handleCloseEditor}
+      <div ref={sphereNodeRef} id="sphere" className={`fixed inset-0 ${inAdmin ? "invisible" : ""}`} />
+      {inAdmin && (
+        adminAccount ? (
+          <AdminPanel
+            account={adminAccount}
+            onBack={handleCloseAdmin}
+            onUnauthorized={handleCloseAdmin}
           />
         ) : (
           <div className="fixed inset-0 flex items-center justify-center bg-slate-950">
             <div className="bg-slate-900 border border-slate-800 rounded-lg p-6 w-80 text-center">
-              <p className="text-slate-300 mb-4">Please sign in to access the editor.</p>
+              <p className="text-slate-300 mb-4">Please sign in to access admin.</p>
               <button
-                onClick={handleCloseEditor}
+                onClick={handleCloseAdmin}
                 className="text-sm text-slate-400 hover:text-white py-2 px-4 border border-slate-700 rounded transition-all"
               >
                 Back
@@ -317,7 +317,7 @@ export default function App() {
           </div>
         )
       )}
-      {!inEditor && (
+      {!inAdmin && (
         <>
           <div id="app" className="fixed inset-0 z-10 pointer-events-none">
             {(state.tag === "Idle" || state.tag === "Lobby") &&

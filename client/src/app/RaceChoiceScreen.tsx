@@ -41,7 +41,7 @@ export default function RaceChoiceScreen() {
     startRace,
     leaveRace,
     selectCourse,
-    openEditor,
+    openAdmin,
     addGhost,
     removeGhost,
   } = useRaceContext();
@@ -255,10 +255,10 @@ export default function RaceChoiceScreen() {
               </h2>
               {account?.isAdmin && (
                 <button
-                  onClick={openEditor}
+                  onClick={openAdmin}
                   className="text-xs text-slate-500 hover:text-slate-300 transition-all"
                 >
-                  Edit Courses
+                  Admin
                 </button>
               )}
             </div>
