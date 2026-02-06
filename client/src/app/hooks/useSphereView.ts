@@ -64,9 +64,6 @@ export function useSphereView(
       session.boatSpeed,
     );
 
-    // Auto-center if boat is near viewport edge
-    sphereViewRef.current.centerOnBoatIfNearEdge();
-
     const interpolatedWind = interpolatedWindRef.current;
     const factor = interpolatedWind.getInterpolationFactor(session.courseTime);
     sphereViewRef.current.updateWind(interpolatedWind, factor);

@@ -258,9 +258,22 @@ export class SphereView {
   }
 
   updatePosition(pos: LngLat, heading: number, boatSpeed: number = 0) {
+    // Check boundary crossing: was the boat in the safe zone before this move?
+    const oldScreen = this.projection([this.position.lng, this.position.lat]);
+    const wasInSafeZone = oldScreen !== null && this.isInSafeZone(oldScreen[0], oldScreen[1]);
+
     this.position = pos;
     this.heading = heading;
     this.wake.addPoint(pos, boatSpeed);
+
+    if (!this.moving && wasInSafeZone) {
+      const newScreen = this.projection([pos.lng, pos.lat]);
+      if (!newScreen || !this.isInSafeZone(newScreen[0], newScreen[1])) {
+        this.centerOnBoat();
+        return;
+      }
+    }
+
     this.render();
   }
 
@@ -417,40 +430,14 @@ export class SphereView {
     this.centerOnBoatWithScale(currentScale, 300);
   }
 
-  /**
-   * Check if the boat is near the viewport edge (within 1/10) and auto-center if so.
-   * Skips if an animation is already in progress.
-   */
-  centerOnBoatIfNearEdge() {
-    // Don't trigger if animation is in progress
-    if (this.moving) return;
-
-    // Project boat position to screen coordinates
-    const boatScreen = this.projection([this.position.lng, this.position.lat]);
-    if (!boatScreen) {
-      // Boat not on visible hemisphere - center on it
-      this.centerOnBoat();
-      return;
-    }
-
-    const [boatX, boatY] = boatScreen;
-    const edgeFraction = 0.1; // 1/10 from edge
-
-    // Check if boat is within edge zone on any side
-    const leftEdge = this.width * edgeFraction;
-    const rightEdge = this.width * (1 - edgeFraction);
-    const topEdge = this.height * edgeFraction;
-    const bottomEdge = this.height * (1 - edgeFraction);
-
-    const nearEdge =
-      boatX < leftEdge ||
-      boatX > rightEdge ||
-      boatY < topEdge ||
-      boatY > bottomEdge;
-
-    if (nearEdge) {
-      this.centerOnBoat();
-    }
+  private isInSafeZone(screenX: number, screenY: number): boolean {
+    const edgeFraction = 0.1;
+    return (
+      screenX >= this.width * edgeFraction &&
+      screenX <= this.width * (1 - edgeFraction) &&
+      screenY >= this.height * edgeFraction &&
+      screenY <= this.height * (1 - edgeFraction)
+    );
   }
 
   /**
