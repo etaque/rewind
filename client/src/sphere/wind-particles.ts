@@ -5,9 +5,10 @@ import * as utils from "../utils";
 
 const MAX_AGE = 1200;
 const PARTICLES_COUNT = 1000;
-const TRAVEL_SPEED = 15;
+const TRAVEL_SPEED = 45;
 const TRAIL_LENGTH = 25;
 const TRAIL_BANDS = 6;
+const BASE_SCALE = 500;
 
 type Particle = {
   pix: Pixel;
@@ -72,6 +73,7 @@ export default class Particles {
         context.save();
         context.scale(dpr, dpr);
         context.strokeStyle = "rgb(210,210,210)";
+        context.lineWidth = 1.5;
 
         // Draw trails in banded passes for efficient batched rendering
         for (let b = 0; b < TRAIL_BANDS; b++) {
@@ -239,8 +241,12 @@ function moveParticle(
 
   const { u, v } = windSpeed;
 
-  const lngDeltaDist = u * delta * TRAVEL_SPEED;
-  const latDeltaDist = v * delta * TRAVEL_SPEED;
+  // Scale travel speed inversely with zoom level to keep screen-space velocity constant
+  const scale = scene.projection.scale();
+  const effectiveSpeed = TRAVEL_SPEED * (BASE_SCALE / scale);
+
+  const lngDeltaDist = u * delta * effectiveSpeed;
+  const latDeltaDist = v * delta * effectiveSpeed;
 
   const lngDeltaDeg = lngDeltaDist / utils.lngOneDegToM(p.coord.lat);
   const latDeltaDeg = latDeltaDist / utils.latOneDegToM;
