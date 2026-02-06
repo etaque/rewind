@@ -1,4 +1,4 @@
-import { Pixel, WindSpeed } from "./models";
+import { LngLat, Pixel, WindSpeed } from "./models";
 
 /**
  * Format a duration in milliseconds as "14d 06:37" or "06:37".
@@ -58,6 +58,32 @@ export const lngOneDegToM = (lat: number): number =>
   (Math.PI / 180) * 6378137 * Math.cos(lat * (Math.PI / 180));
 
 export const latOneDegToM = 111000;
+
+const KM_TO_NM = 0.539957;
+
+/**
+ * Haversine distance between two coordinates in km.
+ */
+export function haversineDistanceKm(p1: LngLat, p2: LngLat): number {
+  const R = 6371; // Earth radius in km
+  const dLat = ((p2.lat - p1.lat) * Math.PI) / 180;
+  const dLng = ((p2.lng - p1.lng) * Math.PI) / 180;
+  const a =
+    Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+    Math.cos((p1.lat * Math.PI) / 180) *
+      Math.cos((p2.lat * Math.PI) / 180) *
+      Math.sin(dLng / 2) *
+      Math.sin(dLng / 2);
+  const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+  return R * c;
+}
+
+/**
+ * Haversine distance between two coordinates in nautical miles.
+ */
+export function haversineDistanceNm(p1: LngLat, p2: LngLat): number {
+  return haversineDistanceKm(p1, p2) * KM_TO_NM;
+}
 
 export const bilinear = ({ x, y }: Pixel, f: (p: Pixel) => number): number => {
   const xf = Math.floor(x);

@@ -46,11 +46,17 @@ export default function Leaderboard({
       <div className="flex flex-col gap-1">
         {entries.map((entry, index) => {
           const isMe = entry.playerId === myPlayerId;
+          const isGhost = entry.playerId.startsWith("ghost:");
           const isFinished = entry.finishTime !== null;
+          const nameClass = isMe
+            ? "text-pink-400"
+            : isGhost
+              ? "text-amber-400"
+              : "";
           return (
             <div
               key={entry.playerId}
-              className={`flex justify-between gap-4 ${isMe ? "text-pink-400" : ""}`}
+              className={`flex justify-between gap-4 ${nameClass}`}
             >
               <span>
                 {index + 1}. {entry.playerName}

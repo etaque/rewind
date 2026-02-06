@@ -1,6 +1,7 @@
 import { geoDistance, geoPath } from "d3-geo";
 import type { LineString } from "geojson";
 import { LngLat } from "../models";
+import { haversineDistanceKm } from "../utils";
 import { Scene } from "./scene";
 import { getBoatSizeKm } from "./boat-geometry";
 
@@ -38,7 +39,7 @@ export default class Wake {
     // Only add if far enough from last point
     if (this.points.length > 0) {
       const last = this.points[this.points.length - 1];
-      const dist = haversineDistance(last.pos, position);
+      const dist = haversineDistanceKm(last.pos, position);
       if (dist < MIN_DISTANCE_KM) return;
     }
 
@@ -70,7 +71,7 @@ export default class Wake {
     for (let i = n - 2; i >= 0; i--) {
       distFromBoat[i] =
         distFromBoat[i + 1] +
-        haversineDistance(this.points[i].pos, this.points[i + 1].pos);
+        haversineDistanceKm(this.points[i].pos, this.points[i + 1].pos);
     }
 
     // --- Tail pass: batch-render all segments beyond the gradient zone ---
@@ -154,18 +155,4 @@ export default class Wake {
 
     context.globalAlpha = 1;
   }
-}
-
-function haversineDistance(p1: LngLat, p2: LngLat): number {
-  const R = 6371; // Earth radius in km
-  const dLat = ((p2.lat - p1.lat) * Math.PI) / 180;
-  const dLng = ((p2.lng - p1.lng) * Math.PI) / 180;
-  const a =
-    Math.sin(dLat / 2) * Math.sin(dLat / 2) +
-    Math.cos((p1.lat * Math.PI) / 180) *
-      Math.cos((p2.lat * Math.PI) / 180) *
-      Math.sin(dLng / 2) *
-      Math.sin(dLng / 2);
-  const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
-  return R * c;
 }

@@ -1,4 +1,4 @@
-import { useReducer, useEffect, useState, useCallback, useMemo } from "react";
+import { useReducer, useEffect, useState, useCallback, useMemo, useRef } from "react";
 import { appReducer, initialState } from "./state";
 import Hud from "./Hud";
 import CursorWind from "./CursorWind";
@@ -26,6 +26,11 @@ import FinishOverlay from "./FinishOverlay";
 import KeyBindings from "./KeyBindings";
 import RaceTimer from "./RaceTimer";
 import { RaceContext, RaceContextValue } from "./race-context";
+import {
+  ghostLeaderboardEntries,
+  mergeLeaderboards,
+  GhostGateCrossing,
+} from "./ghost-leaderboard";
 
 // Re-export for backward compatibility
 export type { RecordedGhost } from "./hooks/useGhosts";
@@ -82,6 +87,28 @@ export default function App() {
     courseTime,
     isLobbyReady,
   );
+
+  // Ghost leaderboard: cache gate crossings per ghost (computed once per ghost)
+  const ghostCrossingsRef = useRef(new Map<number, GhostGateCrossing[]>());
+
+  // Merge ghost entries into leaderboard, recomputing when server leaderboard updates
+  const serverLeaderboard = state.tag === "Playing" ? state.leaderboard : [];
+  const mergedLeaderboard = useMemo(() => {
+    if (state.tag !== "Playing" || recordedGhosts.size === 0)
+      return serverLeaderboard;
+
+    const ghostEntries = ghostLeaderboardEntries(
+      recordedGhosts,
+      state.session.course,
+      state.session.courseTime,
+      ghostCrossingsRef.current,
+    );
+    return mergeLeaderboards(serverLeaderboard, ghostEntries);
+    // Recompute when server leaderboard updates (~2s) or ghosts change.
+    // courseTime is intentionally omitted: the server leaderboard reference
+    // changes every ~2s which provides a natural refresh cadence.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [serverLeaderboard, recordedGhosts]);
 
   // Multiplayer
   const [multiplayerRef, multiplayerCallbacks] = useMultiplayer(
@@ -323,7 +350,7 @@ export default function App() {
                 <Hud session={state.session} />
                 <KeyBindings />
                 <Leaderboard
-                  entries={state.leaderboard}
+                  entries={mergedLeaderboard}
                   myPlayerId={state.race.myPlayerId}
                   courseStartTime={state.session.course.startTime}
                   onQuit={handleQuitClick}
