@@ -361,6 +361,42 @@ export class SphereView {
   }
 
   /**
+   * Check if the boat is near the viewport edge (within 1/10) and auto-center if so.
+   * Skips if an animation is already in progress.
+   */
+  centerOnBoatIfNearEdge() {
+    // Don't trigger if animation is in progress
+    if (this.moving) return;
+
+    // Project boat position to screen coordinates
+    const boatScreen = this.projection([this.position.lng, this.position.lat]);
+    if (!boatScreen) {
+      // Boat not on visible hemisphere - center on it
+      this.centerOnBoat();
+      return;
+    }
+
+    const [boatX, boatY] = boatScreen;
+    const edgeFraction = 0.1; // 1/10 from edge
+
+    // Check if boat is within edge zone on any side
+    const leftEdge = this.width * edgeFraction;
+    const rightEdge = this.width * (1 - edgeFraction);
+    const topEdge = this.height * edgeFraction;
+    const bottomEdge = this.height * (1 - edgeFraction);
+
+    const nearEdge =
+      boatX < leftEdge ||
+      boatX > rightEdge ||
+      boatY < topEdge ||
+      boatY > bottomEdge;
+
+    if (nearEdge) {
+      this.centerOnBoat();
+    }
+  }
+
+  /**
    * Focus the viewport on the course start and first gate (or finish if no gates).
    * Adjusts rotation and zoom to show both points comfortably.
    */
