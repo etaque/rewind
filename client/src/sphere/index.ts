@@ -13,6 +13,7 @@ import Wake from "./wake";
 import WindTexture from "./wind-texture";
 import WindParticles from "./wind-particles";
 import GhostBoats from "./ghost-boats";
+import OffscreenIndicators from "./offscreen-indicators";
 import { polarToBoatType } from "./boat-geometry";
 import CourseLine from "./course-line";
 
@@ -46,6 +47,7 @@ export class SphereView {
   particles: WindParticles;
   windTexture: WindTexture;
   ghostBoats: GhostBoats;
+  offscreenIndicators: OffscreenIndicators;
   private boatCanvas: HTMLCanvasElement;
   courseLine: CourseLine | null = null;
   v0?: versor.Cartesian;
@@ -148,6 +150,7 @@ export class SphereView {
     this.wake = new Wake(boatCanvas);
     this.boat = new Boat(boatCanvas);
     this.ghostBoats = new GhostBoats(boatCanvas);
+    this.offscreenIndicators = new OffscreenIndicators(boatCanvas);
     // Only create course-related renderers if we have a course
     if (course) {
       this.courseLine = new CourseLine(boatCanvas, course);
@@ -608,6 +611,7 @@ export class SphereView {
       if (this.course) {
         this.boat.render(scene, this.position, this.heading, boatType, this.vmgBad, this.twaLocked, this.windDirection);
       }
+      this.offscreenIndicators.render(scene, this.ghostBoats.peers, this.ghostBoats.recordedGhosts);
     });
 
     const currentRaster = this.interpolatedWind?.getCurrentRaster();
