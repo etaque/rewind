@@ -60,3 +60,16 @@ export async function deleteCourse(
   if (res.status === 401) throw new Error("Unauthorized");
   if (!res.ok) throw new Error("Failed to delete course");
 }
+
+export async function reorderCourses(
+  keys: string[],
+  sessionToken: string,
+): Promise<void> {
+  const res = await fetch(`${serverUrl}/courses/reorder`, {
+    method: "PUT",
+    headers: authHeaders(sessionToken),
+    body: JSON.stringify(keys),
+  });
+  if (res.status === 401) throw new Error("Unauthorized");
+  if (!res.ok) throw new Error("Failed to reorder courses");
+}

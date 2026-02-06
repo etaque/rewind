@@ -95,6 +95,7 @@ pub async fn run(address: std::net::SocketAddr) {
         .route("/health", get(health_handler))
         .route("/editor/verify", get(verify_editor_access_handler))
         .route("/courses", get(courses_handler).post(create_course_handler))
+        .route("/courses/reorder", put(reorder_courses_handler))
         .route(
             "/courses/{key}",
             put(update_course_handler).delete(delete_course_handler),
@@ -177,6 +178,15 @@ async fn delete_course_handler(
 ) -> Result<impl IntoResponse, AppError> {
     check_admin(&headers).await?;
     courses::delete(&key).await?;
+    Ok(StatusCode::OK)
+}
+
+async fn reorder_courses_handler(
+    headers: HeaderMap,
+    Json(keys): Json<Vec<String>>,
+) -> Result<impl IntoResponse, AppError> {
+    check_admin(&headers).await?;
+    courses::reorder(&keys).await?;
     Ok(StatusCode::OK)
 }
 

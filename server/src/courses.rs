@@ -228,9 +228,10 @@ pub async fn seed_if_empty() -> Result<()> {
 }
 
 pub async fn get_all() -> Result<Vec<Course>> {
-    let rows: Vec<(String,)> = sqlx::query_as("SELECT data FROM courses ORDER BY created_at")
-        .fetch_all(db::pool())
-        .await?;
+    let rows: Vec<(String,)> =
+        sqlx::query_as("SELECT data FROM courses ORDER BY position, created_at")
+            .fetch_all(db::pool())
+            .await?;
     let courses = rows
         .into_iter()
         .filter_map(|(data,)| serde_json::from_str::<Course>(&data).ok())
@@ -252,11 +253,13 @@ pub async fn get_by_key(key: &str) -> Result<Option<Course>> {
 
 pub async fn insert(course: &Course) -> Result<()> {
     let data = serde_json::to_string(course)?;
-    sqlx::query("INSERT INTO courses (key, data) VALUES (?, ?)")
-        .bind(&course.key)
-        .bind(&data)
-        .execute(db::pool())
-        .await?;
+    sqlx::query(
+        "INSERT INTO courses (key, data, position) VALUES (?, ?, (SELECT COALESCE(MAX(position), 0) + 1 FROM courses))",
+    )
+    .bind(&course.key)
+    .bind(&data)
+    .execute(db::pool())
+    .await?;
     Ok(())
 }
 
@@ -275,6 +278,17 @@ pub async fn delete(key: &str) -> Result<()> {
         .bind(key)
         .execute(db::pool())
         .await?;
+    Ok(())
+}
+
+pub async fn reorder(keys: &[String]) -> Result<()> {
+    for (i, key) in keys.iter().enumerate() {
+        sqlx::query("UPDATE courses SET position = ? WHERE key = ?")
+            .bind(i as i64)
+            .bind(key)
+            .execute(db::pool())
+            .await?;
+    }
     Ok(())
 }
 

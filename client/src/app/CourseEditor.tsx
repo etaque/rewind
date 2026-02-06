@@ -7,6 +7,7 @@ import {
   createCourse,
   updateCourse,
   deleteCourse,
+  reorderCourses,
   verifyEditorAccess,
 } from "./editor/api";
 import CourseForm, { type FocusTarget } from "./editor/CourseForm";
@@ -140,6 +141,22 @@ export default function CourseEditor({ account, onBack, onUnauthorized, embedded
     }
   }, [selectedKey, sessionToken, loadCourses, onUnauthorized]);
 
+  const handleMove = useCallback(
+    async (index: number, direction: -1 | 1) => {
+      const swapIndex = index + direction;
+      if (swapIndex < 0 || swapIndex >= courses.length) return;
+      const reordered = [...courses];
+      [reordered[index], reordered[swapIndex]] = [reordered[swapIndex], reordered[index]];
+      setCourses(reordered);
+      try {
+        await reorderCourses(reordered.map((c) => c.key), sessionToken);
+      } catch {
+        await loadCourses();
+      }
+    },
+    [courses, sessionToken, loadCourses],
+  );
+
   const handleAddGate = useCallback(() => {
     if (!editCourse) return;
     const gates = [
@@ -222,18 +239,37 @@ export default function CourseEditor({ account, onBack, onUnauthorized, embedded
             </button>
           </div>
           <div className="space-y-1 max-h-48 overflow-y-auto">
-            {courses.map((course) => (
-              <button
-                key={course.key}
-                onClick={() => handleSelectCourse(course.key)}
-                className={`w-full text-left px-3 py-2 rounded text-sm transition-all flex items-center justify-between ${
-                  selectedKey === course.key
-                    ? "bg-blue-600 text-white"
-                    : "text-slate-300 hover:bg-slate-800"
-                }`}
-              >
-                <span>{course.name || course.key}</span>
-              </button>
+            {courses.map((course, index) => (
+              <div key={course.key} className="flex items-center gap-1">
+                <button
+                  onClick={() => handleSelectCourse(course.key)}
+                  className={`flex-1 text-left px-3 py-2 rounded text-sm transition-all ${
+                    selectedKey === course.key
+                      ? "bg-blue-600 text-white"
+                      : "text-slate-300 hover:bg-slate-800"
+                  }`}
+                >
+                  {course.name || course.key}
+                </button>
+                {!isNew && (
+                  <div className="flex flex-col">
+                    <button
+                      onClick={() => handleMove(index, -1)}
+                      disabled={index === 0}
+                      className="text-slate-500 hover:text-white disabled:opacity-20 text-xs px-1 leading-none"
+                    >
+                      ▲
+                    </button>
+                    <button
+                      onClick={() => handleMove(index, 1)}
+                      disabled={index === courses.length - 1}
+                      className="text-slate-500 hover:text-white disabled:opacity-20 text-xs px-1 leading-none"
+                    >
+                      ▼
+                    </button>
+                  </div>
+                )}
+              </div>
             ))}
           </div>
         </div>
