@@ -85,7 +85,7 @@ export type AppAction =
   | { type: "TURN"; direction: Turn }
   | { type: "TACK" }
   | { type: "TOGGLE_TWA_LOCK" }
-  | { type: "VMG_LOCK"; mode: "upwind" | "downwind" }
+  | { type: "VMG_LOCK"; mode: "upwind" | "downwind" | "closest" }
   | { type: "GATE_CROSSED"; gateIndex: number; courseTime: number }
   // Multiplayer actions
   | {

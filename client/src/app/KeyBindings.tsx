@@ -1,11 +1,11 @@
 export default function KeyBindings() {
   const bindings = [
-    { key: "\u2190 \u2192", action: "Turn" },
+    { key: "← →", action: "Turn" },
     { key: "Space", action: "Tack" },
     { key: "Enter", action: "Lock TWA" },
-    { key: "\u2191", action: "Upwind VMG" },
-    { key: "\u2193", action: "Downwind VMG" },
-    { key: "X", action: "Look ahead" },
+    { key: "Shift", action: "Best VMG" },
+    { key: "↑", action: "Zoom in" },
+    { key: "↓", action: "Zoom out" },
   ];
 
   return (

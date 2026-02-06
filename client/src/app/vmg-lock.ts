@@ -1,11 +1,11 @@
 import { Session } from "./state";
 import { getWindDirection, getWindSpeedKnots } from "../utils";
-import { VMGMode, getOptimalVMGHeading } from "./polar";
+import { VMGMode, getOptimalVMGHeading, calculateTWA } from "./polar";
 
 /**
  * Calculate the optimal VMG heading based on current conditions.
  * This will lock the boat to the best VMG angle on the current tack.
- * @param mode Force upwind or downwind VMG
+ * @param mode Force upwind or downwind VMG, or "closest" to pick based on current TWA
  * @returns Target heading for optimal VMG, or null if no wind
  */
 export function calculateVMGLockHeading(
@@ -20,5 +20,13 @@ export function calculateVMGLockHeading(
   }
 
   const windDirection = getWindDirection(windSpeed);
-  return getOptimalVMGHeading(polar, windDirection, tws, heading, mode);
+
+  // For "closest" mode, determine upwind/downwind based on current TWA
+  let effectiveMode: "upwind" | "downwind" = mode === "closest" ? "upwind" : mode;
+  if (mode === "closest") {
+    const twa = Math.abs(calculateTWA(heading, windDirection));
+    effectiveMode = twa < 90 ? "upwind" : "downwind";
+  }
+
+  return getOptimalVMGHeading(polar, windDirection, tws, heading, effectiveMode);
 }

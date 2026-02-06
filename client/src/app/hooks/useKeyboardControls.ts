@@ -6,10 +6,10 @@ import { SphereView } from "../../sphere";
  * Hook to handle keyboard controls when playing.
  * - Arrow Left/Right: Turn boat
  * - Enter: Toggle TWA lock
- * - Arrow Up: Lock to optimal upwind VMG heading
- * - Arrow Down: Lock to optimal downwind VMG heading
+ * - Shift: Lock to closest VMG (upwind or downwind based on current TWA)
+ * - Arrow Up: Zoom in and center on boat
+ * - Arrow Down: Zoom out and center on boat
  * - Space: Tack
- * - X: Center map on boat
  */
 export function useKeyboardControls(
   isPlaying: boolean,
@@ -28,20 +28,22 @@ export function useKeyboardControls(
         e.preventDefault();
         e.stopPropagation();
         dispatch({ type: "TOGGLE_TWA_LOCK" });
+      } else if (e.key === "Shift") {
+        e.preventDefault();
+        e.stopPropagation();
+        dispatch({ type: "VMG_LOCK", mode: "closest" });
       } else if (e.key === "ArrowUp") {
         e.preventDefault();
         e.stopPropagation();
-        dispatch({ type: "VMG_LOCK", mode: "upwind" });
+        sphereViewRef.current?.zoomIn();
       } else if (e.key === "ArrowDown") {
         e.preventDefault();
         e.stopPropagation();
-        dispatch({ type: "VMG_LOCK", mode: "downwind" });
+        sphereViewRef.current?.zoomOut();
       } else if (e.key === " ") {
         e.preventDefault();
         e.stopPropagation();
         dispatch({ type: "TACK" });
-      } else if (e.key === "x" || e.key === "X") {
-        sphereViewRef.current?.centerOnBoat();
       }
     };
 

@@ -314,50 +314,104 @@ export class SphereView {
     this.animateToView(this.position.lng, this.position.lat, targetScale, 1000);
   }
 
+  zoomIn() {
+    const currentScale = this.projection.scale();
+    const maxScale = this.initialScale * MAX_SCALE;
+    const targetScale = Math.min(currentScale * 1.5, maxScale);
+    // Center ahead of boat, then zoom keeping boat at that position
+    this.centerOnBoatWithScale(targetScale, 200);
+  }
+
+  zoomOut() {
+    const currentScale = this.projection.scale();
+    const minScale = this.initialScale * 0.8;
+    const targetScale = Math.max(currentScale / 1.5, minScale);
+    this.zoomCenteredOnBoat(targetScale, 200);
+  }
+
   /**
-   * Center the map ahead of the boat based on heading.
-   * Places the boat at approximately 1/10 from the viewport edge,
-   * with the view focused on "where the boat is going".
+   * Zoom while keeping the boat at its current screen position.
+   * The map zooms around the boat rather than the screen center.
    */
-  centerOnBoat() {
+  private zoomCenteredOnBoat(targetScale: number, duration: number) {
+    const currentScale = this.projection.scale();
+
+    // Get boat's current screen position
+    const boatScreen = this.projection([this.position.lng, this.position.lat]);
+    if (!boatScreen) {
+      // Boat not visible, just center on it
+      this.animateToView(this.position.lng, this.position.lat, targetScale, duration);
+      return;
+    }
+
+    const [bx, by] = boatScreen;
+    const factor = targetScale / currentScale;
+
+    // Calculate what old screen position will become the new center after zoom
+    // This ensures the boat stays at (bx, by) on screen
+    const newCenterOldScreenX = bx + (this.width / 2 - bx) / factor;
+    const newCenterOldScreenY = by + (this.height / 2 - by) / factor;
+
+    // Convert to geo coords
+    const newCenter = this.projection.invert?.([newCenterOldScreenX, newCenterOldScreenY]);
+
+    if (newCenter) {
+      this.animateToView(newCenter[0], newCenter[1], targetScale, duration);
+    } else {
+      // Fallback: center on boat
+      this.animateToView(this.position.lng, this.position.lat, targetScale, duration);
+    }
+  }
+
+  /**
+   * Center the map ahead of the boat based on heading, with optional scale change.
+   * Places the boat at approximately 1/8 from the viewport edge,
+   * with the view focused on "where the boat is going".
+   * Properly accounts for scale change to keep boat at correct position.
+   */
+  private centerOnBoatWithScale(targetScale: number, duration: number) {
     const currentScale = this.projection.scale();
 
     // Project boat position to screen coordinates
     const boatScreen = this.projection([this.position.lng, this.position.lat]);
     if (!boatScreen) {
       // Boat not on visible hemisphere - just center on it directly
-      this.animateToView(this.position.lng, this.position.lat, currentScale, 300);
+      this.animateToView(this.position.lng, this.position.lat, targetScale, duration);
       return;
     }
 
     const [boatX, boatY] = boatScreen;
 
-    // Calculate offset in screen pixels
-    // Boat at 1/10 from edge means center is 0.4 of viewport dimension ahead
-    const edgeFraction = 0.1; // 1/10 from edge
-    const offsetFraction = 0.5 - edgeFraction; // 0.4
+    // Calculate target screen position for boat (1/8 from edge, opposite to heading)
+    const edgeFraction = 0.125; // 1/8 from edge
+    const offsetFraction = 0.5 - edgeFraction; // 0.375
 
-    // Convert heading to screen-space offset
     // Heading: 0 = North (up/-Y), 90 = East (right/+X)
-    // Use width for horizontal component, height for vertical
+    // Boat should be offset from center in opposite direction of heading
     const headingRad = (this.heading * Math.PI) / 180;
-    const screenOffsetX = Math.sin(headingRad) * this.width * offsetFraction;
-    const screenOffsetY = -Math.cos(headingRad) * this.height * offsetFraction; // Screen Y is inverted
+    const targetBoatX = this.width / 2 - Math.sin(headingRad) * this.width * offsetFraction;
+    const targetBoatY = this.height / 2 + Math.cos(headingRad) * this.height * offsetFraction;
 
-    // Target screen position (ahead of boat)
-    const targetScreenX = boatX + screenOffsetX;
-    const targetScreenY = boatY + screenOffsetY;
+    // Calculate new center that puts boat at target position with target scale
+    // This combines panning (to target position) and zooming (keeping boat fixed)
+    const factor = targetScale / currentScale;
+    const newCenterOldScreenX = boatX + (this.width / 2 - targetBoatX) / factor;
+    const newCenterOldScreenY = boatY + (this.height / 2 - targetBoatY) / factor;
 
-    // Inverse project to geographic coordinates
-    const targetCoords = this.projection.invert?.([targetScreenX, targetScreenY]);
+    // Convert to geo coords using current projection
+    const newCenter = this.projection.invert?.([newCenterOldScreenX, newCenterOldScreenY]);
 
-    if (targetCoords) {
-      const [targetLng, targetLat] = targetCoords;
-      this.animateToView(targetLng, targetLat, currentScale, 300);
+    if (newCenter) {
+      this.animateToView(newCenter[0], newCenter[1], targetScale, duration);
     } else {
-      // Target is outside the globe - fall back to centering on boat
-      this.animateToView(this.position.lng, this.position.lat, currentScale, 300);
+      // Fallback: center on boat
+      this.animateToView(this.position.lng, this.position.lat, targetScale, duration);
     }
+  }
+
+  centerOnBoat() {
+    const currentScale = this.projection.scale();
+    this.centerOnBoatWithScale(currentScale, 300);
   }
 
   /**

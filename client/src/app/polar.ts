@@ -165,7 +165,7 @@ export function calculateVMG(boatSpeed: number, twa: number): number {
   return boatSpeed * Math.cos(twaRad);
 }
 
-export type VMGMode = "upwind" | "downwind";
+export type VMGMode = "upwind" | "downwind" | "closest";
 
 /**
  * Find the optimal TWA that maximizes VMG for the given wind speed.
