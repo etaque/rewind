@@ -97,6 +97,14 @@ export default function CourseEditor({ account, onBack, onUnauthorized, embedded
     setSaveState(asyncState.idle());
   }, []);
 
+  const handleDuplicate = useCallback(() => {
+    if (!editCourse) return;
+    setSelectedKey(null);
+    setEditCourse({ ...editCourse, key: "", name: "" });
+    setIsNew(true);
+    setSaveState(asyncState.idle());
+  }, [editCourse]);
+
   const handleSave = useCallback(async () => {
     if (!editCourse) return;
     setSaveState(asyncState.loading());
@@ -246,12 +254,20 @@ export default function CourseEditor({ account, onBack, onUnauthorized, embedded
                 onSelect={handleMapSelect}
               />
               {!isNew && selectedKey && (
-                <button
-                  onClick={handleDelete}
-                  className="w-full mt-3 text-red-400 hover:text-red-300 py-2 text-sm transition-all border border-red-900 hover:border-red-700 rounded"
-                >
-                  Delete Course
-                </button>
+                <div className="flex gap-2 mt-3">
+                  <button
+                    onClick={handleDuplicate}
+                    className="flex-1 text-slate-300 hover:text-white py-2 text-sm transition-all border border-slate-600 hover:border-slate-400 rounded"
+                  >
+                    Duplicate
+                  </button>
+                  <button
+                    onClick={handleDelete}
+                    className="flex-1 text-red-400 hover:text-red-300 py-2 text-sm transition-all border border-red-900 hover:border-red-700 rounded"
+                  >
+                    Delete Course
+                  </button>
+                </div>
               )}
             </>
           ) : (
