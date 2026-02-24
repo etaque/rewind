@@ -50,7 +50,8 @@ export type ServerMessage =
       raceTime: number;
     }
   | { type: "RaceEnded"; reason: string }
-  | { type: "Leaderboard"; entries: LeaderboardEntry[] };
+  | { type: "Leaderboard"; entries: LeaderboardEntry[] }
+  | { type: "SyncRaceTime"; raceTime: number };
 
 // ============================================================================
 // State Types
@@ -105,6 +106,7 @@ export type MultiplayerCallbacks = {
   onCountdown: (seconds: number) => void;
   onRaceEnded: (reason: string) => void;
   onLeaderboardUpdate: (entries: LeaderboardEntry[]) => void;
+  onSyncRaceTime: (raceTime: number) => void;
   onError: (message: string) => void;
   onDisconnect: () => void;
 };

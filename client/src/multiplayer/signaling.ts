@@ -1,6 +1,41 @@
 import { ClientMessage, ServerMessage, MultiplayerCallbacks } from "./types";
 
-const serverUrl = import.meta.env.REWIND_SERVER_URL;
+const SERVER_MESSAGE_TYPES = new Set([
+  "Error",
+  "RaceCreated",
+  "RaceJoined",
+  "PlayerJoined",
+  "PlayerLeft",
+  "RaceCountdown",
+  "RaceStarted",
+  "PositionUpdate",
+  "RaceEnded",
+  "Leaderboard",
+  "SyncRaceTime",
+]);
+
+function isServerMessage(value: unknown): value is ServerMessage {
+  return (
+    typeof value === "object" &&
+    value !== null &&
+    "type" in value &&
+    typeof (value as { type: unknown }).type === "string" &&
+    SERVER_MESSAGE_TYPES.has((value as { type: string }).type)
+  );
+}
+
+function getServerUrl(): string {
+  const url = import.meta.env.REWIND_SERVER_URL;
+  if (typeof url !== "string" || url === "") {
+    throw new Error(
+      "REWIND_SERVER_URL environment variable is not set. " +
+        "Add it to your .env file or set it in your environment.",
+    );
+  }
+  return url;
+}
+
+const serverUrl = getServerUrl();
 
 /**
  * WebSocket client for multiplayer server communication.
@@ -33,8 +68,12 @@ export class SignalingClient {
 
       this.ws.onmessage = (event) => {
         try {
-          const message = JSON.parse(event.data) as ServerMessage;
-          this.handleMessage(message);
+          const parsed: unknown = JSON.parse(event.data);
+          if (!isServerMessage(parsed)) {
+            console.error("Invalid server message:", parsed);
+            return;
+          }
+          this.handleMessage(parsed);
         } catch (e) {
           console.error("Failed to parse signaling message:", e);
         }
@@ -96,13 +135,20 @@ export class SignalingClient {
       case "Leaderboard":
         this.callbacks.onLeaderboardUpdate(message.entries);
         break;
+
+      case "SyncRaceTime":
+        this.callbacks.onSyncRaceTime(message.raceTime);
+        break;
     }
   }
 
-  send(message: ClientMessage) {
+  send(message: ClientMessage): boolean {
     if (this.ws && this.ws.readyState === WebSocket.OPEN) {
       this.ws.send(JSON.stringify(message));
+      return true;
     }
+    console.warn("WebSocket send dropped (not connected):", message.type);
+    return false;
   }
 
   createRace(courseKey: string, playerName: string, persistentId: string) {

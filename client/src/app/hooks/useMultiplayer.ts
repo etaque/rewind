@@ -93,6 +93,9 @@ export function useMultiplayer(
         }
       },
 
+      onSyncRaceTime: (raceTime) => {
+        dispatch({ type: "SYNC_RACE_TIME", raceTime });
+      },
       onRaceEnded: (reason) => {
         dispatch({ type: "RACE_ENDED", reason });
       },
