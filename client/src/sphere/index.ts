@@ -59,6 +59,7 @@ export class SphereView {
   private twaLocked = false;
   private windDirection: number | null = null;
   private renderGeneration = 0;
+  private syncingZoomTransform = false;
 
   private zoom: d3.ZoomBehavior<HTMLElement, unknown>;
   private initialScale: number = 500;
@@ -66,6 +67,10 @@ export class SphereView {
   constructor(node: HTMLElement, course: Course | null = null) {
     this.course = course;
     this.node = node;
+    // Clear any existing canvases from a previous instance (e.g. HMR)
+    while (node.firstChild) {
+      node.removeChild(node.firstChild);
+    }
     // Default to Atlantic view if no course
     this.position = course?.start ?? { lng: -30, lat: 20 };
     this.heading = course?.startHeading ?? 0;
@@ -163,6 +168,9 @@ export class SphereView {
       .scaleExtent([0.8, MAX_SCALE])
       .wheelDelta((e) => -e.deltaY * (e.deltaMode === 1 ? 0.05 : e.deltaMode ? 1 : 0.005))
       .on("start", (e: d3.D3ZoomEvent<HTMLElement, unknown>) => {
+        // Skip handlers during programmatic zoom.transform sync
+        if (this.syncingZoomTransform) return;
+
         // Cancel any running view animation when user starts interacting
         d3.select(this.node).interrupt("view-animation");
 
@@ -181,27 +189,39 @@ export class SphereView {
         this.render();
       })
       .on("zoom", (e: d3.D3ZoomEvent<HTMLElement, unknown>) => {
+        if (this.syncingZoomTransform) return;
+
         this.moving = true;
         this.particles.hide();
 
         this.projection.scale(this.initialScale * e.transform.k);
 
-        const rotated = this.projection.rotate(this.r0!);
-        const coords = rotated.invert ? rotated.invert(d3.pointer(e)) : null;
-        if (!coords) return;
+        // Apply rotation only if the "start" handler set the initial values
+        if (this.r0 && this.q0 && this.v0) {
+          const rotated = this.projection.rotate(this.r0);
+          const coords = rotated.invert
+            ? rotated.invert(d3.pointer(e))
+            : null;
+          if (coords) {
+            const v1 = versor.cartesian(coords);
+            const q1 = versor.multiply(
+              this.q0,
+              versor.delta(this.v0, v1),
+            );
 
-        const v1 = versor.cartesian(coords);
-        let q1 = versor.multiply(this.q0!, versor.delta(this.v0!, v1));
+            const [lambda, phi] = versor.rotation(q1);
+            // North always up: ignore gamma
+            const shiftVector: Spherical = [lambda, phi, 0];
 
-        const [lambda, phi] = versor.rotation(q1);
-        // North always up: ignore gamma
-        const shiftVector: Spherical = [lambda, phi, 0];
-
-        this.projection.rotate(shiftVector);
+            this.projection.rotate(shiftVector);
+          }
+        }
 
         this.render();
       })
       .on("end", () => {
+        if (this.syncingZoomTransform) return;
+
         this.moving = false;
         this.render();
       });
@@ -216,6 +236,16 @@ export class SphereView {
         console.log(`lng: ${lng.toFixed(4)}, lat: ${lat.toFixed(4)}`);
       }
     });
+  }
+
+  destroy() {
+    d3.select<HTMLElement, unknown>(this.node).on(".zoom", null);
+    d3.select(this.node).on("click", null);
+    this.particles.hide();
+    // Remove all canvases created by this instance
+    while (this.node.firstChild) {
+      this.node.removeChild(this.node.firstChild);
+    }
   }
 
   updateWind(interpolatedWind: InterpolatedWind, interpolationFactor: number) {
@@ -518,11 +548,15 @@ export class SphereView {
         };
       })
       .on("end", () => {
-        // Sync D3 zoom transform with the new scale
-        // This prevents jump when user starts scrolling after animation
+        // Sync D3 zoom transform with the new scale.
+        // Use the flag to prevent zoom handlers from firing — they would
+        // corrupt the projection (no real pointer event to invert) and
+        // set this.moving = true, hiding particles permanently.
         const newK = this.projection.scale() / this.initialScale;
         const selection = d3.select<HTMLElement, unknown>(this.node);
+        this.syncingZoomTransform = true;
         this.zoom.transform(selection, d3.zoomIdentity.scale(newK));
+        this.syncingZoomTransform = false;
 
         // Re-enable particles after animation completes
         this.moving = false;
