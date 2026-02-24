@@ -153,5 +153,5 @@ export default class Land {
 async function getLand(path: string): Promise<d3.GeoPermissibleObjects> {
   const world = await d3.json<Topology>(path);
   if (world) return topojson.feature(world, world.objects.land);
-  else return Promise.reject("Failed to fetch land at: " + path);
+  else return Promise.reject(new Error("Failed to fetch land at: " + path));
 }

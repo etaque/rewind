@@ -127,7 +127,8 @@ export default class Texture {
       worker.terminate();
     };
 
-    worker.onerror = () => {
+    worker.onerror = (e) => {
+      console.error("Wind texture worker failed:", e.message);
       if (this.pendingGeneration === expectedGeneration) {
         this.pendingGeneration = undefined;
       }
