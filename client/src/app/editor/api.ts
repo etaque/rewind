@@ -9,9 +9,13 @@ function authHeaders(sessionToken: string): HeadersInit {
   };
 }
 
-export async function verifyEditorAccess(sessionToken: string): Promise<boolean> {
+export async function verifyEditorAccess(
+  sessionToken: string,
+  signal?: AbortSignal,
+): Promise<boolean> {
   const res = await fetch(`${serverUrl}/editor/verify`, {
     headers: { Authorization: `Bearer ${sessionToken}` },
+    signal,
   });
   return res.ok;
 }

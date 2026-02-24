@@ -183,7 +183,7 @@ export default function AuthModal({ onClose, onSuccess }: AuthModalProps) {
             >
               {code.map((digit, i) => (
                 <input
-                  key={i}
+                  key={`code-${i}`}
                   ref={(el) => { codeInputRefs.current[i] = el; }}
                   type="text"
                   inputMode="numeric"

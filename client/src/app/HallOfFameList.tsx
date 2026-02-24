@@ -26,17 +26,20 @@ export default function HallOfFameList({
   const [loading, setLoading] = useState(false);
 
   useEffect(() => {
+    const controller = new AbortController();
     const fetchLeaderboard = async () => {
       setLoading(true);
       try {
         const res = await fetch(
           `${serverUrl}/leaderboard/${courseKey}?limit=10`,
+          { signal: controller.signal },
         );
         if (res.ok) {
           const data = await res.json();
           setEntries(data);
         }
       } catch (err) {
+        if (err instanceof DOMException && err.name === "AbortError") return;
         console.error("Failed to fetch leaderboard:", err);
       } finally {
         setLoading(false);
@@ -44,6 +47,7 @@ export default function HallOfFameList({
     };
 
     fetchLeaderboard();
+    return () => controller.abort();
   }, [courseKey]);
 
   const formatDate = (timestamp: number) => {

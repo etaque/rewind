@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo, useCallback } from "react";
+import { useState, useEffect, useMemo, useCallback, useRef } from "react";
 import { RaceInfo } from "./race";
 import { useRaceContext } from "./race-context";
 import { generateNickname } from "./nickname";
@@ -90,34 +90,45 @@ export default function RaceChoiceScreen() {
     }
   }, [account]);
 
-  // Refresh account on mount to validate session and update admin status
+  // Refresh account on mount to validate session and update admin status.
+  // Use a ref to read the initial account without adding it as a dependency
+  // (including account in deps would loop since refresh can update it).
+  const mountAccountRef = useRef(account);
   useEffect(() => {
-    if (account) {
-      refreshAccount(account).then((updated) => {
-        if (updated !== account) {
+    const a = mountAccountRef.current;
+    if (a) {
+      refreshAccount(a).then((updated) => {
+        if (updated !== a) {
           setAccount(updated);
         }
       });
     }
-  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+  }, []);
 
   // Fetch available races periodically
   useEffect(() => {
+    const controller = new AbortController();
     const fetchRaces = async () => {
       try {
-        const res = await fetch(`${serverUrl}/multiplayer/races`);
+        const res = await fetch(`${serverUrl}/multiplayer/races`, {
+          signal: controller.signal,
+        });
         const races: RaceInfo[] = await res.json();
         setAvailableRaces(
           raceId ? races.filter((r) => r.id !== raceId) : races,
         );
       } catch (err) {
+        if (err instanceof DOMException && err.name === "AbortError") return;
         console.error("Failed to fetch races:", err);
       }
     };
 
     fetchRaces();
     const interval = setInterval(fetchRaces, 5000);
-    return () => clearInterval(interval);
+    return () => {
+      controller.abort();
+      clearInterval(interval);
+    };
   }, [raceId]);
 
   // Fetch hall of fame when course changes

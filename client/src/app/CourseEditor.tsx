@@ -53,14 +53,21 @@ export default function CourseEditor({ account, onBack, onUnauthorized, embedded
   // Verify admin access on mount (skip when embedded — AdminPanel already verified)
   useEffect(() => {
     if (embedded) return;
-    verifyEditorAccess(sessionToken).then((ok) => {
-      if (ok) {
-        setAccessState(asyncState.success(undefined));
-      } else {
-        setAccessState(asyncState.error("Unauthorized"));
-        onUnauthorized();
-      }
-    });
+    const controller = new AbortController();
+    verifyEditorAccess(sessionToken, controller.signal)
+      .then((ok) => {
+        if (ok) {
+          setAccessState(asyncState.success(undefined));
+        } else {
+          setAccessState(asyncState.error("Unauthorized"));
+          onUnauthorized();
+        }
+      })
+      .catch((err) => {
+        if (err instanceof DOMException && err.name === "AbortError") return;
+        setAccessState(asyncState.error("Failed to verify access"));
+      });
+    return () => controller.abort();
   }, [sessionToken, onUnauthorized, embedded]);
 
   const loadCourses = useCallback(async () => {

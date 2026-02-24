@@ -25,14 +25,17 @@ export default function RaceResultsTab({ sessionToken, onUnauthorized }: Props) 
 
   // Load courses for filter dropdown
   useEffect(() => {
-    (async () => {
-      try {
-        const res = await fetch(`${serverUrl}/courses`);
-        if (res.ok) setCourses(await res.json());
-      } catch {
-        // ignore
-      }
-    })();
+    const controller = new AbortController();
+    fetch(`${serverUrl}/courses`, { signal: controller.signal })
+      .then((res) => (res.ok ? res.json() : null))
+      .then((data) => {
+        if (data) setCourses(data);
+      })
+      .catch((err) => {
+        if (err instanceof DOMException && err.name === "AbortError") return;
+        console.error("Failed to load courses:", err);
+      });
+    return () => controller.abort();
   }, []);
 
   const load = useCallback(async (off: number, course: string) => {

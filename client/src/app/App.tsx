@@ -228,6 +228,7 @@ export default function App() {
   }, [session?.nextGateIndex, sphereViewRef]);
 
   // Transition to Playing when countdown reaches 0
+  const countdown = state.tag === "Countdown" ? state.countdown : null;
   useEffect(() => {
     if (state.tag !== "Countdown") return;
     if (state.countdown > 0) return;
@@ -243,7 +244,7 @@ export default function App() {
         dispatch({ type: "LOCAL_WIND_UPDATED", windSpeed: wind });
       }
     }
-  }, [state.tag === "Countdown" ? state.countdown : false]);
+  }, [countdown]);
 
   const handleOpenAdmin = useCallback(() => {
     const account = loadAccount();
