@@ -192,7 +192,7 @@ function bilinear(
 
   let ia: number, ib: number;
 
-  if (xf == xc) {
+  if (xf === xc) {
     ia = g1;
     ib = g3;
   } else {
@@ -200,7 +200,7 @@ function bilinear(
     ib = g3 * (xc - x) + g4 * (x - xf);
   }
 
-  if (yf == yc) {
+  if (yf === yc) {
     return (ia + ib) / 2;
   } else {
     return ia * (yc - y) + ib * (y - yf);
