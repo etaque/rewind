@@ -475,6 +475,7 @@ impl RaceManager {
 
         let mut races = self.races.write().await;
         races.insert(race_id.clone(), race);
+        drop(races);
 
         let mut player_races = self.player_races.write().await;
         player_races.insert(player_id, race_id.clone());
@@ -517,11 +518,11 @@ impl RaceManager {
         race.add_player(player)?;
 
         let players = race.get_player_infos();
+        let rasters = race.wind_raster_sources.clone();
+        drop(races);
 
         let mut player_races = self.player_races.write().await;
         player_races.insert(player_id, race_id.to_string());
-
-        let rasters = race.wind_raster_sources.clone();
 
         Ok((players, rasters, course_key, is_creator))
     }
