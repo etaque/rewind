@@ -39,21 +39,32 @@ async fn check_admin(headers: &HeaderMap) -> Result<(), AppError> {
     }
 }
 
-// Make our own error that wraps `anyhow::Error`.
 enum AppError {
+    /// Unexpected internal error — details are logged, not exposed to clients.
     Internal(anyhow::Error),
+    /// User-facing validation or business logic error (400).
+    BadRequest(String),
+    /// Resource not found (404).
+    NotFound,
+    /// Authentication required or insufficient permissions (401).
     Unauthorized,
 }
 
-// Tell axum how to convert `AppError` into a response.
 impl IntoResponse for AppError {
     fn into_response(self) -> Response {
         match self {
-            AppError::Internal(err) => (
-                StatusCode::INTERNAL_SERVER_ERROR,
-                format!("Something went wrong: {}", err),
-            )
-                .into_response(),
+            AppError::Internal(err) => {
+                log::error!("Internal error: {:?}", err);
+                (
+                    StatusCode::INTERNAL_SERVER_ERROR,
+                    "Internal server error".to_string(),
+                )
+                    .into_response()
+            }
+            AppError::BadRequest(msg) => {
+                (StatusCode::BAD_REQUEST, msg).into_response()
+            }
+            AppError::NotFound => StatusCode::NOT_FOUND.into_response(),
             AppError::Unauthorized => StatusCode::UNAUTHORIZED.into_response(),
         }
     }
@@ -227,7 +238,7 @@ async fn replay_handler(Path(result_id): Path<i64>) -> Result<impl IntoResponse,
             let url = config().s3.paths_url(&key);
             Ok(Json(ReplayResponse { path_url: url }))
         }
-        None => Err(AppError::Internal(anyhow::anyhow!("Race result not found"))),
+        None => Err(AppError::NotFound),
     }
 }
 
@@ -242,7 +253,7 @@ async fn random_wind_handler() -> Result<impl IntoResponse, AppError> {
 
     match report {
         Some(r) => Ok(Json(RandomWindResponse { png_url: r.png_url() })),
-        None => Err(AppError::Internal(anyhow::anyhow!("No wind reports available"))),
+        None => Err(AppError::NotFound),
     }
 }
 
@@ -251,14 +262,18 @@ async fn random_wind_handler() -> Result<impl IntoResponse, AppError> {
 async fn start_auth_handler(
     Json(request): Json<auth::StartAuthRequest>,
 ) -> Result<impl IntoResponse, AppError> {
-    auth::start_auth(&request.email).await?;
+    auth::start_auth(&request.email)
+        .await
+        .map_err(|e| AppError::BadRequest(e.to_string()))?;
     Ok(StatusCode::OK)
 }
 
 async fn verify_auth_handler(
     Json(request): Json<auth::VerifyAuthRequest>,
 ) -> Result<impl IntoResponse, AppError> {
-    let result = auth::verify_auth(&request.email, &request.code).await?;
+    let result = auth::verify_auth(&request.email, &request.code)
+        .await
+        .map_err(|e| AppError::BadRequest(e.to_string()))?;
     Ok(Json(result))
 }
 
@@ -320,7 +335,9 @@ async fn create_profile_handler(
     Json(request): Json<profiles::CreateProfileRequest>,
 ) -> Result<impl IntoResponse, AppError> {
     let account_id = require_auth(&headers).await?;
-    let profile = profiles::create_profile(&account_id, &request.name).await?;
+    let profile = profiles::create_profile(&account_id, &request.name)
+        .await
+        .map_err(|e| AppError::BadRequest(e.to_string()))?;
     Ok((StatusCode::CREATED, Json(profile)))
 }
 
@@ -330,7 +347,9 @@ async fn update_profile_handler(
     Json(request): Json<profiles::UpdateProfileRequest>,
 ) -> Result<impl IntoResponse, AppError> {
     let account_id = require_auth(&headers).await?;
-    let profile = profiles::update_profile(&account_id, &profile_id, &request.name).await?;
+    let profile = profiles::update_profile(&account_id, &profile_id, &request.name)
+        .await
+        .map_err(|e| AppError::BadRequest(e.to_string()))?;
     Ok(Json(profile))
 }
 
@@ -339,7 +358,9 @@ async fn delete_profile_handler(
     Path(profile_id): Path<String>,
 ) -> Result<impl IntoResponse, AppError> {
     let account_id = require_auth(&headers).await?;
-    profiles::delete_profile(&account_id, &profile_id).await?;
+    profiles::delete_profile(&account_id, &profile_id)
+        .await
+        .map_err(|e| AppError::BadRequest(e.to_string()))?;
     Ok(StatusCode::OK)
 }
 
