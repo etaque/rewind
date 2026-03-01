@@ -14,8 +14,8 @@ pub async fn import_grib_range(
     to: NaiveDate,
     max_concurrency: usize,
 ) -> anyhow::Result<()> {
-    let grib_s3 = Arc::new(s3::grib_client());
-    let raster_s3 = Arc::new(s3::raster_client());
+    let grib_s3 = s3::grib_client();
+    let raster_s3 = s3::raster_client();
     let ncar = Arc::new(NcarSource::new());
 
     println!("Using NCAR THREDDS source (0.25° resolution)");
@@ -66,13 +66,11 @@ pub async fn import_grib_range(
     let results: Vec<anyhow::Result<()>> = stream::iter(tasks)
         .map(|(day, hour)| {
             let ncar = Arc::clone(&ncar);
-            let grib_s3 = Arc::clone(&grib_s3);
-            let raster_s3 = Arc::clone(&raster_s3);
             let completed = Arc::clone(&completed);
             let error_count = Arc::clone(&error_count);
 
             async move {
-                let result = handle_ncar_grib(&ncar, &grib_s3, &raster_s3, day, hour).await;
+                let result = handle_ncar_grib(&ncar, grib_s3, raster_s3, day, hour).await;
 
                 let done = completed.fetch_add(1, Ordering::Relaxed) + 1;
 

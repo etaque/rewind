@@ -1,3 +1,5 @@
+use std::sync::LazyLock;
+
 use crate::config::config;
 use object_store::aws;
 
@@ -17,14 +19,23 @@ fn client_for_bucket(bucket: &str) -> aws::AmazonS3 {
         .unwrap()
 }
 
-pub fn grib_client() -> aws::AmazonS3 {
-    client_for_bucket(&config().s3.grib_bucket)
+static GRIB_CLIENT: LazyLock<aws::AmazonS3> =
+    LazyLock::new(|| client_for_bucket(&config().s3.grib_bucket));
+
+static RASTER_CLIENT: LazyLock<aws::AmazonS3> =
+    LazyLock::new(|| client_for_bucket(&config().s3.raster_bucket));
+
+static PATHS_CLIENT: LazyLock<aws::AmazonS3> =
+    LazyLock::new(|| client_for_bucket(&config().s3.paths_bucket));
+
+pub fn grib_client() -> &'static aws::AmazonS3 {
+    &GRIB_CLIENT
 }
 
-pub fn raster_client() -> aws::AmazonS3 {
-    client_for_bucket(&config().s3.raster_bucket)
+pub fn raster_client() -> &'static aws::AmazonS3 {
+    &RASTER_CLIENT
 }
 
-pub fn paths_client() -> aws::AmazonS3 {
-    client_for_bucket(&config().s3.paths_bucket)
+pub fn paths_client() -> &'static aws::AmazonS3 {
+    &PATHS_CLIENT
 }
