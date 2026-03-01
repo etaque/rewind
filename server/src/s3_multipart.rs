@@ -47,28 +47,17 @@ impl S3MultipartUploader {
     pub async fn write(&mut self, data: &[u8]) -> Result<()> {
         self.buffer.extend_from_slice(data);
 
-        // Flush when buffer exceeds minimum part size
+        // Flush full parts while buffer is large enough
         while self.buffer.len() >= MIN_PART_SIZE {
-            self.flush_part().await?;
+            // Split off everything after MIN_PART_SIZE, upload the first chunk
+            let remainder = self.buffer.split_off(MIN_PART_SIZE);
+            let part_data = std::mem::replace(&mut self.buffer, remainder);
+
+            self.upload
+                .put_part(PutPayload::from(part_data))
+                .await
+                .context("Failed to upload part")?;
         }
-
-        Ok(())
-    }
-
-    /// Flush the current buffer as a part upload.
-    async fn flush_part(&mut self) -> Result<()> {
-        if self.buffer.is_empty() {
-            return Ok(());
-        }
-
-        // Take up to MIN_PART_SIZE bytes from the buffer
-        let part_size = self.buffer.len().min(MIN_PART_SIZE);
-        let part_data: Vec<u8> = self.buffer.drain(..part_size).collect();
-
-        self.upload
-            .put_part(PutPayload::from(part_data))
-            .await
-            .context("Failed to upload part")?;
 
         Ok(())
     }
