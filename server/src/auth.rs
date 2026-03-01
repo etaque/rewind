@@ -2,7 +2,7 @@ use anyhow::Result;
 use rand::Rng;
 use serde::{Deserialize, Serialize};
 
-use crate::{config::config, db, email};
+use crate::{config::config, db, email, profiles};
 
 const CODE_EXPIRATION_MS: i64 = 10 * 60 * 1000; // 10 minutes
 const SESSION_DURATION_MS: i64 = 30 * 24 * 60 * 60 * 1000; // 30 days
@@ -66,17 +66,10 @@ pub async fn start_auth(email_addr: &str) -> Result<()> {
 
 #[derive(Debug, Serialize)]
 #[serde(rename_all = "camelCase")]
-pub struct Profile {
-    pub id: String,
-    pub name: String,
-}
-
-#[derive(Debug, Serialize)]
-#[serde(rename_all = "camelCase")]
 pub struct AuthResult {
     pub account_id: String,
     pub session_token: String,
-    pub profiles: Vec<Profile>,
+    pub profiles: Vec<profiles::Profile>,
     pub is_admin: bool,
 }
 
@@ -193,18 +186,8 @@ async fn get_or_create_account(email: &str) -> Result<String> {
 }
 
 /// Get all profiles for an account.
-async fn get_profiles_for_account(account_id: &str) -> Result<Vec<Profile>> {
-    let rows: Vec<(String, String)> = sqlx::query_as(
-        "SELECT id, name FROM profiles WHERE account_id = ? ORDER BY created_at",
-    )
-    .bind(account_id)
-    .fetch_all(db::pool())
-    .await?;
-
-    Ok(rows
-        .into_iter()
-        .map(|(id, name)| Profile { id, name })
-        .collect())
+async fn get_profiles_for_account(account_id: &str) -> Result<Vec<profiles::Profile>> {
+    profiles::list_profiles(account_id).await
 }
 
 /// Get the email address for an account.

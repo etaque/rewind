@@ -219,10 +219,11 @@ pub async fn seed_if_empty() -> Result<()> {
         .fetch_one(db::pool())
         .await?;
     if row.0 == 0 {
-        for course in seed_courses() {
-            insert(&course).await?;
+        let courses = seed_courses();
+        for course in &courses {
+            insert(course).await?;
         }
-        log::info!("Seeded {} courses into database", seed_courses().len());
+        log::info!("Seeded {} courses into database", courses.len());
     }
     Ok(())
 }
@@ -282,13 +283,15 @@ pub async fn delete(key: &str) -> Result<()> {
 }
 
 pub async fn reorder(keys: &[String]) -> Result<()> {
+    let mut tx = db::pool().begin().await?;
     for (i, key) in keys.iter().enumerate() {
         sqlx::query("UPDATE courses SET position = ? WHERE key = ?")
             .bind(i as i64)
             .bind(key)
-            .execute(db::pool())
+            .execute(&mut *tx)
             .await?;
     }
+    tx.commit().await?;
     Ok(())
 }
 

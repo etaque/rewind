@@ -183,21 +183,14 @@ pub async fn count_all(course_key_filter: Option<&str>) -> Result<i64> {
 
 /// Delete a race result and return the S3 path key for cleanup.
 pub async fn delete_result(id: i64) -> Result<Option<String>> {
-    let row: Option<(String,)> =
-        sqlx::query_as("SELECT path_s3_key FROM race_results WHERE id = ?")
-            .bind(id)
-            .fetch_optional(db::pool())
-            .await?;
+    let row: Option<(String,)> = sqlx::query_as(
+        "DELETE FROM race_results WHERE id = ? RETURNING path_s3_key",
+    )
+    .bind(id)
+    .fetch_optional(db::pool())
+    .await?;
 
-    if let Some((path_key,)) = row {
-        sqlx::query("DELETE FROM race_results WHERE id = ?")
-            .bind(id)
-            .execute(db::pool())
-            .await?;
-        Ok(Some(path_key))
-    } else {
-        Ok(None)
-    }
+    Ok(row.map(|(key,)| key))
 }
 
 // ============================================================================

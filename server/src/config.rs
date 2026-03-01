@@ -1,6 +1,6 @@
-use once_cell::sync::Lazy;
 use serde::Deserialize;
 use std::env;
+use std::sync::LazyLock;
 
 #[derive(Debug, Deserialize)]
 pub struct S3Config {
@@ -48,7 +48,7 @@ pub struct Config {
     pub email_from: String,
 }
 
-pub static CONFIG: Lazy<Config> = Lazy::new(|| {
+pub static CONFIG: LazyLock<Config> = LazyLock::new(|| {
     let s3 = if cfg!(test) {
         // Use default config for tests
         S3Config::default()

@@ -1,10 +1,10 @@
 use anyhow::Result;
-use once_cell::sync::OnceCell;
 use sqlx::sqlite::{SqlitePool, SqlitePoolOptions};
+use std::sync::OnceLock;
 
 use crate::config::config;
 
-static POOL: OnceCell<SqlitePool> = OnceCell::new();
+static POOL: OnceLock<SqlitePool> = OnceLock::new();
 
 pub async fn init() -> Result<()> {
     let pool = SqlitePoolOptions::new()
@@ -29,7 +29,7 @@ pub fn pool() -> &'static SqlitePool {
 }
 
 #[cfg(test)]
-static TEST_INIT_DONE: OnceCell<()> = OnceCell::new();
+static TEST_INIT_DONE: OnceLock<()> = OnceLock::new();
 
 #[cfg(test)]
 pub async fn init_test() -> Result<()> {
