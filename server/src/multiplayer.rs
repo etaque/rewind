@@ -565,51 +565,61 @@ impl RaceManager {
             (race.race_started(), race.race_start_time)
         };
 
-        // Now get write lock to update player position
-        let mut races = self.races.write().await;
-        let Some(race) = races.get_mut(&race_id) else {
-            return;
-        };
+        // Collect broadcast targets under write lock, then release before sending
+        let targets: Vec<mpsc::UnboundedSender<ServerMessage>> = {
+            let mut races = self.races.write().await;
+            let Some(race) = races.get_mut(&race_id) else {
+                return;
+            };
 
-        // Update player position and sample path
-        if let Some(player) = race.players.get_mut(player_id) {
-            player.position = Some((lng as f64, lat as f64));
-            player.heading = heading;
+            // Update player position and sample path
+            if let Some(player) = race.players.get_mut(player_id) {
+                player.position = Some((lng as f64, lat as f64));
+                player.heading = heading;
 
-            // Sample path if race has started (100ms real-time interval)
-            if race_started {
-                let now = Instant::now();
-                let should_sample = player
-                    .last_sample_instant
-                    .map(|last| now.duration_since(last) >= Duration::from_millis(100))
-                    .unwrap_or(true);
+                // Sample path if race has started (100ms real-time interval)
+                if race_started {
+                    let now = Instant::now();
+                    let should_sample = player
+                        .last_sample_instant
+                        .map(|last| now.duration_since(last) >= Duration::from_millis(100))
+                        .unwrap_or(true);
 
-                if should_sample {
-                    // Calculate race time
-                    let elapsed = Utc::now().timestamp_millis() - race_start_time.unwrap_or(0);
-                    let race_time = race.course.race_time(elapsed);
+                    if should_sample {
+                        // Calculate race time
+                        let elapsed =
+                            Utc::now().timestamp_millis() - race_start_time.unwrap_or(0);
+                        let race_time = race.course.race_time(elapsed);
 
-                    player.path_history.push(PathPoint {
-                        race_time,
-                        lng,
-                        lat,
-                        heading,
-                    });
-                    player.last_sample_instant = Some(now);
+                        player.path_history.push(PathPoint {
+                            race_time,
+                            lng,
+                            lat,
+                            heading,
+                        });
+                        player.last_sample_instant = Some(now);
+                    }
                 }
             }
-        }
 
-        // Broadcast to all players except sender
-        race.broadcast(
-            ServerMessage::PositionUpdate {
-                player_id: player_id.to_string(),
-                lng,
-                lat,
-                heading,
-            },
-            Some(player_id),
-        );
+            // Collect senders for all players except the sender
+            race.players
+                .iter()
+                .filter(|(id, _)| *id != player_id)
+                .map(|(_, p)| p.tx.clone())
+                .collect()
+        };
+        // Write lock is dropped here
+
+        let msg = ServerMessage::PositionUpdate {
+            player_id: player_id.to_string(),
+            lng,
+            lat,
+            heading,
+        };
+        for tx in targets {
+            let _ = tx.send(msg.clone());
+        }
     }
 
     pub async fn record_gate_crossing(
