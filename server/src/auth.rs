@@ -6,6 +6,8 @@ use crate::{config::config, db, email};
 
 const CODE_EXPIRATION_MS: i64 = 10 * 60 * 1000; // 10 minutes
 const SESSION_DURATION_MS: i64 = 30 * 24 * 60 * 60 * 1000; // 30 days
+const MAX_CODES_PER_WINDOW: i64 = 3; // Max verification codes per email per window
+const RATE_LIMIT_WINDOW_MS: i64 = 10 * 60 * 1000; // 10-minute sliding window
 
 /// Generate a random 6-digit verification code.
 fn generate_code() -> String {
@@ -19,30 +21,45 @@ fn generate_session_token() -> String {
 }
 
 /// Start authentication by sending a verification code to the email.
-pub async fn start_auth(email: &str) -> Result<()> {
-    let email = email.to_lowercase().trim().to_string();
+pub async fn start_auth(email_addr: &str) -> Result<()> {
+    let email_addr = email_addr.to_lowercase().trim().to_string();
 
     // Validate email format (basic check)
-    if !email.contains('@') || !email.contains('.') {
+    if !email_addr.contains('@') || !email_addr.contains('.') {
         anyhow::bail!("Invalid email format");
     }
 
-    let code = generate_code();
     let now = chrono::Utc::now().timestamp_millis();
+    let window_start = now - RATE_LIMIT_WINDOW_MS;
+
+    // Rate limit: max N codes per email per window
+    let (recent_count,): (i64,) = sqlx::query_as(
+        "SELECT COUNT(*) FROM verification_codes WHERE email = ? AND created_at > ?",
+    )
+    .bind(&email_addr)
+    .bind(window_start)
+    .fetch_one(db::pool())
+    .await?;
+
+    if recent_count >= MAX_CODES_PER_WINDOW {
+        anyhow::bail!("Too many attempts, please try again later");
+    }
+
+    let code = generate_code();
     let expires_at = now + CODE_EXPIRATION_MS;
 
     // Insert verification code
     sqlx::query(
         "INSERT INTO verification_codes (email, code, expires_at) VALUES (?, ?, ?)",
     )
-    .bind(&email)
+    .bind(&email_addr)
     .bind(&code)
     .bind(expires_at)
     .execute(db::pool())
     .await?;
 
     // Send the code via email
-    email::send_verification_code(&email, &code).await?;
+    email::send_verification_code(&email_addr, &code).await?;
 
     Ok(())
 }
@@ -64,8 +81,8 @@ pub struct AuthResult {
 }
 
 /// Verify a code and create a session. Creates the account if it doesn't exist.
-pub async fn verify_auth(email: &str, code: &str) -> Result<AuthResult> {
-    let email = email.to_lowercase().trim().to_string();
+pub async fn verify_auth(email_addr: &str, code: &str) -> Result<AuthResult> {
+    let email_addr = email_addr.to_lowercase().trim().to_string();
     let now = chrono::Utc::now().timestamp_millis();
 
     // Find valid, unused code
@@ -74,7 +91,7 @@ pub async fn verify_auth(email: &str, code: &str) -> Result<AuthResult> {
          WHERE email = ? AND code = ? AND expires_at > ? AND used_at IS NULL
          ORDER BY created_at DESC LIMIT 1",
     )
-    .bind(&email)
+    .bind(&email_addr)
     .bind(code)
     .bind(now)
     .fetch_optional(db::pool())
@@ -82,7 +99,21 @@ pub async fn verify_auth(email: &str, code: &str) -> Result<AuthResult> {
 
     let code_id = match row {
         Some((id,)) => id,
-        None => anyhow::bail!("Invalid or expired code"),
+        None => {
+            // Invalidate all pending codes for this email to prevent brute-force.
+            // Combined with the rate limit on start_auth, this caps total guesses.
+            sqlx::query(
+                "UPDATE verification_codes SET used_at = ?
+                 WHERE email = ? AND expires_at > ? AND used_at IS NULL",
+            )
+            .bind(now)
+            .bind(&email_addr)
+            .bind(now)
+            .execute(db::pool())
+            .await?;
+
+            anyhow::bail!("Invalid or expired code");
+        }
     };
 
     // Mark code as used
@@ -93,7 +124,7 @@ pub async fn verify_auth(email: &str, code: &str) -> Result<AuthResult> {
         .await?;
 
     // Get or create account
-    let account_id = get_or_create_account(&email).await?;
+    let account_id = get_or_create_account(&email_addr).await?;
 
     // Create session
     let session_token = generate_session_token();
@@ -114,7 +145,8 @@ pub async fn verify_auth(email: &str, code: &str) -> Result<AuthResult> {
 
     // Check if this is an admin account
     let admin_email = &config().admin_email;
-    let is_admin = !admin_email.is_empty() && email.to_lowercase() == admin_email.to_lowercase();
+    let is_admin =
+        !admin_email.is_empty() && email_addr.to_lowercase() == admin_email.to_lowercase();
 
     Ok(AuthResult {
         account_id,
@@ -386,6 +418,51 @@ mod tests {
 
         // Try with wrong code
         let result = verify_auth(email, "000000").await;
+        assert!(result.is_err());
+    }
+
+    #[tokio::test]
+    async fn test_rate_limit_on_start_auth() {
+        db::init_test().await.unwrap();
+
+        let email = "ratelimit@example.com";
+
+        // First MAX_CODES_PER_WINDOW requests should succeed
+        for _ in 0..MAX_CODES_PER_WINDOW {
+            start_auth(email).await.unwrap();
+        }
+
+        // Next request should be rate-limited
+        let result = start_auth(email).await;
+        assert!(result.is_err());
+        assert!(result
+            .unwrap_err()
+            .to_string()
+            .contains("Too many attempts"));
+    }
+
+    #[tokio::test]
+    async fn test_failed_verify_invalidates_pending_codes() {
+        db::init_test().await.unwrap();
+
+        let email = "invalidate@example.com";
+        start_auth(email).await.unwrap();
+
+        // Get the real code
+        let (real_code,): (String,) = sqlx::query_as(
+            "SELECT code FROM verification_codes WHERE email = ? ORDER BY created_at DESC LIMIT 1",
+        )
+        .bind(email)
+        .fetch_one(db::pool())
+        .await
+        .unwrap();
+
+        // Submit a wrong code — this should invalidate all pending codes
+        let result = verify_auth(email, "000000").await;
+        assert!(result.is_err());
+
+        // Now the real code should also be rejected (it was invalidated)
+        let result = verify_auth(email, &real_code).await;
         assert!(result.is_err());
     }
 }
