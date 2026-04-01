@@ -242,8 +242,10 @@ Database location configured via `REWIND_DB_PATH` environment variable (default:
 
 | Bucket | Purpose | Access |
 |--------|---------|--------|
-| `grib-files` | Raw GRIB files downloaded from NOAA | Private (server cache) |
-| `wind-rasters` | Processed UV PNG files | Public read (client access) |
+| `rewind-gribs` | Raw GRIB files downloaded from NOAA | Private, Glacier after 7 days |
+| `rewind-wind-rasters` | Processed UV PNG files | Public read (client access, CORS enabled) |
+| `rewind-race-paths` | Race path data for replay | Public read (client access, CORS enabled) |
+| `rewind.milox.dev` | Frontend static assets | Public read (CloudFront origin) |
 
 **PNG format:** 720×360 pixels (0.5° resolution), RGB where R=u, G=v components encoded as `(value + 30) * 255 / 60`
 
@@ -257,6 +259,36 @@ Database location configured via `REWIND_DB_PATH` environment variable (default:
 - **png** - PNG encoding
 - **serde/serde_json** - JSON serialization
 - **chrono** - Date/time handling
+
+### Infrastructure (`infra/`)
+
+Terraform-managed AWS infrastructure in `eu-west-3` (Paris), using the `rewind-terraform` AWS profile.
+
+#### Directory Structure
+
+```
+infra/
+├── main.tf         # AWS providers (eu-west-3 + us-east-1 for ACM), ACM certificate for rewind.milox.dev
+├── frontend.tf     # S3 bucket + CloudFront distribution for frontend, IAM uploader user
+├── gribs.tf        # S3 buckets (gribs, rasters, paths), IAM uploader user for server
+├── ecs.tf          # ECR repo, ECS Fargate cluster + task definition for pull-gribs job
+├── backend.tf      # Terraform backend configuration
+└── versions.tf     # Provider version constraints
+```
+
+#### Key Resources
+
+| Resource | Purpose |
+|----------|---------|
+| **CloudFront** | CDN for frontend at `rewind.milox.dev` (PriceClass_100, HTTPS via ACM) |
+| **ACM Certificate** | SSL cert in `us-east-1` (required by CloudFront), DNS validation via Gandi |
+| **ECS Fargate** | Runs `pull-gribs` task from ECR container image, uses default VPC |
+| **ECR** | Docker image registry for the server container |
+| **IAM Users** | `rewind-frontend-uploader` (S3 deploy), `rewind-gribs-uploader` (server S3 access) |
+
+#### DNS
+
+Domain `rewind.milox.dev` is managed in Gandi. ACM validation records and CloudFront CNAME must be configured there manually.
 
 ## Development Commands
 
