@@ -1,6 +1,12 @@
 # Rewind
 
-Multiplayer sailing game: offshore races against real historical wind conditions, accelerated in time. Ride weather systems around the world in minutes.
+An old idea of mine, revived with help of LLM forces. What if we could race around the world with offshore yatchs, but with accelerated time, like x10?
+
+Would we be able to ride on back of storms, and dodge low wind areas? How would it feel to steer through the oceans with the tip of you fingers?
+
+Could we replay historical wind conditions and compare ourselves with real skippers?
+
+Codebase is 90% LLM-generated, but derivated from a hand-written core started 10 years ago. Lacks tests, a nice UI and proper deployment as my primary goal was to get a feel of the game. Paused since.
 
 ## Features
 
